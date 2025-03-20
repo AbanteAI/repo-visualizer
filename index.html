@@ -102,6 +102,30 @@
             justify-content: center;
             gap: 10px;
         }
+        
+        .fullscreen-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background-color: white;
+            z-index: 1000;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow: auto;
+        }
+        
+        .fullscreen-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            z-index: 1001;
+        }
         .node {
             stroke: #fff;
             stroke-width: 1.5px;
@@ -225,6 +249,7 @@
             <button id="zoom-in">Zoom In</button>
             <button id="zoom-out">Zoom Out</button>
             <button id="reset-view">Reset View</button>
+            <button id="fullscreen-btn">Full Screen</button>
         </div>
         
         <div id="legend" class="legend"></div>
@@ -250,6 +275,7 @@
             const zoomInBtn = document.getElementById('zoom-in');
             const zoomOutBtn = document.getElementById('zoom-out');
             const resetViewBtn = document.getElementById('reset-view');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
             const fileInfo = document.getElementById('file-info');
             const fileName = document.getElementById('file-name');
             const fileDetails = document.getElementById('file-details');
@@ -366,6 +392,13 @@
             zoomInBtn.addEventListener('click', () => zoomVisualization(1.2));
             zoomOutBtn.addEventListener('click', () => zoomVisualization(0.8));
             resetViewBtn.addEventListener('click', resetVisualization);
+            fullscreenBtn.addEventListener('click', toggleFullscreen);
+            
+            // Handle fullscreen change events
+            document.addEventListener('fullscreenchange', updateFullscreenButtonText);
+            document.addEventListener('webkitfullscreenchange', updateFullscreenButtonText);
+            document.addEventListener('mozfullscreenchange', updateFullscreenButtonText);
+            document.addEventListener('MSFullscreenChange', updateFullscreenButtonText);
             
             // Handle file upload
             function handleFileUpload(file) {
@@ -573,7 +606,7 @@
                     
                     // Set up SVG container with dimensions
                     const width = visualizationContainer.clientWidth;
-                    const height = 600;
+                    const height = document.fullscreenElement ? window.innerHeight - 40 : 600;
                     
                     svg = d3.select('#visualization')
                         .append('svg')
@@ -880,6 +913,97 @@
                 svg.transition()
                     .duration(750)
                     .call(zoom.transform, d3.zoomIdentity);
+            }
+            
+            // Toggle fullscreen mode for the visualization
+            function toggleFullscreen() {
+                const container = document.getElementById('visualization');
+                
+                if (!document.fullscreenElement &&
+                    !document.mozFullScreenElement &&
+                    !document.webkitFullscreenElement &&
+                    !document.msFullscreenElement) {
+                    // Enter fullscreen mode
+                    if (container.requestFullscreen) {
+                        container.requestFullscreen();
+                    } else if (container.mozRequestFullScreen) { // Firefox
+                        container.mozRequestFullScreen();
+                    } else if (container.webkitRequestFullscreen) { // Chrome, Safari and Opera
+                        container.webkitRequestFullscreen();
+                    } else if (container.msRequestFullscreen) { // IE/Edge
+                        container.msRequestFullscreen();
+                    }
+                    
+                    // Apply manual fullscreen if the API is not supported
+                    if (!document.fullscreenEnabled && 
+                        !document.mozFullScreenEnabled && 
+                        !document.webkitFullscreenEnabled && 
+                        !document.msFullscreenEnabled) {
+                        container.classList.add('fullscreen-container');
+                        
+                        // Create a duplicate of controls for fullscreen mode
+                        const fullscreenControls = document.createElement('div');
+                        fullscreenControls.className = 'controls fullscreen-controls';
+                        fullscreenControls.innerHTML = document.querySelector('.controls').innerHTML;
+                        container.appendChild(fullscreenControls);
+                        
+                        // Add event listener to the new controls
+                        fullscreenControls.querySelector('#fullscreen-btn').addEventListener('click', toggleFullscreen);
+                    }
+                } else {
+                    // Exit fullscreen mode
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.mozCancelFullScreen) { // Firefox
+                        document.mozCancelFullScreen();
+                    } else if (document.webkitExitFullscreen) { // Chrome, Safari and Opera
+                        document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) { // IE/Edge
+                        document.msExitFullscreen();
+                    }
+                    
+                    // Remove manual fullscreen if applied
+                    container.classList.remove('fullscreen-container');
+                    const fullscreenControls = container.querySelector('.fullscreen-controls');
+                    if (fullscreenControls) {
+                        container.removeChild(fullscreenControls);
+                    }
+                }
+                
+                // Update button text based on state
+                updateFullscreenButtonText();
+                
+                // Adjust visualization size after going fullscreen
+                if (svg) {
+                    setTimeout(() => {
+                        const width = visualizationContainer.clientWidth;
+                        const height = document.fullscreenElement ? window.innerHeight - 40 : 600;
+                        
+                        svg.attr('width', width)
+                           .attr('height', height)
+                           .attr('viewBox', [0, 0, width, height]);
+                           
+                        if (simulation) {
+                            simulation.force('center', d3.forceCenter(width / 2, height / 2));
+                            simulation.alpha(0.3).restart();
+                        }
+                    }, 100); // Short delay to ensure the browser has updated the DOM
+                }
+            }
+            
+            // Update fullscreen button text based on current state
+            function updateFullscreenButtonText() {
+                const isFullscreen = document.fullscreenElement ||
+                                     document.mozFullScreenElement ||
+                                     document.webkitFullscreenElement ||
+                                     document.msFullscreenElement ||
+                                     document.getElementById('visualization').classList.contains('fullscreen-container');
+                
+                // Update all fullscreen buttons (including the one in the fullscreen controls)
+                const fullscreenButtons = document.querySelectorAll('#fullscreen-btn');
+                fullscreenButtons.forEach(btn => {
+                    btn.textContent = isFullscreen ? 'Exit Full Screen' : 'Full Screen';
+                });
             }
             
             // Start with example data for demonstration
