@@ -412,7 +412,9 @@ class RepositoryAnalyzer:
 
                 # Calculate basic metrics
                 metrics["linesOfCode"] = len(lines)
-                metrics["emptyLines"] = len([line for line in lines if not line.strip()])
+                metrics["emptyLines"] = len(
+                    [line for line in lines if not line.strip()]
+                )
 
                 # Extract components based on file type
                 if extension == "py":
