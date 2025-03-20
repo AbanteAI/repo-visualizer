@@ -59,3 +59,5 @@ typeCheckingMode = "basic"
 pythonVersion = "3.8"
 reportMissingTypeStubs = false
 reportUnknownMemberType = false
+reportTypedDictNotRequiredAccess = false
+reportGeneralTypeIssues = "none"
