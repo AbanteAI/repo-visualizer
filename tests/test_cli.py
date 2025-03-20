@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.repo_visualizer.cli import main, parse_args, setup_logging
+from repo_visualizer.cli import main, parse_args, setup_logging
 
 
 class TestCli:
@@ -40,7 +40,7 @@ class TestCli:
         assert kwargs["level"] == 10  # DEBUG level
 
     @patch("os.path.isdir")
-    @patch("src.repo_visualizer.cli.analyze_repository")
+    @patch("repo_visualizer.cli.analyze_repository")
     def test_main_success(self, mock_analyze, mock_isdir):
         """Test successful execution of main function."""
         # Mock directory checks
@@ -78,7 +78,7 @@ class TestCli:
         assert exit_code == 1
 
     @patch("os.path.isdir")
-    @patch("src.repo_visualizer.cli.analyze_repository")
+    @patch("repo_visualizer.cli.analyze_repository")
     def test_main_exception(self, mock_analyze, mock_isdir):
         """Test main function with exception during analysis."""
         # Mock directory checks
