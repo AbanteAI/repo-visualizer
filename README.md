@@ -88,7 +88,7 @@ repo-visualizer -v
 You can also use Repo Visualizer as a Python library:
 
 ```python
-from repo_visualizer.analyzer import analyze_repository
+from src.repo_visualizer.analyzer import analyze_repository
 
 # Analyze a repository
 analyze_repository("/path/to/repository", "output.json")
