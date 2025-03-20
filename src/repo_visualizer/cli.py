@@ -6,10 +6,10 @@ This module provides a command-line interface for analyzing git repositories
 and generating visualization data according to the repository visualization schema.
 """
 
-import os
-import sys
 import argparse
 import logging
+import os
+import sys
 from typing import List, Optional
 
 from .analyzer import analyze_repository
@@ -46,7 +46,7 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
 
     parser.add_argument(
         "repo_path",
-        help="Path to the git repository to analyze (defaults to current directory if not specified)",
+        help="Path to the git repository to analyze (defaults to current directory)",
         nargs="?",
         default=os.getcwd(),
     )

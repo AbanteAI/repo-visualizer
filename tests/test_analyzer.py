@@ -1,9 +1,6 @@
 """Tests for repository analyzer module."""
 
-import json
-import os
-import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -132,11 +129,11 @@ def top_level_function():
 
 class ExampleClass:
     \"\"\"Class docstring\"\"\"
-    
+
     def __init__(self):
         \"\"\"Init method\"\"\"
         self.value = 42
-    
+
     def example_method(self):
         \"\"\"Method docstring\"\"\"
         return self.value

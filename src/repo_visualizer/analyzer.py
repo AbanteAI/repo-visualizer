@@ -6,13 +6,12 @@ generate a structured JSON representation according to the repository
 visualization schema.
 """
 
+import json
 import os
 import re
-import json
 import subprocess
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .schema import (
     Component,
@@ -20,7 +19,6 @@ from .schema import (
     Relationship,
     RepositoryData,
     create_empty_schema,
-    validate_repository_data,
 )
 
 
@@ -408,13 +406,13 @@ class RepositoryAnalyzer:
             ):
                 return components, None
 
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
                 lines = content.split("\n")
 
                 # Calculate basic metrics
                 metrics["linesOfCode"] = len(lines)
-                metrics["emptyLines"] = len([l for l in lines if not l.strip()])
+                metrics["emptyLines"] = len([line for line in lines if not line.strip()])
 
                 # Extract components based on file type
                 if extension == "py":

@@ -1,8 +1,6 @@
 """Tests for repository visualizer CLI."""
 
-import os
-import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
