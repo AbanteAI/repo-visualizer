@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.repo_visualizer.analyzer import RepositoryAnalyzer, analyze_repository
+from repo_visualizer.analyzer import RepositoryAnalyzer, analyze_repository
 
 
 class TestRepositoryAnalyzer:
@@ -215,7 +215,7 @@ class ExampleClass:
             # Check that json.dump was called
             assert mock_json_dump.called
 
-    @patch("src.repo_visualizer.analyzer.RepositoryAnalyzer")
+    @patch("repo_visualizer.analyzer.RepositoryAnalyzer")
     def test_analyze_repository_function(self, mock_analyzer_class):
         """Test the analyze_repository convenience function."""
         # Setup mock
