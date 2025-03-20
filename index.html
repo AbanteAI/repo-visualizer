@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repo Visualizer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        p.description {
+            color: #7f8c8d;
+            margin-top: 0;
+        }
+        .upload-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .upload-section h2 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .file-input-container {
+            margin: 20px 0;
+        }
+        #file-input {
+            display: none;
+        }
+        .file-input-label {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .file-input-label:hover {
+            background-color: #2980b9;
+        }
+        .selected-file {
+            margin-top: 10px;
+            font-style: italic;
+            color: #7f8c8d;
+        }
+        button {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #27ae60;
+        }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background-color: #95a5a6;
+        }
+        button.secondary:hover {
+            background-color: #7f8c8d;
+        }
+        #visualization {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            min-height: 600px;
+            position: relative;
+            overflow: hidden;
+        }
+        .controls {
+            margin: 15px 0;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .node {
+            stroke: #fff;
+            stroke-width: 1.5px;
+            cursor: pointer;
+            transition: stroke-width 0.2s;
+        }
+        .node:hover {
+            stroke-width: 3px;
+        }
+        .link {
+            stroke: #95a5a6;
+            stroke-opacity: 0.4;
+            stroke-width: 1px;
+        }
+        .file-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
+            display: none;
+            max-width: 300px;
+            z-index: 100;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+        .file-info h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 5px;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 10px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .loading-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .repo-info {
+            text-align: center;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .help-text {
+            text-align: center;
+            margin: 10px 0;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        .component-list {
+            margin-top: 10px;
+        }
+        .component-list li {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Repo Visualizer</h1>
+            <p class="description">Visualize your repository structure interactively</p>
+        </header>
+        
+        <div class="upload-section">
+            <h2>Upload Repository JSON</h2>
+            <div class="file-input-container">
+                <label for="file-input" class="file-input-label">Choose File</label>
+                <input type="file" id="file-input" accept=".json">
+                <div id="selected-file" class="selected-file">No file selected</div>
+            </div>
+            <button id="visualize-btn" disabled>Visualize Repository</button>
+            <p class="help-text">Or use our example data:</p>
+            <button id="load-example" class="secondary">Load Example Data</button>
+        </div>
+        
+        <div id="repo-info" class="repo-info"></div>
+        
+        <div id="visualization">
+            <div class="loading" id="loading" style="display: none;">
+                <div class="loading-spinner"></div>
+                <div>Building visualization...</div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="zoom-in">Zoom In</button>
+            <button id="zoom-out">Zoom Out</button>
+            <button id="reset-view">Reset View</button>
+        </div>
+        
+        <div id="legend" class="legend"></div>
+        
+        <div id="file-info" class="file-info">
+            <h3 id="file-name"></h3>
+            <div id="file-details"></div>
+        </div>
+    </div>
+    
+    <!-- D3.js for visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM elements
+            const fileInput = document.getElementById('file-input');
+            const selectedFileDiv = document.getElementById('selected-file');
+            const visualizeBtn = document.getElementById('visualize-btn');
+            const loadExampleBtn = document.getElementById('load-example');
+            const visualizationContainer = document.getElementById('visualization');
+            const loadingDiv = document.getElementById('loading');
+            const zoomInBtn = document.getElementById('zoom-in');
+            const zoomOutBtn = document.getElementById('zoom-out');
+            const resetViewBtn = document.getElementById('reset-view');
+            const fileInfo = document.getElementById('file-info');
+            const fileName = document.getElementById('file-name');
+            const fileDetails = document.getElementById('file-details');
+            const repoInfo = document.getElementById('repo-info');
+            const legend = document.getElementById('legend');
+            
+            // Visualization state
+            let repositoryData = null;
+            let simulation = null;
+            let svg = null;
+            let zoom = null;
+            
+            // File extension colors mapping
+            const extensionColors = {
+                'py': '#3572A5',    // Python
+                'js': '#f7df1e',    // JavaScript
+                'html': '#e34c26',  // HTML
+                'css': '#563d7c',   // CSS
+                'md': '#083fa1',    // Markdown
+                'json': '#292929',  // JSON
+                'java': '#b07219',  // Java
+                'cpp': '#f34b7d',   // C++
+                'c': '#555555',     // C
+                'rb': '#701516',    // Ruby
+                'php': '#4F5D95',   // PHP
+                'ts': '#2b7489',    // TypeScript
+                'sh': '#89e051',    // Shell
+                'go': '#00ADD8',    // Go
+                'rs': '#dea584',    // Rust
+                'swift': '#ffac45', // Swift
+                'kt': '#F18E33',    // Kotlin
+                'scala': '#c22d40', // Scala
+                'pl': '#0298c3',    // Perl
+                'lua': '#000080',   // Lua
+                'r': '#198CE7',     // R
+            };
+            
+            // Create legend for file types
+            function createLegend() {
+                legend.innerHTML = '';
+                
+                // Only show extensions that were actually in the data
+                const usedExtensions = new Set();
+                if (repositoryData && repositoryData.files) {
+                    repositoryData.files.forEach(file => {
+                        if (file.extension) {
+                            usedExtensions.add(file.extension);
+                        }
+                    });
+                }
+                
+                // Add directory type
+                const legendDiv = document.createElement('div');
+                legendDiv.className = 'legend-item';
+                const colorSpan = document.createElement('span');
+                colorSpan.className = 'legend-color';
+                colorSpan.style.backgroundColor = '#7f8c8d';
+                const textSpan = document.createElement('span');
+                textSpan.textContent = 'Directory';
+                legendDiv.appendChild(colorSpan);
+                legendDiv.appendChild(textSpan);
+                legend.appendChild(legendDiv);
+                
+                // Add file types that are used
+                for (const [ext, color] of Object.entries(extensionColors)) {
+                    if (usedExtensions.has(ext)) {
+                        const legendDiv = document.createElement('div');
+                        legendDiv.className = 'legend-item';
+                        const colorSpan = document.createElement('span');
+                        colorSpan.className = 'legend-color';
+                        colorSpan.style.backgroundColor = color;
+                        const textSpan = document.createElement('span');
+                        textSpan.textContent = `.${ext}`;
+                        legendDiv.appendChild(colorSpan);
+                        legendDiv.appendChild(textSpan);
+                        legend.appendChild(legendDiv);
+                    }
+                }
+                
+                // Add "Other" type for extensions not in our map
+                const otherDiv = document.createElement('div');
+                otherDiv.className = 'legend-item';
+                const otherColor = document.createElement('span');
+                otherColor.className = 'legend-color';
+                otherColor.style.backgroundColor = '#aaaaaa';
+                const otherText = document.createElement('span');
+                otherText.textContent = 'Other';
+                otherDiv.appendChild(otherColor);
+                otherDiv.appendChild(otherText);
+                legend.appendChild(otherDiv);
+            }
+            
+            // Event listeners
+            fileInput.addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    selectedFileDiv.textContent = file.name;
+                    visualizeBtn.removeAttribute('disabled');
+                } else {
+                    selectedFileDiv.textContent = 'No file selected';
+                    visualizeBtn.setAttribute('disabled', 'disabled');
+                }
+            });
+            
+            visualizeBtn.addEventListener('click', function() {
+                const file = fileInput.files[0];
+                if (file) {
+                    loadingDiv.style.display = 'block';
+                    handleFileUpload(file);
+                }
+            });
+            
+            loadExampleBtn.addEventListener('click', loadExampleData);
+            zoomInBtn.addEventListener('click', () => zoomVisualization(1.2));
+            zoomOutBtn.addEventListener('click', () => zoomVisualization(0.8));
+            resetViewBtn.addEventListener('click', resetVisualization);
+            
+            // Handle file upload
+            function handleFileUpload(file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const jsonData = JSON.parse(e.target.result);
+                        if (validateRepositoryData(jsonData)) {
+                            repositoryData = jsonData;
+                            renderVisualization();
+                        } else {
+                            alert('Invalid repository data format. The file should contain metadata, files, and relationships arrays.');
+                            loadingDiv.style.display = 'none';
+                        }
+                    } catch (error) {
+                        console.error('Error parsing JSON:', error);
+                        alert('Error parsing JSON file. Please ensure the file contains valid JSON.');
+                        loadingDiv.style.display = 'none';
+                    }
+                };
+                reader.readAsText(file);
+            }
+            
+            // Load example data
+            function loadExampleData() {
+                loadingDiv.style.display = 'block';
+                
+                // Example data based on the schema
+                const exampleData = {
+                    "metadata": {
+                        "repoName": "example-repo",
+                        "description": "An example repository for visualization",
+                        "schemaVersion": "1.0.0",
+                        "analysisDate": "2025-03-20T12:00:00Z",
+                        "language": {
+                            "Python": 0.6,
+                            "JavaScript": 0.3,
+                            "Markdown": 0.1
+                        }
+                    },
+                    "files": [
+                        {
+                            "id": "src",
+                            "path": "src",
+                            "name": "src",
+                            "size": 0,
+                            "type": "directory",
+                            "depth": 0,
+                            "components": []
+                        },
+                        {
+                            "id": "src/main.py",
+                            "path": "src/main.py",
+                            "name": "main.py",
+                            "extension": "py",
+                            "size": 1024,
+                            "type": "file",
+                            "depth": 1,
+                            "components": [
+                                {
+                                    "id": "src/main.py:main",
+                                    "name": "main",
+                                    "type": "function",
+                                    "lineStart": 10,
+                                    "lineEnd": 20,
+                                    "components": []
+                                },
+                                {
+                                    "id": "src/main.py:ExampleClass",
+                                    "name": "ExampleClass",
+                                    "type": "class",
+                                    "lineStart": 25,
+                                    "lineEnd": 100,
+                                    "components": [
+                                        {
+                                            "id": "src/main.py:ExampleClass.method1",
+                                            "name": "method1",
+                                            "type": "method",
+                                            "lineStart": 40,
+                                            "lineEnd": 50,
+                                            "components": []
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "id": "src/utils.py",
+                            "path": "src/utils.py",
+                            "name": "utils.py",
+                            "extension": "py",
+                            "size": 512,
+                            "type": "file",
+                            "depth": 1,
+                            "components": [
+                                {
+                                    "id": "src/utils.py:helper_function",
+                                    "name": "helper_function",
+                                    "type": "function",
+                                    "lineStart": 5,
+                                    "lineEnd": 15,
+                                    "components": []
+                                }
+                            ]
+                        },
+                        {
+                            "id": "src/web",
+                            "path": "src/web",
+                            "name": "web",
+                            "size": 0,
+                            "type": "directory",
+                            "depth": 1,
+                            "components": []
+                        },
+                        {
+                            "id": "src/web/app.js",
+                            "path": "src/web/app.js",
+                            "name": "app.js",
+                            "extension": "js",
+                            "size": 768,
+                            "type": "file",
+                            "depth": 2,
+                            "components": []
+                        },
+                        {
+                            "id": "README.md",
+                            "path": "README.md",
+                            "name": "README.md",
+                            "extension": "md",
+                            "size": 256,
+                            "type": "file",
+                            "depth": 0,
+                            "components": []
+                        }
+                    ],
+                    "relationships": [
+                        {
+                            "source": "src/main.py",
+                            "target": "src/utils.py",
+                            "type": "import"
+                        },
+                        {
+                            "source": "src",
+                            "target": "src/main.py",
+                            "type": "contains"
+                        },
+                        {
+                            "source": "src",
+                            "target": "src/utils.py",
+                            "type": "contains"
+                        },
+                        {
+                            "source": "src",
+                            "target": "src/web",
+                            "type": "contains"
+                        },
+                        {
+                            "source": "src/web",
+                            "target": "src/web/app.js",
+                            "type": "contains"
+                        }
+                    ]
+                };
+                
+                // Add the component relationships only if visualization correctly handles them
+                const componentRelationships = [
+                    {
+                        "source": "src/main.py:main",
+                        "target": "src/utils.py:helper_function",
+                        "type": "call"
+                    },
+                    {
+                        "source": "src/web/app.js",
+                        "target": "src/main.py",
+                        "type": "reference"
+                    }
+                ];
+                
+                repositoryData = exampleData;
+                setTimeout(() => renderVisualization(), 100); // Add short delay to ensure DOM is ready
+            }
+            
+            // Basic validation of repository data structure
+            function validateRepositoryData(data) {
+                return data && 
+                       data.metadata && 
+                       Array.isArray(data.files) && 
+                       Array.isArray(data.relationships);
+            }
+            
+            // Main function to render the visualization
+            function renderVisualization() {
+                if (!repositoryData) return;
+                
+                try {
+                    // Update repository info
+                    updateRepositoryInfo();
+                    
+                    // Create legend
+                    createLegend();
+                    
+                    // Clear previous visualization
+                    visualizationContainer.innerHTML = '';
+                    loadingDiv.style.display = 'none';
+                    
+                    // Set up SVG container with dimensions
+                    const width = visualizationContainer.clientWidth;
+                    const height = 600;
+                    
+                    svg = d3.select('#visualization')
+                        .append('svg')
+                        .attr('width', width)
+                        .attr('height', height)
+                        .attr('viewBox', [0, 0, width, height]);
+                    
+                    // Create a group for the graph
+                    const g = svg.append('g');
+                    
+                    // Create zoom behavior
+                    zoom = d3.zoom()
+                        .scaleExtent([0.1, 10])
+                        .on('zoom', (event) => {
+                            g.attr('transform', event.transform);
+                        });
+                    
+                    svg.call(zoom);
+                    
+                    // Extract nodes and links from repository data
+                    const nodes = repositoryData.files.map(file => ({
+                        id: file.id,
+                        name: file.name,
+                        path: file.path,
+                        size: file.size,
+                        type: file.type,
+                        extension: file.extension,
+                        depth: file.depth,
+                        components: file.components || []
+                    }));
+                    
+                    // Only include relationships where both source and target are in the nodes list
+                    const nodeIds = new Set(nodes.map(n => n.id));
+                    const validLinks = repositoryData.relationships.filter(rel => {
+                        return nodeIds.has(rel.source) && nodeIds.has(rel.target);
+                    });
+                    
+                    const links = validLinks.map(rel => ({
+                        source: rel.source,
+                        target: rel.target,
+                        type: rel.type
+                    }));
+                    
+                    // Create a force simulation
+                    simulation = d3.forceSimulation(nodes)
+                        .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+                        .force('charge', d3.forceManyBody().strength(-300))
+                        .force('center', d3.forceCenter(width / 2, height / 2))
+                        .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5));
+                    
+                    // Create links
+                    const link = g.append('g')
+                        .selectAll('line')
+                        .data(links)
+                        .enter()
+                        .append('line')
+                        .attr('class', 'link')
+                        .attr('stroke-width', d => getLinkWidth(d));
+                    
+                    // Create nodes
+                    const node = g.append('g')
+                        .selectAll('circle')
+                        .data(nodes)
+                        .enter()
+                        .append('circle')
+                        .attr('class', 'node')
+                        .attr('r', d => getNodeRadius(d))
+                        .attr('fill', d => getNodeColor(d))
+                        .call(dragBehavior());
+                    
+                    // Add node labels
+                    const label = g.append('g')
+                        .selectAll('text')
+                        .data(nodes)
+                        .enter()
+                        .append('text')
+                        .attr('dx', d => getNodeRadius(d) + 5)
+                        .attr('dy', 4)
+                        .text(d => d.name)
+                        .style('font-size', '10px')
+                        .style('pointer-events', 'none');
+                    
+                    // Add hover titles to nodes
+                    node.append('title')
+                        .text(d => d.path);
+                    
+                    // Add click handler to show file details
+                    node.on('click', (event, d) => {
+                        showFileDetails(d);
+                        event.stopPropagation();
+                    });
+                    
+                    // Click on background to hide file details
+                    svg.on('click', () => {
+                        hideFileDetails();
+                    });
+                    
+                    // Update positions on each tick of the simulation
+                    simulation.on('tick', () => {
+                        link
+                            .attr('x1', d => d.source.x)
+                            .attr('y1', d => d.source.y)
+                            .attr('x2', d => d.target.x)
+                            .attr('y2', d => d.target.y);
+                        
+                        node
+                            .attr('cx', d => d.x)
+                            .attr('cy', d => d.y);
+                        
+                        label
+                            .attr('x', d => d.x)
+                            .attr('y', d => d.y);
+                    });
+                    
+                    // Helper function for drag behavior with D3 v7
+                    function dragBehavior() {
+                        return d3.drag()
+                            .on('start', (event, d) => {
+                                if (!event.active) simulation.alphaTarget(0.3).restart();
+                                d.fx = d.x;
+                                d.fy = d.y;
+                            })
+                            .on('drag', (event, d) => {
+                                d.fx = event.x;
+                                d.fy = event.y;
+                            })
+                            .on('end', (event, d) => {
+                                if (!event.active) simulation.alphaTarget(0);
+                                d.fx = null;
+                                d.fy = null;
+                            });
+                    }
+                    
+                } catch (error) {
+                    console.error('Error rendering visualization:', error);
+                    visualizationContainer.innerHTML = `
+                        <div style="text-align: center; padding: 20px;">
+                            <h3>Error rendering visualization</h3>
+                            <p>${error.message}</p>
+                            <p>Please check the browser console for more details.</p>
+                        </div>
+                    `;
+                    loadingDiv.style.display = 'none';
+                }
+            }
+            
+            // Update repository info display
+            function updateRepositoryInfo() {
+                if (repositoryData && repositoryData.metadata) {
+                    const metadata = repositoryData.metadata;
+                    let infoText = `Repository: ${metadata.repoName}`;
+                    
+                    if (metadata.description) {
+                        infoText += ` - ${metadata.description}`;
+                    }
+                    
+                    if (metadata.analysisDate) {
+                        const date = new Date(metadata.analysisDate);
+                        infoText += ` (Analyzed: ${date.toLocaleDateString()})`;
+                    }
+                    
+                    repoInfo.textContent = infoText;
+                    repoInfo.style.display = 'block';
+                } else {
+                    repoInfo.style.display = 'none';
+                }
+            }
+            
+            // Helper function to get node radius based on file size
+            function getNodeRadius(node) {
+                if (node.type === 'directory') {
+                    return 10; // Fixed size for directories
+                }
+                
+                // Scale file size to a reasonable radius
+                const minRadius = 5;
+                const maxRadius = 15;
+                const baseRadius = node.size ? Math.sqrt(node.size) / 15 : minRadius;
+                
+                return Math.max(minRadius, Math.min(maxRadius, baseRadius));
+            }
+            
+            // Helper function to get link width based on relationship type
+            function getLinkWidth(link) {
+                switch (link.type) {
+                    case 'import':
+                    case 'call':
+                        return 2;
+                    case 'contains':
+                        return 1;
+                    default:
+                        return 1.5;
+                }
+            }
+            
+            // Helper function to get node color based on file type/extension
+            function getNodeColor(node) {
+                // Directories have a different color
+                if (node.type === 'directory') {
+                    return '#7f8c8d';
+                }
+                
+                // Files are colored by extension
+                if (node.extension && extensionColors[node.extension]) {
+                    return extensionColors[node.extension];
+                }
+                
+                // Default color for unknown file types
+                return '#aaaaaa';
+            }
+            
+            // Show file details panel
+            function showFileDetails(file) {
+                fileName.textContent = file.name;
+                
+                let details = `
+                    <p><strong>Path:</strong> ${file.path}</p>
+                    <p><strong>Type:</strong> ${file.type}</p>
+                `;
+                
+                if (file.type === 'file') {
+                    details += `<p><strong>Size:</strong> ${formatFileSize(file.size)}</p>`;
+                    
+                    if (file.extension) {
+                        details += `<p><strong>Extension:</strong> .${file.extension}</p>`;
+                    }
+                }
+                
+                details += `<p><strong>Depth:</strong> ${file.depth}</p>`;
+                
+                if (file.components && file.components.length > 0) {
+                    details += `<p><strong>Components:</strong></p><ul class="component-list">`;
+                    file.components.forEach(comp => {
+                        details += `<li><strong>${comp.name}</strong> (${comp.type})`;
+                        
+                        if (comp.lineStart && comp.lineEnd) {
+                            details += ` - Lines ${comp.lineStart}-${comp.lineEnd}`;
+                        }
+                        
+                        if (comp.components && comp.components.length > 0) {
+                            details += `<ul class="component-list">`;
+                            comp.components.forEach(subComp => {
+                                details += `<li><strong>${subComp.name}</strong> (${subComp.type})`;
+                                
+                                if (subComp.lineStart && subComp.lineEnd) {
+                                    details += ` - Lines ${subComp.lineStart}-${subComp.lineEnd}`;
+                                }
+                                
+                                details += `</li>`;
+                            });
+                            details += `</ul>`;
+                        }
+                        
+                        details += `</li>`;
+                    });
+                    details += `</ul>`;
+                }
+                
+                fileDetails.innerHTML = details;
+                fileInfo.style.display = 'block';
+            }
+            
+            // Hide file details panel
+            function hideFileDetails() {
+                fileInfo.style.display = 'none';
+            }
+            
+            // Format file size in bytes to a human-readable format
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 bytes';
+                if (!bytes) return 'Unknown';
+                
+                const units = ['bytes', 'KB', 'MB', 'GB'];
+                let i = 0;
+                let size = bytes;
+                
+                while (size >= 1024 && i < units.length - 1) {
+                    size /= 1024;
+                    i++;
+                }
+                
+                return `${size.toFixed(1)} ${units[i]}`;
+            }
+            
+            // Zoom visualization in or out
+            function zoomVisualization(scale) {
+                if (!svg || !zoom) return;
+                
+                const currentTransform = d3.zoomTransform(svg.node());
+                const newScale = currentTransform.k * scale;
+                
+                svg.transition()
+                    .duration(250)
+                    .call(zoom.transform, 
+                          d3.zoomIdentity
+                            .translate(currentTransform.x, currentTransform.y)
+                            .scale(newScale));
+            }
+            
+            // Reset visualization to initial state
+            function resetVisualization() {
+                if (!svg || !zoom) return;
+                
+                svg.transition()
+                    .duration(750)
+                    .call(zoom.transform, d3.zoomIdentity);
+            }
+            
+            // Start with example data for demonstration
+            // Automatically load example data to make it easier for users
+            loadExampleData();
+        });
+    </script>
+</body>
+</html>
