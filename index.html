@@ -191,6 +191,13 @@
         .component-list li {
             margin-bottom: 5px;
         }
+        
+        /* Styles for component-type legend */
+        .component-type-legend {
+            margin-top: 15px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -261,6 +268,14 @@
             let simulation = null;
             let svg = null;
             let zoom = null;
+            let currentGraph = { nodes: [], links: [] };
+            let componentTypeColors = {
+                'class': '#e74c3c',     // Red
+                'function': '#3498db',  // Blue
+                'method': '#2ecc71',    // Green
+                'variable': '#f39c12',  // Orange
+                'component': '#9b59b6'  // Purple (fallback)
+            };
             
             // File extension colors mapping
             const extensionColors = {
@@ -287,7 +302,7 @@
                 'r': '#198CE7',     // R
             };
             
-            // Create legend for file types
+            // Create legend for file types and component types
             function createLegend() {
                 legend.innerHTML = '';
                 
@@ -340,6 +355,43 @@
                 otherDiv.appendChild(otherColor);
                 otherDiv.appendChild(otherText);
                 legend.appendChild(otherDiv);
+                
+                // Add component types section
+                const componentLegendContainer = document.createElement('div');
+                componentLegendContainer.className = 'component-type-legend';
+                legend.appendChild(componentLegendContainer);
+                
+                // Add a title for component types
+                const componentTitle = document.createElement('div');
+                componentTitle.style.textAlign = 'center';
+                componentTitle.style.fontWeight = 'bold';
+                componentTitle.style.marginBottom = '5px';
+                componentTitle.textContent = 'Component Types';
+                componentLegendContainer.appendChild(componentTitle);
+                
+                // Add component type legends
+                for (const [type, color] of Object.entries(componentTypeColors)) {
+                    const componentDiv = document.createElement('div');
+                    componentDiv.className = 'legend-item';
+                    const componentColor = document.createElement('span');
+                    componentColor.className = 'legend-color';
+                    componentColor.style.backgroundColor = color;
+                    const componentText = document.createElement('span');
+                    // Capitalize first letter of type
+                    componentText.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                    componentDiv.appendChild(componentColor);
+                    componentDiv.appendChild(componentText);
+                    componentLegendContainer.appendChild(componentDiv);
+                }
+                
+                // Add a note about double-clicking
+                const helpNote = document.createElement('div');
+                helpNote.style.marginTop = '10px';
+                helpNote.style.fontSize = '12px';
+                helpNote.style.fontStyle = 'italic';
+                helpNote.style.textAlign = 'center';
+                helpNote.textContent = 'Double-click on file nodes to expand/collapse components';
+                legend.appendChild(helpNote);
             }
             
             // Event listeners
@@ -602,13 +654,21 @@
                         type: file.type,
                         extension: file.extension,
                         depth: file.depth,
-                        components: file.components || []
+                        components: file.components || [],
+                        expanded: false,
+                        hidden: false
                     }));
                     
-                    // Only include relationships where both source and target are in the nodes list
+                    // Store initial graph state
+                    currentGraph.nodes = [...nodes];
+                    
+                    // Only include file-level relationships where both source and target are in the nodes list
                     const nodeIds = new Set(nodes.map(n => n.id));
                     const validLinks = repositoryData.relationships.filter(rel => {
-                        return nodeIds.has(rel.source) && nodeIds.has(rel.target);
+                        // Only include file-level relationships for initial view
+                        // (component relationships will be added when expanding nodes)
+                        return nodeIds.has(rel.source) && nodeIds.has(rel.target) &&
+                               !rel.source.includes(':') && !rel.target.includes(':');
                     });
                     
                     const links = validLinks.map(rel => ({
@@ -616,6 +676,9 @@
                         target: rel.target,
                         type: rel.type
                     }));
+                    
+                    // Store initial links
+                    currentGraph.links = [...links];
                     
                     // Create a force simulation
                     simulation = d3.forceSimulation(nodes)
@@ -650,6 +713,7 @@
                         .data(nodes)
                         .enter()
                         .append('text')
+                        .attr('class', 'label')
                         .attr('dx', d => getNodeRadius(d) + 5)
                         .attr('dy', 4)
                         .text(d => d.name)
@@ -664,6 +728,20 @@
                     node.on('click', (event, d) => {
                         showFileDetails(d);
                         event.stopPropagation();
+                    });
+                    
+                    // Add double-click handler to expand/collapse file nodes into components
+                    node.on('dblclick', (event, d) => {
+                        event.stopPropagation();
+                        
+                        // Only handle files with components
+                        if (d.type === 'file' && d.components && d.components.length > 0) {
+                            if (d.expanded) {
+                                collapseFileNode(d);
+                            } else {
+                                expandFileNode(d);
+                            }
+                        }
                     });
                     
                     // Click on background to hide file details
@@ -707,6 +785,206 @@
                             });
                     }
                     
+                    // Function to expand a file node into its components
+                    function expandFileNode(fileNode) {
+                        // Mark the node as expanded
+                        fileNode.expanded = true;
+                        fileNode.hidden = true;
+                        
+                        // Create component nodes
+                        const componentNodes = fileNode.components.map(comp => {
+                            // Calculate lines of code for proper sizing
+                            const lines = (comp.lineEnd || 0) - (comp.lineStart || 0) + 1;
+                            
+                            return {
+                                id: comp.id,
+                                name: comp.name,
+                                type: comp.type,
+                                parentId: fileNode.id,
+                                size: lines, // Size based on line count
+                                lines: lines,
+                                parentX: fileNode.x,
+                                parentY: fileNode.y,
+                                extension: fileNode.extension,
+                                isComponent: true,
+                                components: comp.components || [],
+                                lineStart: comp.lineStart,
+                                lineEnd: comp.lineEnd
+                            };
+                        });
+                        
+                        // Find all relationships involving components of this file
+                        const componentRelationships = repositoryData.relationships
+                            .filter(rel => {
+                                // Include relationships where either source or target is a component of this file
+                                return (rel.source.startsWith(fileNode.id + ':') || 
+                                       rel.target.startsWith(fileNode.id + ':'));
+                            })
+                            .map(rel => ({
+                                source: rel.source,
+                                target: rel.target,
+                                type: rel.type
+                            }));
+                        
+                        // Update the visualization with new nodes and links
+                        updateVisualization(componentNodes, componentRelationships);
+                    }
+                    
+                    // Function to collapse components back into a file node
+                    function collapseFileNode(fileNode) {
+                        // Find all component nodes for this file
+                        const componentIds = fileNode.components.map(comp => comp.id);
+                        
+                        // Remove component nodes from current graph
+                        currentGraph.nodes = currentGraph.nodes.filter(n => {
+                            if (n.parentId === fileNode.id) {
+                                return false; // Remove components of this file
+                            }
+                            return true;
+                        });
+                        
+                        // Remove component relationships from current graph
+                        currentGraph.links = currentGraph.links.filter(link => {
+                            const sourceIsComponent = componentIds.includes(link.source.id || link.source);
+                            const targetIsComponent = componentIds.includes(link.target.id || link.target);
+                            return !(sourceIsComponent || targetIsComponent);
+                        });
+                        
+                        // Un-hide the file node
+                        fileNode.expanded = false;
+                        fileNode.hidden = false;
+                        
+                        // Update the visualization
+                        updateVisualization([], []);
+                    }
+                    
+                    // Function to update the visualization with new nodes and links
+                    function updateVisualization(newNodes = [], newLinks = []) {
+                        // Add new nodes and links to current graph
+                        if (newNodes.length > 0) {
+                            currentGraph.nodes = currentGraph.nodes.concat(newNodes);
+                        }
+                        if (newLinks.length > 0) {
+                            currentGraph.links = currentGraph.links.concat(newLinks);
+                        }
+                        
+                        // Filter out hidden nodes
+                        const visibleNodes = currentGraph.nodes.filter(n => !n.hidden);
+                        
+                        // Create node lookup map for links
+                        const nodeMap = new Map();
+                        visibleNodes.forEach(n => nodeMap.set(n.id, n));
+                        
+                        // Filter links to only include those with both nodes visible
+                        const visibleLinks = currentGraph.links.filter(link => {
+                            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+                            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+                            return nodeMap.has(sourceId) && nodeMap.has(targetId);
+                        });
+                        
+                        // Update the nodes in the visualization
+                        const nodeSelection = d3.select('#visualization g')
+                            .selectAll('circle.node')
+                            .data(visibleNodes, d => d.id);
+                            
+                        // Remove nodes that no longer exist
+                        nodeSelection.exit().remove();
+                        
+                        // Add new nodes
+                        const newNodeElements = nodeSelection.enter()
+                            .append('circle')
+                            .attr('class', 'node')
+                            .attr('r', d => getNodeRadius(d))
+                            .attr('fill', d => d.isComponent ? getComponentColor(d) : getNodeColor(d))
+                            .attr('cx', d => d.parentX || width / 2)
+                            .attr('cy', d => d.parentY || height / 2)
+                            .call(dragBehavior());
+                            
+                        // Add hover titles to new nodes
+                        newNodeElements.append('title')
+                            .text(d => d.isComponent ? `${d.name} (${d.type}) - ${d.parentId}` : d.path);
+                            
+                        // Add event handlers to new nodes
+                        newNodeElements.on('click', (event, d) => {
+                            showFileDetails(d);
+                            event.stopPropagation();
+                        });
+                        
+                        newNodeElements.on('dblclick', (event, d) => {
+                            event.stopPropagation();
+                            
+                            // For file nodes
+                            if (d.type === 'file' && d.components && d.components.length > 0) {
+                                if (d.expanded) {
+                                    collapseFileNode(d);
+                                } else {
+                                    expandFileNode(d);
+                                }
+                            }
+                            // For component nodes with nested components
+                            else if (d.isComponent && d.components && d.components.length > 0) {
+                                // TODO: Add handling for nested components if needed
+                            }
+                        });
+                        
+                        // Update the labels in the visualization
+                        const labelSelection = d3.select('#visualization g')
+                            .selectAll('text.label')
+                            .data(visibleNodes, d => d.id);
+                            
+                        // Remove labels that no longer exist
+                        labelSelection.exit().remove();
+                        
+                        // Add new labels
+                        labelSelection.enter()
+                            .append('text')
+                            .attr('class', 'label')
+                            .attr('x', d => d.parentX || width / 2)
+                            .attr('y', d => d.parentY || height / 2)
+                            .attr('dx', d => getNodeRadius(d) + 5)
+                            .attr('dy', 4)
+                            .text(d => d.name)
+                            .style('font-size', '10px')
+                            .style('pointer-events', 'none');
+                            
+                        // Update the links in the visualization
+                        const linkSelection = d3.select('#visualization g')
+                            .selectAll('line.link')
+                            .data(visibleLinks, (d, i) => {
+                                const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+                                const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+                                return `${sourceId}-${targetId}-${i}`;
+                            });
+                            
+                        // Remove links that no longer exist
+                        linkSelection.exit().remove();
+                        
+                        // Add new links
+                        linkSelection.enter()
+                            .append('line')
+                            .attr('class', 'link')
+                            .attr('stroke-width', d => getLinkWidth(d));
+                            
+                        // Update the simulation
+                        simulation.nodes(visibleNodes);
+                        simulation.force('link').links(visibleLinks);
+                        simulation.alpha(1).restart();
+                    }
+                    
+                    // Helper function to get component node color
+                    function getComponentColor(node) {
+                        if (node.type && componentTypeColors[node.type]) {
+                            return componentTypeColors[node.type];
+                        }
+                        
+                        // Fallback to extension color or component default
+                        if (node.extension && extensionColors[node.extension]) {
+                            return extensionColors[node.extension];
+                        }
+                        
+                        return componentTypeColors.component;
+                    }
+                    
                 } catch (error) {
                     console.error('Error rendering visualization:', error);
                     visualizationContainer.innerHTML = `
@@ -742,13 +1020,21 @@
                 }
             }
             
-            // Helper function to get node radius based on file size
+            // Helper function to get node radius based on file size or component line count
             function getNodeRadius(node) {
                 if (node.type === 'directory') {
                     return 10; // Fixed size for directories
                 }
                 
-                // Scale file size to a reasonable radius
+                // For component nodes, size based on line count
+                if (node.isComponent) {
+                    const minRadius = 3;
+                    const maxRadius = 12;
+                    const baseRadius = node.lines ? Math.sqrt(node.lines) / 2 : minRadius;
+                    return Math.max(minRadius, Math.min(maxRadius, baseRadius));
+                }
+                
+                // For file nodes, scale based on file size
                 const minRadius = 5;
                 const maxRadius = 15;
                 const baseRadius = node.size ? Math.sqrt(node.size) / 15 : minRadius;
@@ -787,53 +1073,90 @@
             
             // Show file details panel
             function showFileDetails(file) {
-                fileName.textContent = file.name;
-                
-                let details = `
-                    <p><strong>Path:</strong> ${file.path}</p>
-                    <p><strong>Type:</strong> ${file.type}</p>
-                `;
-                
-                if (file.type === 'file') {
-                    details += `<p><strong>Size:</strong> ${formatFileSize(file.size)}</p>`;
+                // For component nodes, show specific component details
+                if (file.isComponent) {
+                    fileName.textContent = `${file.name} (${file.type})`;
                     
-                    if (file.extension) {
-                        details += `<p><strong>Extension:</strong> .${file.extension}</p>`;
+                    let details = `
+                        <p><strong>Parent:</strong> ${file.parentId}</p>
+                        <p><strong>Type:</strong> ${file.type}</p>
+                    `;
+                    
+                    details += `<p><strong>Lines:</strong> ${file.lines} (${file.lineStart}-${file.lineEnd})</p>`;
+                    
+                    if (file.components && file.components.length > 0) {
+                        details += `<p><strong>Nested Components:</strong></p><ul class="component-list">`;
+                        file.components.forEach(comp => {
+                            details += `<li><strong>${comp.name}</strong> (${comp.type})`;
+                            
+                            if (comp.lineStart && comp.lineEnd) {
+                                details += ` - Lines ${comp.lineStart}-${comp.lineEnd}`;
+                            }
+                            
+                            details += `</li>`;
+                        });
+                        details += `</ul>`;
                     }
+                    
+                    details += `<p><em>Double-click to expand/collapse components.</em></p>`;
+                    
+                    fileDetails.innerHTML = details;
+                    fileInfo.style.display = 'block';
                 }
-                
-                details += `<p><strong>Depth:</strong> ${file.depth}</p>`;
-                
-                if (file.components && file.components.length > 0) {
-                    details += `<p><strong>Components:</strong></p><ul class="component-list">`;
-                    file.components.forEach(comp => {
-                        details += `<li><strong>${comp.name}</strong> (${comp.type})`;
+                // For regular file/directory nodes
+                else {
+                    fileName.textContent = file.name;
+                    
+                    let details = `
+                        <p><strong>Path:</strong> ${file.path}</p>
+                        <p><strong>Type:</strong> ${file.type}</p>
+                    `;
+                    
+                    if (file.type === 'file') {
+                        details += `<p><strong>Size:</strong> ${formatFileSize(file.size)}</p>`;
                         
-                        if (comp.lineStart && comp.lineEnd) {
-                            details += ` - Lines ${comp.lineStart}-${comp.lineEnd}`;
+                        if (file.extension) {
+                            details += `<p><strong>Extension:</strong> .${file.extension}</p>`;
                         }
+                    }
+                    
+                    details += `<p><strong>Depth:</strong> ${file.depth}</p>`;
+                    
+                    if (file.components && file.components.length > 0) {
+                        details += `<p><strong>Components:</strong></p><ul class="component-list">`;
+                        file.components.forEach(comp => {
+                            details += `<li><strong>${comp.name}</strong> (${comp.type})`;
+                            
+                            if (comp.lineStart && comp.lineEnd) {
+                                details += ` - Lines ${comp.lineStart}-${comp.lineEnd}`;
+                            }
+                            
+                            if (comp.components && comp.components.length > 0) {
+                                details += `<ul class="component-list">`;
+                                comp.components.forEach(subComp => {
+                                    details += `<li><strong>${subComp.name}</strong> (${subComp.type})`;
+                                    
+                                    if (subComp.lineStart && subComp.lineEnd) {
+                                        details += ` - Lines ${subComp.lineStart}-${subComp.lineEnd}`;
+                                    }
+                                    
+                                    details += `</li>`;
+                                });
+                                details += `</ul>`;
+                            }
+                            
+                            details += `</li>`;
+                        });
+                        details += `</ul>`;
                         
-                        if (comp.components && comp.components.length > 0) {
-                            details += `<ul class="component-list">`;
-                            comp.components.forEach(subComp => {
-                                details += `<li><strong>${subComp.name}</strong> (${subComp.type})`;
-                                
-                                if (subComp.lineStart && subComp.lineEnd) {
-                                    details += ` - Lines ${subComp.lineStart}-${subComp.lineEnd}`;
-                                }
-                                
-                                details += `</li>`;
-                            });
-                            details += `</ul>`;
+                        if (file.type === 'file') {
+                            details += `<p><em>Double-click to expand/collapse components.</em></p>`;
                         }
-                        
-                        details += `</li>`;
-                    });
-                    details += `</ul>`;
+                    }
+                    
+                    fileDetails.innerHTML = details;
+                    fileInfo.style.display = 'block';
                 }
-                
-                fileDetails.innerHTML = details;
-                fileInfo.style.display = 'block';
             }
             
             // Hide file details panel
