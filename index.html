@@ -787,9 +787,8 @@
                     
                     // Function to expand a file node into its components
                     function expandFileNode(fileNode) {
-                        // Mark the node as expanded
+                        // Mark the node as expanded but keep it visible
                         fileNode.expanded = true;
-                        fileNode.hidden = true;
                         
                         // Create component nodes
                         const componentNodes = fileNode.components.map(comp => {
@@ -837,22 +836,22 @@
                         
                         // Remove component nodes from current graph
                         currentGraph.nodes = currentGraph.nodes.filter(n => {
-                            if (n.parentId === fileNode.id) {
-                                return false; // Remove components of this file
-                            }
-                            return true;
+                            return !n.isComponent || n.parentId !== fileNode.id;
                         });
                         
                         // Remove component relationships from current graph
                         currentGraph.links = currentGraph.links.filter(link => {
-                            const sourceIsComponent = componentIds.includes(link.source.id || link.source);
-                            const targetIsComponent = componentIds.includes(link.target.id || link.target);
+                            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+                            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+                            
+                            const sourceIsComponent = componentIds.includes(sourceId);
+                            const targetIsComponent = componentIds.includes(targetId);
+                            
                             return !(sourceIsComponent || targetIsComponent);
                         });
                         
-                        // Un-hide the file node
+                        // Mark file node as not expanded
                         fileNode.expanded = false;
-                        fileNode.hidden = false;
                         
                         // Update the visualization
                         updateVisualization([], []);
@@ -868,14 +867,14 @@
                             currentGraph.links = currentGraph.links.concat(newLinks);
                         }
                         
-                        // Filter out hidden nodes
-                        const visibleNodes = currentGraph.nodes.filter(n => !n.hidden);
+                        // Get all nodes (we're no longer hiding nodes, just marking them as expanded)
+                        const visibleNodes = currentGraph.nodes;
                         
                         // Create node lookup map for links
                         const nodeMap = new Map();
                         visibleNodes.forEach(n => nodeMap.set(n.id, n));
                         
-                        // Filter links to only include those with both nodes visible
+                        // Filter links to only include those with both nodes in the graph
                         const visibleLinks = currentGraph.links.filter(link => {
                             const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
                             const targetId = typeof link.target === 'object' ? link.target.id : link.target;
