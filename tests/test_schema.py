@@ -5,8 +5,8 @@ import os
 import tempfile
 from datetime import datetime
 
-from src.repo_visualizer.example import create_example_data, save_example_to_file
-from src.repo_visualizer.schema import (
+from repo_visualizer.example import create_example_data, save_example_to_file
+from repo_visualizer.schema import (
     create_empty_schema,
     schema_version,
     validate_repository_data,

@@ -3,7 +3,7 @@
 import io
 from unittest.mock import patch
 
-from src.hello_world.main import hello_world, main
+from hello_world.main import hello_world, main
 
 
 def test_hello_world():

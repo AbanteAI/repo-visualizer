@@ -6,7 +6,23 @@ Repo Visualizer is an interactive tool for visualizing git repositories as dynam
 
 Our vision is to transform how developers explore and understand codebases by creating an intuitive, visual representation that highlights connections between files, classes, and functions. By "playing" through git history, users can see how a project evolves over time, making it easier to understand architectural decisions and development patterns.
 
-## Features (Planned)
+## Features
+
+### Repository Analyzer (Available Now)
+
+- **Comprehensive Repository Analysis**
+  - Extracts file structure, metadata, and relationships
+  - Detects imports and references between files
+  - Analyzes components within files (classes, functions, methods)
+  - Extracts git history for time-based visualization
+  - Calculates language statistics
+
+- **Standardized Output Format**
+  - Generates structured JSON according to the [schema](docs/SCHEMA.md)
+  - Designed for visualization consumption
+  - Human-readable and processable format
+
+### Visualization Interface (Coming Soon)
 
 - **Interactive Visualization**
   - Files represented as interactive nodes (dots)
@@ -20,12 +36,6 @@ Our vision is to transform how developers explore and understand codebases by cr
   - Force-directed layout with "tension" between related components
   - Customizable visualizations through intuitive UI controls
 
-- **Exploration Tools**
-  - Click nodes to view code content
-  - Search and filter capabilities
-  - Zoom and pan navigation
-  - Configurable visualization parameters
-
 ## Architecture
 
 The project consists of two main components:
@@ -35,13 +45,89 @@ The project consists of two main components:
 
 This architecture allows for simple local usage while remaining extensible for potential future hosting as a service.
 
-## Getting Started (Coming Soon)
+## Getting Started
 
-As development progresses, we'll provide detailed instructions for:
-- Installing dependencies
-- Analyzing repositories
-- Launching the visualization interface
-- Customizing the display
+### Installation
+
+You can install Repo Visualizer using pip:
+
+```bash
+pip install repo-visualizer
+```
+
+Or directly from the repository:
+
+```bash
+git clone https://github.com/AbanteAI/repo-visualizer.git
+cd repo-visualizer
+pip install -e .
+```
+
+### Usage
+
+#### Command Line Interface
+
+Once installed, you can use the Repo Visualizer CLI to analyze a repository:
+
+```bash
+# Analyze the current directory
+repo-visualizer
+
+# Analyze a specific repository
+repo-visualizer /path/to/repository
+
+# Specify an output file
+repo-visualizer /path/to/repository -o output.json
+
+# Enable verbose output
+repo-visualizer -v
+```
+
+#### Python API
+
+You can also use Repo Visualizer as a Python library:
+
+```python
+from src.repo_visualizer.analyzer import analyze_repository
+
+# Analyze a repository
+analyze_repository("/path/to/repository", "output.json")
+```
+
+#### Output
+
+The analyzer generates a JSON file that follows the [schema](docs/SCHEMA.md). This file can be used for visualization or analysis.
+
+The JSON includes:
+- Repository metadata (name, description, language stats)
+- File structure and metrics
+- Component details (classes, functions, methods)
+- Relationships between files and components
+- Git history data
+
+## Development
+
+To set up a development environment:
+
+```bash
+git clone https://github.com/AbanteAI/repo-visualizer.git
+cd repo-visualizer
+source .mentat/setup.sh  # Sets up a virtual environment and installs dependencies
+```
+
+### Running Tests
+
+```bash
+pytest
+```
+
+### Running Checks
+
+```bash
+ruff check .        # Run linting
+ruff format .       # Run formatting
+pyright             # Run type checking
+```
 
 ## Roadmap
 
