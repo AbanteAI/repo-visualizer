@@ -24,7 +24,7 @@ class TestRepositoryAnalyzer:
         # First call to isdir returns True (path exists)
         # Second call to isdir returns False (.git directory doesn't exist)
         mock_isdir.side_effect = [True, False]
-        
+
         with pytest.raises(ValueError, match="Not a git repository"):
             RepositoryAnalyzer("/fake/path")
 
@@ -34,7 +34,7 @@ class TestRepositoryAnalyzer:
         """Test extracting repository metadata."""
         # Mock directory checks
         mock_isdir.return_value = True
-        
+
         # Mock subprocess calls
         def mock_subprocess_run(args, **kwargs):
             result = MagicMock()
@@ -55,17 +55,17 @@ class TestRepositoryAnalyzer:
                 result.returncode = 0
                 result.stdout = "2023-03-15 15:30:00 +0000\n"
             return result
-        
+
         mock_run.side_effect = mock_subprocess_run
-        
+
         # Create analyzer and extract metadata
         with patch("os.walk") as mock_walk:
             # Mock empty file system for _calculate_language_stats
             mock_walk.return_value = []
-            
+
             analyzer = RepositoryAnalyzer("/fake/repo")
             analyzer._extract_metadata()
-        
+
         # Check metadata values
         assert analyzer.data["metadata"]["repoName"] == "repo"
         assert "Git repository at" in analyzer.data["metadata"]["description"]
@@ -77,30 +77,32 @@ class TestRepositoryAnalyzer:
     @patch("os.walk")
     @patch("os.path.isfile")
     @patch("os.path.getsize")
-    def test_calculate_language_stats(self, mock_getsize, mock_isfile, mock_walk, mock_isdir):
+    def test_calculate_language_stats(
+        self, mock_getsize, mock_isfile, mock_walk, mock_isdir
+    ):
         """Test calculation of language statistics."""
         # Mock directory checks
         mock_isdir.return_value = True
-        
+
         # Mock file system structure
         mock_walk.return_value = [
             ("/fake/repo", [], ["file1.py", "file2.py", "file3.js"]),
         ]
-        
+
         # Mock file checks
         mock_isfile.return_value = True
-        
+
         # Mock file sizes
         mock_getsize.side_effect = lambda path: {
             "/fake/repo/file1.py": 100,
             "/fake/repo/file2.py": 200,
             "/fake/repo/file3.js": 100,
         }.get(path, 0)
-        
+
         # Create analyzer and calculate language stats
         analyzer = RepositoryAnalyzer("/fake/repo")
         language_stats = analyzer._calculate_language_stats()
-        
+
         # Check language statistics
         assert len(language_stats) == 2
         assert "Python" in language_stats
@@ -118,7 +120,7 @@ class TestRepositoryAnalyzer:
         mock_isdir.return_value = True
         mock_exists.return_value = True
         mock_isfile.return_value = True
-        
+
         # Mock file content
         python_content = """
 # This is a comment
@@ -143,32 +145,32 @@ class ExampleClass:
         file_mock = MagicMock()
         file_mock.__enter__.return_value.read.return_value = python_content
         mock_open.return_value = file_mock
-        
+
         # Create analyzer
         analyzer = RepositoryAnalyzer("/fake/repo")
-        
+
         # Analyze Python file
         components, metrics = analyzer._analyze_python_file(
             python_content, "test.py", {"linesOfCode": 20, "emptyLines": 5}
         )
-        
+
         # Check metrics
         assert "commentLines" in metrics
         assert metrics["commentLines"] > 0
-        
+
         # Check components
         assert len(components) == 2  # One function, one class
-        
+
         # Check function
         function = next(c for c in components if c["type"] == "function")
         assert function["name"] == "top_level_function"
         assert function["id"] == "test.py:top_level_function"
-        
+
         # Check class
         class_component = next(c for c in components if c["type"] == "class")
         assert class_component["name"] == "ExampleClass"
         assert class_component["id"] == "test.py:ExampleClass"
-        
+
         # Check methods in class
         assert len(class_component["components"]) == 2
         method_names = [m["name"] for m in class_component["components"]]
@@ -180,18 +182,18 @@ class ExampleClass:
         """Test end-to-end repository analysis."""
         # This is a more integrated test that patches several methods
         # to avoid actual file system and git operations
-        
+
         # Mock directory checks
         mock_isdir.return_value = True
-        
-        with patch.object(RepositoryAnalyzer, "_extract_metadata"), \
-             patch.object(RepositoryAnalyzer, "_analyze_files"), \
-             patch.object(RepositoryAnalyzer, "_extract_relationships"), \
-             patch.object(RepositoryAnalyzer, "_analyze_history"):
-            
+
+        with patch.object(RepositoryAnalyzer, "_extract_metadata"), patch.object(
+            RepositoryAnalyzer, "_analyze_files"
+        ), patch.object(RepositoryAnalyzer, "_extract_relationships"), patch.object(
+            RepositoryAnalyzer, "_analyze_history"
+        ):
             analyzer = RepositoryAnalyzer("/fake/repo")
             result = analyzer.analyze()
-            
+
             # Check basic structure
             assert "metadata" in result
             assert "files" in result
@@ -203,14 +205,14 @@ class ExampleClass:
         """Test saving repository data to a file."""
         # Mock directory checks
         mock_isdir.return_value = True
-        
+
         # Mock open file
         mock_file = MagicMock()
-        
+
         with patch("builtins.open", mock_file):
             analyzer = RepositoryAnalyzer("/fake/repo")
             analyzer.save_to_file("output.json")
-            
+
             # Check that json.dump was called
             assert mock_json_dump.called
 
@@ -220,10 +222,10 @@ class ExampleClass:
         # Setup mock
         mock_instance = MagicMock()
         mock_analyzer_class.return_value = mock_instance
-        
+
         # Call function
         analyze_repository("/path/to/repo", "output.json")
-        
+
         # Check that methods were called
         mock_analyzer_class.assert_called_once_with("/path/to/repo")
         mock_instance.analyze.assert_called_once()
