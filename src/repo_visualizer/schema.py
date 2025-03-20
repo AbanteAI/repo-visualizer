@@ -2,16 +2,17 @@
 Repository Visualization Schema
 
 This module defines the schema for the repository visualization JSON data format.
-It provides type definitions and utilities for working with repository visualization data.
+It provides type definitions and utilities for working with repository
+visualization data.
 """
 
-from typing import Dict, List, Union, Optional, Any, TypedDict
 from datetime import datetime
+from typing import Any, Dict, List, Optional, TypedDict, Union
 
 
 class FileMetrics(TypedDict, total=False):
     """Metrics associated with a file."""
-    
+
     complexity: float
     linesOfCode: int
     commentLines: int
@@ -21,27 +22,27 @@ class FileMetrics(TypedDict, total=False):
 
 class ComponentMetrics(TypedDict, total=False):
     """Metrics associated with a component."""
-    
+
     complexity: float
     linesOfCode: int
     custom: Dict[str, Any]
 
 
-class Component(TypedDict):
+class Component(TypedDict, total=False):
     """Internal component of a file (class, function, etc.)."""
-    
+
     id: str
     name: str
     type: str  # 'class', 'function', 'method', 'variable', etc.
     lineStart: int
     lineEnd: int
     metrics: Optional[ComponentMetrics]
-    components: List['Component']  # Nested components
+    components: List["Component"]  # Nested components
 
 
-class File(TypedDict):
+class File(TypedDict, total=False):
     """File or directory in the repository."""
-    
+
     id: str
     path: str
     name: str
@@ -57,7 +58,7 @@ class File(TypedDict):
 
 class Relationship(TypedDict, total=False):
     """Relationship between files or components."""
-    
+
     source: str  # ID of source file/component
     target: str  # ID of target file/component
     type: str  # 'import', 'call', 'inheritance', etc.
@@ -67,7 +68,7 @@ class Relationship(TypedDict, total=False):
 
 class FileChange(TypedDict):
     """Change to a file in a commit."""
-    
+
     fileId: str
     type: str  # 'add', 'modify', 'delete'
     additions: int
@@ -76,7 +77,7 @@ class FileChange(TypedDict):
 
 class Commit(TypedDict):
     """Git commit data."""
-    
+
     id: str  # Commit hash
     author: str
     date: str  # ISO format date string
@@ -86,7 +87,7 @@ class Commit(TypedDict):
 
 class TimelinePoint(TypedDict):
     """Point in time with repository snapshot."""
-    
+
     commitId: str
     state: Dict[str, Any]
     snapshot: Dict[str, Union[List[File], List[Relationship]]]
@@ -94,14 +95,14 @@ class TimelinePoint(TypedDict):
 
 class History(TypedDict):
     """Repository history data."""
-    
+
     commits: List[Commit]
     timelinePoints: List[TimelinePoint]
 
 
 class Metadata(TypedDict, total=False):
     """Repository metadata."""
-    
+
     repoName: str
     description: str
     createdAt: str  # ISO format date string
@@ -114,7 +115,7 @@ class Metadata(TypedDict, total=False):
 
 class RepositoryData(TypedDict):
     """Complete repository visualization data."""
-    
+
     metadata: Metadata
     files: List[File]
     relationships: List[Relationship]
@@ -122,34 +123,32 @@ class RepositoryData(TypedDict):
     customData: Dict[str, Any]
 
 
-def validate_repository_data(data: Dict[str, Any]) -> bool:
+def validate_repository_data(data: Union[RepositoryData, Dict[str, Any]]) -> bool:
     """
     Validate that the provided data conforms to the RepositoryData schema.
-    
+
     Args:
         data: Dictionary containing repository data
-        
+
     Returns:
         bool: True if valid, False otherwise
     """
     # Basic validation of required fields
     if "metadata" not in data or "files" not in data or "relationships" not in data:
         return False
-    
+
     # Additional validation could be implemented here
-    
+
     return True
 
 
 def create_empty_schema() -> RepositoryData:
     """
     Create an empty schema with required fields.
-    
+
     Returns:
         RepositoryData: Empty schema with default values
     """
-    from datetime import datetime
-    
     return {
         "metadata": {
             "repoName": "",
@@ -160,7 +159,7 @@ def create_empty_schema() -> RepositoryData:
         "files": [],
         "relationships": [],
         "history": None,
-        "customData": {}
+        "customData": {},
     }
 
 
