@@ -208,13 +208,14 @@ class RepositoryAnalyzer:
         # Create a PathSpec object to match against gitignore patterns
         return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
-    def _is_ignored(self, path: str, is_directory: bool = None) -> bool:
+    def _is_ignored(self, path: str, is_directory: Optional[bool] = None) -> bool:
         """
         Check if a path should be ignored according to gitignore rules.
 
         Args:
             path: The path to check, relative to the repository root
-            is_directory: Explicitly specify if path is a directory; if None, will check filesystem
+            is_directory: Explicitly specify if path is a directory; if None, will check
+                filesystem
 
         Returns:
             True if the path should be ignored, False otherwise
