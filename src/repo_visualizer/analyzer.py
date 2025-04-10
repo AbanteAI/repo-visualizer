@@ -70,7 +70,8 @@ class RepositoryAnalyzer:
         self._analyze_history()
 
         # Final safety check: filter out any files that should be ignored
-        # This ensures even if something slipped through, it won't be in the final output
+        # This ensures even if something slipped through, it won't be in the
+        # final output
         self._apply_final_gitignore_filter()
 
         return self.data
@@ -1008,7 +1009,8 @@ class RepositoryAnalyzer:
     def _apply_final_gitignore_filter(self) -> None:
         """
         Apply final gitignore filtering to ensure no ignored files are in the output.
-        This is a failsafe mechanism that removes any files that match gitignore patterns.
+        This is a failsafe mechanism that removes any files that match gitignore
+        patterns.
         """
         if not self.data["files"]:
             return
