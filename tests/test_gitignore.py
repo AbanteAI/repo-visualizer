@@ -66,7 +66,7 @@ sample/ignore_me/
             assert analyzer._is_ignored("sample/keep_me/file.txt") is False
 
     def test_always_ignore_git_directory(self):
-        """Test that .git directory is always ignored regardless of gitignore patterns."""
+        """Test that .git directory is always ignored no matter what."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a fake git repo
             git_dir = os.path.join(temp_dir, ".git")
