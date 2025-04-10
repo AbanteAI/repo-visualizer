@@ -69,6 +69,10 @@ class RepositoryAnalyzer:
         # Analyze git history
         self._analyze_history()
 
+        # Final safety check: filter out any files that should be ignored
+        # This ensures even if something slipped through, it won't be in the final output
+        self._apply_final_gitignore_filter()
+
         return self.data
 
     def _extract_metadata(self) -> None:
@@ -1000,6 +1004,67 @@ class RepositoryAnalyzer:
         """Extract relationships between files and components."""
         # File relationships are already extracted during file content analysis
         self.data["relationships"] = self.relationships
+
+    def _apply_final_gitignore_filter(self) -> None:
+        """
+        Apply final gitignore filtering to ensure no ignored files are in the output.
+        This is a failsafe mechanism that removes any files that match gitignore patterns.
+        """
+        if not self.data["files"]:
+            return
+
+        # Create a set of paths that should be ignored
+        ignored_paths = set()
+
+        # First pass: identify all ignored directories
+        for file in self.data["files"][:]:
+            path = file["path"]
+
+            # Check if this path should be ignored
+            is_dir = file["type"] == "directory"
+            if self._is_ignored(path, is_directory=is_dir):
+                ignored_paths.add(path)
+                if is_dir:
+                    # Also add the path with trailing slash to match directory patterns
+                    ignored_paths.add(f"{path}/")
+
+        # Second pass: filter out all files that are ignored or in ignored directories
+        filtered_files = []
+        for file in self.data["files"]:
+            path = file["path"]
+
+            # Skip if this path is ignored directly
+            if path in ignored_paths:
+                continue
+
+            # Skip if this path is in an ignored directory
+            if any(
+                ignored_dir == ""  # Root directory
+                or (
+                    ignored_dir.endswith("/") and path.startswith(ignored_dir)
+                )  # Directory with trailing slash
+                or (
+                    not ignored_dir.endswith("/") and path.startswith(f"{ignored_dir}/")
+                )  # Directory without trailing slash
+                for ignored_dir in ignored_paths
+            ):
+                continue
+
+            # Keep this file
+            filtered_files.append(file)
+
+        # Update the data with the filtered list
+        self.data["files"] = filtered_files
+
+        # Also update file_ids to be consistent
+        self.file_ids = {file["id"] for file in filtered_files}
+
+        # Filter relationships to only include files that still exist
+        self.data["relationships"] = [
+            rel
+            for rel in self.data["relationships"]
+            if rel["source"] in self.file_ids and rel["target"] in self.file_ids
+        ]
 
     def _analyze_history(self) -> None:
         """Analyze git history."""
