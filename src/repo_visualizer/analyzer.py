@@ -208,12 +208,13 @@ class RepositoryAnalyzer:
         # Create a PathSpec object to match against gitignore patterns
         return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
-    def _is_ignored(self, path: str) -> bool:
+    def _is_ignored(self, path: str, is_directory: bool = None) -> bool:
         """
         Check if a path should be ignored according to gitignore rules.
 
         Args:
             path: The path to check, relative to the repository root
+            is_directory: Explicitly specify if path is a directory; if None, will check filesystem
 
         Returns:
             True if the path should be ignored, False otherwise
@@ -225,13 +226,27 @@ class RepositoryAnalyzer:
         # Normalize path separator to forward slash for consistency
         norm_path = path.replace(os.path.sep, "/")
 
-        # Add trailing slash for directories to match gitignore patterns
-        is_dir = os.path.isdir(os.path.join(self.repo_path, norm_path))
-        if is_dir and not norm_path.endswith("/"):
+        # Determine if the path is a directory and add trailing slash if so
+        if is_directory is None:
+            is_directory = os.path.isdir(os.path.join(self.repo_path, norm_path))
+
+        if is_directory and not norm_path.endswith("/"):
             norm_path += "/"
 
-        # Check if the path matches any gitignore patterns
-        return self.gitignore_spec.match_file(norm_path)
+        # 1. First check if the path itself is ignored
+        if self.gitignore_spec.match_file(norm_path):
+            return True
+
+        # 2. For a file path, also check if any parent directory is ignored
+        if not is_directory and "/" in norm_path:
+            # Check if any parent directory is ignored
+            parts = norm_path.split("/")
+            for i in range(1, len(parts)):
+                parent_dir = "/".join(parts[:i]) + "/"
+                if self.gitignore_spec.match_file(parent_dir):
+                    return True
+
+        return False
 
     def _calculate_language_stats(self) -> Dict[str, float]:
         """Calculate language statistics based on file extensions."""
@@ -281,7 +296,8 @@ class RepositoryAnalyzer:
                 dir_name = dirs[i]
                 dir_path = os.path.join(rel_root, dir_name)
 
-                if self._is_ignored(dir_path):
+                # Explicitly check as a directory
+                if self._is_ignored(dir_path, is_directory=True):
                     dirs.pop(i)
                 else:
                     i += 1
@@ -290,7 +306,7 @@ class RepositoryAnalyzer:
                 rel_path = os.path.join(rel_root, file)
 
                 # Skip ignored files
-                if self._is_ignored(rel_path):
+                if self._is_ignored(rel_path, is_directory=False):
                     continue
 
                 file_path = os.path.join(root, file)
@@ -350,7 +366,9 @@ class RepositoryAnalyzer:
                 dir_path = os.path.join(rel_root, dir_name)
 
                 # Skip hidden directories and those that match gitignore patterns
-                if dir_name.startswith(".") or self._is_ignored(dir_path):
+                if dir_name.startswith(".") or self._is_ignored(
+                    dir_path, is_directory=True
+                ):
                     dirs.pop(i)
                 else:
                     i += 1
@@ -393,7 +411,7 @@ class RepositoryAnalyzer:
                 rel_path = os.path.join(rel_root, file_name)
 
                 # Skip ignored files
-                if self._is_ignored(rel_path):
+                if self._is_ignored(rel_path, is_directory=False):
                     continue
 
                 file_path = os.path.join(root, file_name)
