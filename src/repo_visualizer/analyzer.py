@@ -208,7 +208,9 @@ class RepositoryAnalyzer:
         # Create a PathSpec object to match against gitignore patterns
         return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
-    def _is_ignored(self, path: str, is_directory: Optional[bool] = None) -> bool:
+    def _is_ignored(
+        self, path: str, is_directory: Optional[bool] = None, check_parents: bool = True
+    ) -> bool:
         """
         Check if a path should be ignored according to gitignore rules.
 
@@ -216,6 +218,7 @@ class RepositoryAnalyzer:
             path: The path to check, relative to the repository root
             is_directory: Explicitly specify if path is a directory; if None, will check
                 filesystem
+            check_parents: Whether to check if any parent directory is ignored
 
         Returns:
             True if the path should be ignored, False otherwise
@@ -238,8 +241,8 @@ class RepositoryAnalyzer:
         if self.gitignore_spec.match_file(norm_path):
             return True
 
-        # 2. For a file path, also check if any parent directory is ignored
-        if not is_directory and "/" in norm_path:
+        # 2. Check if any parent directory is ignored (for any path type)
+        if check_parents and "/" in norm_path:
             # Check if any parent directory is ignored
             parts = norm_path.split("/")
             for i in range(1, len(parts)):
@@ -291,6 +294,15 @@ class RepositoryAnalyzer:
             if rel_root == ".":
                 rel_root = ""
 
+            # Check if current directory is inside an ignored directory
+            if any(
+                rel_root == ignored_dir or rel_root.startswith(f"{ignored_dir}/")
+                for ignored_dir in ignored_dirs
+            ):
+                # Skip all directories in this subtree
+                dirs.clear()
+                continue
+
             # Filter directories in-place
             i = 0
             while i < len(dirs):
@@ -299,6 +311,12 @@ class RepositoryAnalyzer:
 
                 # Explicitly check as a directory
                 if self._is_ignored(dir_path, is_directory=True):
+                    # Add to ignored_dirs to skip traversal into this subtree
+                    if rel_root:
+                        ignored_path = f"{rel_root}/{dir_name}"
+                    else:
+                        ignored_path = dir_name
+                    ignored_dirs.add(ignored_path)
                     dirs.pop(i)
                 else:
                     i += 1
@@ -306,8 +324,9 @@ class RepositoryAnalyzer:
             for file in files:
                 rel_path = os.path.join(rel_root, file)
 
-                # Skip ignored files
-                if self._is_ignored(rel_path, is_directory=False):
+                # Skip ignored files - no need to check parent directories again
+                # since we're already filtering directories during traversal
+                if self._is_ignored(rel_path, is_directory=False, check_parents=False):
                     continue
 
                 file_path = os.path.join(root, file)
@@ -353,11 +372,23 @@ class RepositoryAnalyzer:
         """Analyze file structure and content."""
         files: List[File] = []
 
+        # Track ignored directories to avoid traversing their subtrees
+        ignored_dirs = set()
+
         for root, dirs, file_names in os.walk(self.repo_path):
             # Get the path relative to the repository root
             rel_root = os.path.relpath(root, self.repo_path)
             if rel_root == ".":
                 rel_root = ""
+
+            # Check if current directory is inside an ignored directory
+            if any(
+                rel_root == ignored_dir or rel_root.startswith(f"{ignored_dir}/")
+                for ignored_dir in ignored_dirs
+            ):
+                # Skip all directories in this subtree
+                dirs.clear()
+                continue
 
             # Filter directories in-place to respect gitignore
             # Use a copy of the list since we're modifying it during iteration
@@ -370,6 +401,12 @@ class RepositoryAnalyzer:
                 if dir_name.startswith(".") or self._is_ignored(
                     dir_path, is_directory=True
                 ):
+                    # Add to ignored_dirs to skip traversal into this subtree
+                    if rel_root:
+                        ignored_path = f"{rel_root}/{dir_name}"
+                    else:
+                        ignored_path = dir_name
+                    ignored_dirs.add(ignored_path)
                     dirs.pop(i)
                 else:
                     i += 1
@@ -411,8 +448,9 @@ class RepositoryAnalyzer:
 
                 rel_path = os.path.join(rel_root, file_name)
 
-                # Skip ignored files
-                if self._is_ignored(rel_path, is_directory=False):
+                # Skip ignored files - no need to check parent directories again
+                # since we're already filtering directories during traversal
+                if self._is_ignored(rel_path, is_directory=False, check_parents=False):
                     continue
 
                 file_path = os.path.join(root, file_name)
