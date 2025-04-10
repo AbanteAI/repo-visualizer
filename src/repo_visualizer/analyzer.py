@@ -45,7 +45,7 @@ class RepositoryAnalyzer:
         self.data = create_empty_schema()
         self.file_ids: Set[str] = set()
         self.relationships: List[Relationship] = []
-        
+
         # Load gitignore patterns
         self.gitignore_spec = self._load_gitignore_patterns()
 
@@ -189,13 +189,13 @@ class RepositoryAnalyzer:
     def _load_gitignore_patterns(self) -> pathspec.PathSpec:
         """
         Load gitignore patterns from the repository.
-        
+
         Returns:
             A PathSpec object that can match paths against gitignore patterns
         """
         gitignore_path = os.path.join(self.repo_path, ".gitignore")
         patterns = []
-        
+
         # If .gitignore file exists, read the patterns
         if os.path.isfile(gitignore_path):
             try:
@@ -203,34 +203,34 @@ class RepositoryAnalyzer:
                     patterns = f.readlines()
             except Exception as e:
                 print(f"Warning: Could not read .gitignore file: {e}")
-        
+
         # Create a PathSpec object to match against gitignore patterns
         return pathspec.PathSpec.from_lines(
             pathspec.patterns.GitWildMatchPattern, patterns
         )
-    
+
     def _is_ignored(self, path: str) -> bool:
         """
         Check if a path should be ignored according to gitignore rules.
-        
+
         Args:
             path: The path to check, relative to the repository root
-            
+
         Returns:
             True if the path should be ignored, False otherwise
         """
         # Always ignore the .git directory
         if ".git" in path.split(os.path.sep):
             return True
-            
+
         # Normalize path separator to forward slash for consistency
         norm_path = path.replace(os.path.sep, "/")
-        
+
         # Add trailing slash for directories to match gitignore patterns
         is_dir = os.path.isdir(os.path.join(self.repo_path, norm_path))
-        if is_dir and not norm_path.endswith('/'):
-            norm_path += '/'
-            
+        if is_dir and not norm_path.endswith("/"):
+            norm_path += "/"
+
         # Check if the path matches any gitignore patterns
         return self.gitignore_spec.match_file(norm_path)
 
@@ -275,25 +275,25 @@ class RepositoryAnalyzer:
             rel_root = os.path.relpath(root, self.repo_path)
             if rel_root == ".":
                 rel_root = ""
-            
+
             # Filter directories in-place
             i = 0
             while i < len(dirs):
                 dir_name = dirs[i]
                 dir_path = os.path.join(rel_root, dir_name)
-                
+
                 if self._is_ignored(dir_path):
                     dirs.pop(i)
                 else:
                     i += 1
-            
+
             for file in files:
                 rel_path = os.path.join(rel_root, file)
-                
+
                 # Skip ignored files
                 if self._is_ignored(rel_path):
                     continue
-                
+
                 file_path = os.path.join(root, file)
                 try:
                     # Only count regular files
@@ -342,20 +342,20 @@ class RepositoryAnalyzer:
             rel_root = os.path.relpath(root, self.repo_path)
             if rel_root == ".":
                 rel_root = ""
-            
+
             # Filter directories in-place to respect gitignore
             # Use a copy of the list since we're modifying it during iteration
             i = 0
             while i < len(dirs):
                 dir_name = dirs[i]
                 dir_path = os.path.join(rel_root, dir_name)
-                
+
                 # Skip hidden directories and those that match gitignore patterns
                 if dir_name.startswith(".") or self._is_ignored(dir_path):
                     dirs.pop(i)
                 else:
                     i += 1
-            
+
             # Process directories that weren't filtered out
             for dir_name in dirs:
                 dir_path = os.path.join(root, dir_name)
@@ -390,13 +390,13 @@ class RepositoryAnalyzer:
                 # Skip hidden files
                 if file_name.startswith("."):
                     continue
-                
+
                 rel_path = os.path.join(rel_root, file_name)
-                
+
                 # Skip ignored files
                 if self._is_ignored(rel_path):
                     continue
-                    
+
                 file_path = os.path.join(root, file_name)
 
                 # Skip if somehow outside repo path

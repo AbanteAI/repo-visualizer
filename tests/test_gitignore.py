@@ -39,15 +39,16 @@ sample/ignore_me/
                 f.write(gitignore_content)
 
             # Initialize the analyzer
-            with patch.object(RepositoryAnalyzer, '_extract_metadata'), \
-                 patch.object(RepositoryAnalyzer, '_analyze_files'), \
-                 patch.object(RepositoryAnalyzer, '_extract_relationships'), \
-                 patch.object(RepositoryAnalyzer, '_analyze_history'):
+            with patch.object(RepositoryAnalyzer, "_extract_metadata"), patch.object(
+                RepositoryAnalyzer, "_analyze_files"
+            ), patch.object(RepositoryAnalyzer, "_extract_relationships"), patch.object(
+                RepositoryAnalyzer, "_analyze_history"
+            ):
                 analyzer = RepositoryAnalyzer(temp_dir)
 
             # Test if the gitignore spec is properly loaded
             assert analyzer.gitignore_spec is not None
-            
+
             # Test various paths against the gitignore patterns
             assert analyzer._is_ignored("file.pyc") is True
             assert analyzer._is_ignored("some/path/file.pyc") is True
@@ -58,7 +59,7 @@ sample/ignore_me/
             assert analyzer._is_ignored("package.egg-info/") is True
             assert analyzer._is_ignored("temp_file.txt") is True
             assert analyzer._is_ignored("sample/ignore_me/file.txt") is True
-            
+
             # Test paths that should not be ignored
             assert analyzer._is_ignored("file.py") is False
             assert analyzer._is_ignored("temp.txt") is False  # Not matching temp_*.txt
@@ -76,10 +77,11 @@ sample/ignore_me/
                 f.write("")  # Empty gitignore file
 
             # Initialize the analyzer
-            with patch.object(RepositoryAnalyzer, '_extract_metadata'), \
-                 patch.object(RepositoryAnalyzer, '_analyze_files'), \
-                 patch.object(RepositoryAnalyzer, '_extract_relationships'), \
-                 patch.object(RepositoryAnalyzer, '_analyze_history'):
+            with patch.object(RepositoryAnalyzer, "_extract_metadata"), patch.object(
+                RepositoryAnalyzer, "_analyze_files"
+            ), patch.object(RepositoryAnalyzer, "_extract_relationships"), patch.object(
+                RepositoryAnalyzer, "_analyze_history"
+            ):
                 analyzer = RepositoryAnalyzer(temp_dir)
 
             # Test that .git directory is ignored
@@ -95,16 +97,17 @@ sample/ignore_me/
             os.makedirs(git_dir)
 
             # Initialize the analyzer
-            with patch.object(RepositoryAnalyzer, '_extract_metadata'), \
-                 patch.object(RepositoryAnalyzer, '_analyze_files'), \
-                 patch.object(RepositoryAnalyzer, '_extract_relationships'), \
-                 patch.object(RepositoryAnalyzer, '_analyze_history'):
+            with patch.object(RepositoryAnalyzer, "_extract_metadata"), patch.object(
+                RepositoryAnalyzer, "_analyze_files"
+            ), patch.object(RepositoryAnalyzer, "_extract_relationships"), patch.object(
+                RepositoryAnalyzer, "_analyze_history"
+            ):
                 analyzer = RepositoryAnalyzer(temp_dir)
 
             # Check that only .git directory is ignored
             assert analyzer._is_ignored(".git") is True
             assert analyzer._is_ignored("file.pyc") is False  # No rule to ignore this
-            assert analyzer._is_ignored("dist/") is False     # No rule to ignore this
+            assert analyzer._is_ignored("dist/") is False  # No rule to ignore this
 
     def test_respect_gitignore_in_file_scanning(self):
         """Test that file scanning respects gitignore patterns."""
@@ -112,11 +115,11 @@ sample/ignore_me/
             # Create a fake git repo
             git_dir = os.path.join(temp_dir, ".git")
             os.makedirs(git_dir)
-            
+
             # Create a .gitignore file
             with open(os.path.join(temp_dir, ".gitignore"), "w") as f:
                 f.write("*.ignore\nignored_dir/\n")
-            
+
             # Create some files and directories
             Path(os.path.join(temp_dir, "regular_file.txt")).touch()
             Path(os.path.join(temp_dir, "should.ignore")).touch()
@@ -124,25 +127,25 @@ sample/ignore_me/
             Path(os.path.join(temp_dir, "regular_dir", "inside_regular.txt")).touch()
             os.makedirs(os.path.join(temp_dir, "ignored_dir"))
             Path(os.path.join(temp_dir, "ignored_dir", "wont_be_seen.txt")).touch()
-            
+
             # Initialize the analyzer with mocked methods except for _analyze_files
-            with patch.object(RepositoryAnalyzer, '_extract_metadata'), \
-                 patch.object(RepositoryAnalyzer, '_extract_relationships'), \
-                 patch.object(RepositoryAnalyzer, '_analyze_history'):
+            with patch.object(RepositoryAnalyzer, "_extract_metadata"), patch.object(
+                RepositoryAnalyzer, "_extract_relationships"
+            ), patch.object(RepositoryAnalyzer, "_analyze_history"):
                 analyzer = RepositoryAnalyzer(temp_dir)
                 analyzer._analyze_files()  # Only run the file analysis portion
-            
+
             # Check that ignored files are not included
             file_paths = {file["path"] for file in analyzer.data["files"]}
-            
+
             # Print file paths for debugging
             print("Files found:", sorted(file_paths))
-            
+
             # Files that should be present
             assert "regular_file.txt" in file_paths
             assert "regular_dir" in file_paths
             assert "regular_dir/inside_regular.txt" in file_paths
-            
+
             # Files that should be ignored
             assert "should.ignore" not in file_paths
             assert "ignored_dir" not in file_paths
