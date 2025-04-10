@@ -198,6 +198,12 @@
             border-top: 1px solid #e0e0e0;
             padding-top: 10px;
         }
+        
+        /* Style for component labels to make them stand out */
+        .component-label {
+            font-weight: bold;
+            font-size: 9px !important;
+        }
     </style>
 </head>
 <body>
@@ -748,34 +754,67 @@
                     
                     // Update positions on each tick of the simulation
                     simulation.on('tick', () => {
+                        // Update links
                         link
                             .attr('x1', d => d.source.x)
                             .attr('y1', d => d.source.y)
                             .attr('x2', d => d.target.x)
                             .attr('y2', d => d.target.y);
                         
+                        // Update nodes
                         node
                             .attr('cx', d => d.x)
                             .attr('cy', d => d.y);
                         
-                        // Update labels with appropriate offsets to prevent overlap
-                        label
-                            .attr('x', d => d.x)
-                            .attr('y', d => d.y)
-                            .attr('dx', d => {
-                                // Different offset for component nodes
+                        // Update each label separately based on its node
+                        node.each(function(d) {
+                            // Find the corresponding label by ID
+                            const labelId = `label-${d.id.replace(/[^\w-]/g, '-')}`;
+                            const label = d3.select(`#${labelId}`);
+                            
+                            if (!label.empty()) {
                                 if (d.isComponent) {
-                                    return getNodeRadius(d) + 5 + 25;
+                                    // For component nodes, position label based on grid position
+                                    // This ensures consistent, non-overlapping label placement
+                                    const baseOffset = getNodeRadius(d) + 5;
+                                    
+                                    // Use the node's grid position if available, or calculate position
+                                    let row = d.gridRow;
+                                    let col = d.gridCol;
+                                    
+                                    if (row === undefined || col === undefined) {
+                                        // Fallback if grid position is not available
+                                        const index = currentGraph.nodes.findIndex(n => n.id === d.id);
+                                        row = Math.floor(index / 3);
+                                        col = index % 3;
+                                    }
+                                    
+                                    // Position label to the right and slightly above node, using grid position
+                                    const dx = baseOffset + 8;  // Horizontal offset
+                                    const dy = -8;             // Vertical offset
+                                    
+                                    // Position label at fixed position relative to node
+                                    label
+                                        .attr('x', d.x)
+                                        .attr('y', d.y)
+                                        .attr('dx', dx)
+                                        .attr('dy', dy)
+                                        .style('text-anchor', 'start'); // Align text from its start
                                 }
-                                return getNodeRadius(d) + 5;
-                            })
-                            .attr('dy', d => {
-                                // For component nodes, add vertical offset
-                                if (d.isComponent) {
-                                    return -10;
+                                else {
+                                    // For regular file/directory nodes, position below node
+                                    const dx = getNodeRadius(d) + 5;
+                                    const dy = getNodeRadius(d) + 12; // Position below node
+                                    
+                                    label
+                                        .attr('x', d.x)
+                                        .attr('y', d.y)
+                                        .attr('dx', 0)
+                                        .attr('dy', dy)
+                                        .style('text-anchor', 'middle'); // Center the text under the node
                                 }
-                                return 4;
-                            });
+                            }
+                        });
                     });
                     
                     // Helper function for drag behavior with D3 v7
@@ -802,17 +841,24 @@
                         // Mark the node as expanded but keep it visible
                         fileNode.expanded = true;
                         
-                        // Create component nodes with positions distributed around the parent node
+                        // Create component nodes with positions distributed in a grid pattern
                         const componentCount = fileNode.components.length;
-                        const radius = 80; // Radius for distributing component nodes
+                        
+                        // Determine grid dimensions - aim for a rough square
+                        const gridSize = Math.ceil(Math.sqrt(componentCount));
+                        const spacing = 70; // Space between components
+                        
                         const componentNodes = fileNode.components.map((comp, index) => {
                             // Calculate lines of code for proper sizing
                             const lines = (comp.lineEnd || 0) - (comp.lineStart || 0) + 1;
                             
-                            // Calculate position in a circle around the parent node
-                            const angle = (index / componentCount) * 2 * Math.PI;
-                            const offsetX = radius * Math.cos(angle);
-                            const offsetY = radius * Math.sin(angle);
+                            // Calculate grid position (from top-left of parent)
+                            const row = Math.floor(index / gridSize);
+                            const col = index % gridSize;
+                            
+                            // Center the grid around the parent
+                            const offsetX = spacing * (col - (gridSize-1)/2);
+                            const offsetY = spacing * (row - Math.floor((componentCount-1)/gridSize)/2);
                             
                             return {
                                 id: comp.id,
@@ -823,13 +869,16 @@
                                 lines: lines,
                                 parentX: fileNode.x,
                                 parentY: fileNode.y,
-                                initialX: fileNode.x + offsetX, // Position in a circle around parent
-                                initialY: fileNode.y + offsetY, // Position in a circle around parent
+                                initialX: fileNode.x + offsetX, // Grid position relative to parent
+                                initialY: fileNode.y + offsetY, // Grid position relative to parent
                                 extension: fileNode.extension,
                                 isComponent: true,
                                 components: comp.components || [],
                                 lineStart: comp.lineStart,
-                                lineEnd: comp.lineEnd
+                                lineEnd: comp.lineEnd,
+                                // Store grid position for label positioning
+                                gridRow: row,
+                                gridCol: col
                             };
                         });
                         
@@ -957,31 +1006,38 @@
                             showFileDetails(d);
                         });
                         
-                        // Update the labels in the visualization
-                        const labelSelection = d3.select('#visualization g')
-                            .selectAll('text.label')
-                            .data(visibleNodes, d => d.id);
-                            
-                        // Remove labels that no longer exist
-                        labelSelection.exit().remove();
+                        // Update the labels in the visualization - completely rebuild them
+                        // First remove all existing labels
+                        d3.select('#visualization g').selectAll('text.label').remove();
                         
-                        // Add new labels with position adjustments for component nodes
-                        labelSelection.enter()
+                        // Create all labels from scratch - this ensures proper node-label association
+                        d3.select('#visualization g')
+                            .selectAll('text.label')
+                            .data(visibleNodes, d => d.id)
+                            .enter()
                             .append('text')
-                            .attr('class', 'label')
-                            .attr('x', d => d.parentX || width / 2)
-                            .attr('y', d => d.parentY || height / 2)
+                            .attr('class', function(d) {
+                                return d.isComponent ? 'label component-label' : 'label';
+                            })
+                            .attr('id', d => `label-${d.id.replace(/[^\w-]/g, '-')}`)
+                            .attr('x', d => d.x || d.initialX || d.parentX || width / 2)
+                            .attr('y', d => d.y || d.initialY || d.parentY || height / 2)
                             .attr('dx', d => {
-                                // For component nodes, add additional offset to avoid overlapping
+                                // Calculate horizontal offset
+                                const baseOffset = getNodeRadius(d) + 5;
                                 if (d.isComponent) {
-                                    return getNodeRadius(d) + 5 + 25; // Add extra horizontal offset
+                                    // Different offset for each component to avoid overlapping
+                                    const index = currentGraph.nodes.findIndex(n => n.id === d.id);
+                                    return baseOffset + (index % 3) * 15; // Stagger by index
                                 }
-                                return getNodeRadius(d) + 5;
+                                return baseOffset;
                             })
                             .attr('dy', d => {
-                                // For component nodes, add some vertical offset
+                                // Calculate vertical offset
                                 if (d.isComponent) {
-                                    return -10; // Move label up
+                                    // Different vertical position for each component to avoid overlapping
+                                    const index = currentGraph.nodes.findIndex(n => n.id === d.id);
+                                    return -10 - (Math.floor(index / 3) * 15); // Stagger vertically by index groups
                                 }
                                 return 4;
                             })
