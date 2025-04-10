@@ -266,7 +266,9 @@ class RepositoryAnalyzer:
     def _analyze_files(self) -> None:
         """Analyze file structure and content."""
         files: List[File] = []
-        dir_file_map: Dict[str, List[str]] = {}  # Maps directory paths to contained file IDs
+        dir_file_map: Dict[
+            str, List[str]
+        ] = {}  # Maps directory paths to contained file IDs
 
         for root, dirs, file_names in os.walk(self.repo_path):
             # Skip .git directory
@@ -305,18 +307,20 @@ class RepositoryAnalyzer:
 
                 files.append(dir_entry)
                 self.file_ids.add(rel_path)
-                
+
                 # Initialize directory in map
                 dir_file_map[rel_path] = []
 
                 # Create parent directory relationship
                 parent_dir = os.path.dirname(rel_path)
                 if parent_dir and parent_dir in self.file_ids:
-                    self.relationships.append({
-                        "source": parent_dir,
-                        "target": rel_path,
-                        "type": "contains",
-                    })
+                    self.relationships.append(
+                        {
+                            "source": parent_dir,
+                            "target": rel_path,
+                            "type": "contains",
+                        }
+                    )
                     if parent_dir in dir_file_map:
                         dir_file_map[parent_dir].append(rel_path)
 
@@ -396,10 +400,14 @@ class RepositoryAnalyzer:
                     # Ensure parent_dir exists as an entry
                     if parent_dir not in self.file_ids:
                         # Create missing directory entries (this can happen with nested directories)
-                        parts = parent_dir.split('/')
+                        parts = parent_dir.split("/")
                         current_path = ""
                         for i, part in enumerate(parts):
-                            current_path = current_path + part if i == 0 else f"{current_path}/{part}"
+                            current_path = (
+                                current_path + part
+                                if i == 0
+                                else f"{current_path}/{part}"
+                            )
                             if current_path not in self.file_ids:
                                 dir_depth = i
                                 dir_entry = {
@@ -414,43 +422,53 @@ class RepositoryAnalyzer:
                                 files.append(dir_entry)
                                 self.file_ids.add(current_path)
                                 dir_file_map[current_path] = []
-                                
+
                                 # Create relationship with parent
                                 if i > 0:
-                                    parent_path = '/'.join(parts[:i])
+                                    parent_path = "/".join(parts[:i])
                                     if parent_path in self.file_ids:
-                                        self.relationships.append({
-                                            "source": parent_path,
-                                            "target": current_path,
-                                            "type": "contains",
-                                        })
+                                        self.relationships.append(
+                                            {
+                                                "source": parent_path,
+                                                "target": current_path,
+                                                "type": "contains",
+                                            }
+                                        )
                                         if parent_path in dir_file_map:
-                                            dir_file_map[parent_path].append(current_path)
-                    
+                                            dir_file_map[parent_path].append(
+                                                current_path
+                                            )
+
                     # Create contains relationship
-                    self.relationships.append({
-                        "source": parent_dir,
-                        "target": rel_path,
-                        "type": "contains",
-                    })
+                    self.relationships.append(
+                        {
+                            "source": parent_dir,
+                            "target": rel_path,
+                            "type": "contains",
+                        }
+                    )
                     if parent_dir in dir_file_map:
                         dir_file_map[parent_dir].append(rel_path)
-                
+
                 # Add file-component relationships
                 for component in components:
-                    self.relationships.append({
-                        "source": rel_path,
-                        "target": component["id"],
-                        "type": "contains",
-                    })
-                    
+                    self.relationships.append(
+                        {
+                            "source": rel_path,
+                            "target": component["id"],
+                            "type": "contains",
+                        }
+                    )
+
                     # Add component-to-component relationships (for methods in a class)
                     for method in component.get("components", []):
-                        self.relationships.append({
-                            "source": component["id"],
-                            "target": method["id"],
-                            "type": "contains",
-                        })
+                        self.relationships.append(
+                            {
+                                "source": component["id"],
+                                "target": method["id"],
+                                "type": "contains",
+                            }
+                        )
 
         # Update file sizes for directories
         self._update_directory_sizes(files)
@@ -779,7 +797,7 @@ class RepositoryAnalyzer:
                 # Import with aliases
                 r"import\s+([\w\.]+)\s+as\s+\w+",
                 # From import with alias
-                r"from\s+([\w\.]+)\s+import\s+[\w\*]+\s+as\s+\w+"
+                r"from\s+([\w\.]+)\s+import\s+[\w\*]+\s+as\s+\w+",
             ]
 
             # Process each import pattern
@@ -788,16 +806,18 @@ class RepositoryAnalyzer:
                     matches = re.finditer(pattern, content)
                     for match in matches:
                         raw_modules = match.group(1)
-                        
+
                         # Handle comma-separated imports
-                        if ',' in raw_modules and 'from' not in match.group(0):
-                            modules = [m.strip() for m in raw_modules.split(',')]
+                        if "," in raw_modules and "from" not in match.group(0):
+                            modules = [m.strip() for m in raw_modules.split(",")]
                         else:
                             modules = [raw_modules]
-                        
+
                         for module in modules:
                             # Try to resolve the import to a file in the repository
-                            import_paths = self._resolve_python_import(module, file_path)
+                            import_paths = self._resolve_python_import(
+                                module, file_path
+                            )
                             for import_path in import_paths:
                                 if import_path and import_path in self.file_ids:
                                     relationship: Relationship = {
@@ -806,13 +826,17 @@ class RepositoryAnalyzer:
                                         "type": "import",
                                     }
                                     # Check if this relationship already exists
-                                    if not any(r["source"] == relationship["source"] and
-                                              r["target"] == relationship["target"] and
-                                              r["type"] == relationship["type"] 
-                                              for r in self.relationships):
+                                    if not any(
+                                        r["source"] == relationship["source"]
+                                        and r["target"] == relationship["target"]
+                                        and r["type"] == relationship["type"]
+                                        for r in self.relationships
+                                    ):
                                         self.relationships.append(relationship)
                 except Exception as e:
-                    print(f"Error extracting Python relationships from {file_path}: {e}")
+                    print(
+                        f"Error extracting Python relationships from {file_path}: {e}"
+                    )
 
             # Look for function calls between modules
             self._extract_python_function_calls(content, file_path)
@@ -827,7 +851,7 @@ class RepositoryAnalyzer:
                 # CommonJS requires
                 r"require\s*\(\s*['\"](.+?)['\"]\s*\)",
                 # ES6 re-exports
-                r"export\s+(?:{[\s\w,]+})?\s+from\s+['\"](.+?)['\"]"
+                r"export\s+(?:{[\s\w,]+})?\s+from\s+['\"](.+?)['\"]",
             ]
 
             for pattern in import_patterns:
@@ -845,18 +869,20 @@ class RepositoryAnalyzer:
                                 "type": "import",
                             }
                             # Check if this relationship already exists
-                            if not any(r["source"] == relationship["source"] and
-                                      r["target"] == relationship["target"] and
-                                      r["type"] == relationship["type"] 
-                                      for r in self.relationships):
+                            if not any(
+                                r["source"] == relationship["source"]
+                                and r["target"] == relationship["target"]
+                                and r["type"] == relationship["type"]
+                                for r in self.relationships
+                            ):
                                 self.relationships.append(relationship)
                 except Exception as e:
                     print(f"Error extracting JS/TS relationships from {file_path}: {e}")
-                    
+
     def _extract_python_function_calls(self, content: str, file_path: str) -> None:
         """
         Extract Python function calls between components.
-        
+
         Args:
             content: File content
             file_path: Relative file path
@@ -878,18 +904,25 @@ class RepositoryAnalyzer:
                         if other_comp["id"] != component["id"]:
                             other_name = other_comp["name"]
                             # Simple check for function calls with regex
-                            call_pattern = fr'\b{other_name}\s*\('
-                            comp_start, comp_end = component.get("lineStart", 0), component.get("lineEnd", 0)
+                            call_pattern = rf"\b{other_name}\s*\("
+                            comp_start, comp_end = (
+                                component.get("lineStart", 0),
+                                component.get("lineEnd", 0),
+                            )
                             if comp_start > 0 and comp_end > 0:
                                 # Extract component content
-                                lines = content.split('\n')
-                                comp_content = '\n'.join(lines[comp_start-1:comp_end])
+                                lines = content.split("\n")
+                                comp_content = "\n".join(
+                                    lines[comp_start - 1 : comp_end]
+                                )
                                 if re.search(call_pattern, comp_content):
-                                    self.relationships.append({
-                                        "source": component["id"],
-                                        "target": other_comp["id"],
-                                        "type": "calls",
-                                    })
+                                    self.relationships.append(
+                                        {
+                                            "source": component["id"],
+                                            "target": other_comp["id"],
+                                            "type": "calls",
+                                        }
+                                    )
         except Exception as e:
             print(f"Error extracting Python function calls from {file_path}: {e}")
 
@@ -905,39 +938,39 @@ class RepositoryAnalyzer:
             List of resolved file paths that match the import
         """
         resolved_paths = []
-        
+
         # Handle relative imports
-        if module.startswith('.'):
+        if module.startswith("."):
             # Count the number of dots for relative import level
             dots = 0
-            while dots < len(module) and module[dots] == '.':
+            while dots < len(module) and module[dots] == ".":
                 dots += 1
-            
+
             # Get the module name without dots
             rel_module = module[dots:]
-            
+
             # Get the current directory and go up based on the number of dots
-            current_parts = file_path.split('/')
+            current_parts = file_path.split("/")
             if len(current_parts) <= dots:
                 # Invalid relative import (trying to go beyond repo root)
                 return resolved_paths
-            
+
             # Base directory after going up the right number of levels
-            base_dir = '/'.join(current_parts[:-dots])
-            
+            base_dir = "/".join(current_parts[:-dots])
+
             # If there's a specific module after the dots
             if rel_module:
-                rel_module_parts = rel_module.split('.')
+                rel_module_parts = rel_module.split(".")
                 # Try as file in the resulting directory
                 rel_path = f"{base_dir}/{'/'.join(rel_module_parts)}.py"
                 init_path = f"{base_dir}/{'/'.join(rel_module_parts)}/__init__.py"
                 package_path = f"{base_dir}/{'/'.join(rel_module_parts)}"
-                
+
                 if rel_path.replace("//", "/").lstrip("/") in self.file_ids:
                     resolved_paths.append(rel_path.replace("//", "/").lstrip("/"))
                 if init_path.replace("//", "/").lstrip("/") in self.file_ids:
                     resolved_paths.append(init_path.replace("//", "/").lstrip("/"))
-                    
+
                 # Try as a directory
                 if package_path in self.file_ids:
                     resolved_paths.append(package_path)
@@ -951,14 +984,24 @@ class RepositoryAnalyzer:
         else:
             # Convert module name to potential file path
             module_parts = module.split(".")
-            
+
             # Try as a standard library import
             if module_parts[0] in (
-                "os", "sys", "re", "datetime", "collections", "json", 
-                "math", "random", "time", "logging", "argparse", "subprocess"
+                "os",
+                "sys",
+                "re",
+                "datetime",
+                "collections",
+                "json",
+                "math",
+                "random",
+                "time",
+                "logging",
+                "argparse",
+                "subprocess",
             ):
                 return resolved_paths  # Standard library, not in repo
-            
+
             # Try direct file in same directory
             current_dir = os.path.dirname(file_path)
             local_paths = [
@@ -967,7 +1010,7 @@ class RepositoryAnalyzer:
                 f"{current_dir}/{'/'.join(module_parts)}.py",
                 f"{current_dir}/{'/'.join(module_parts)}/__init__.py",
             ]
-            
+
             # Also try resolving sub-packages
             if len(module_parts) > 1:
                 for i in range(1, len(module_parts)):
@@ -976,55 +1019,63 @@ class RepositoryAnalyzer:
                     if base_path.replace("//", "/").lstrip("/") in self.file_ids:
                         sub_path = f"{base_path}/{'/'.join(module_parts[i:])}.py"
                         sub_init = f"{base_path}/{'/'.join(module_parts[i:])}"
-                        
+
                         if sub_path.replace("//", "/").lstrip("/") in self.file_ids:
-                            resolved_paths.append(sub_path.replace("//", "/").lstrip("/"))
+                            resolved_paths.append(
+                                sub_path.replace("//", "/").lstrip("/")
+                            )
                         elif sub_init.replace("//", "/").lstrip("/") in self.file_ids:
-                            resolved_paths.append(sub_init.replace("//", "/").lstrip("/"))
-                            
+                            resolved_paths.append(
+                                sub_init.replace("//", "/").lstrip("/")
+                            )
+
                         # Try as __init__.py
                         sub_init_py = f"{sub_init}/__init__.py"
                         if sub_init_py.replace("//", "/").lstrip("/") in self.file_ids:
-                            resolved_paths.append(sub_init_py.replace("//", "/").lstrip("/"))
-            
+                            resolved_paths.append(
+                                sub_init_py.replace("//", "/").lstrip("/")
+                            )
+
             # Try as absolute import from repository root
             absolute_paths = [
                 f"{'/'.join(module_parts)}.py",
                 f"{'/'.join(module_parts)}/__init__.py",
                 f"{'/'.join(module_parts)}",
             ]
-            
+
             # Try resolving with package prefixes (ex: src.repo_visualizer => src/repo_visualizer)
             potential_paths = local_paths + absolute_paths
-            
+
             # Check for partial path matches
             for file_id in self.file_ids:
                 if file_id.endswith("/" + module_parts[-1] + ".py"):
                     # Check if the path ends with the full module path
-                    file_parts = file_id.split('/')
+                    file_parts = file_id.split("/")
                     module_match = True
                     for i, part in enumerate(reversed(module_parts)):
-                        if i >= len(file_parts) or file_parts[-i-1] != part:
+                        if i >= len(file_parts) or file_parts[-i - 1] != part:
                             if i == 0 and file_parts[-1] == part + ".py":
                                 continue  # Handle the .py extension
                             module_match = False
                             break
                     if module_match:
                         potential_paths.append(file_id)
-            
+
             # Add all package directories on the path
             for i in range(1, len(module_parts) + 1):
                 partial_path = "/".join(module_parts[:i])
                 potential_paths.append(partial_path)
-            
+
             # Normalize paths
-            potential_paths = [p.replace("//", "/").lstrip("/") for p in potential_paths]
-            
+            potential_paths = [
+                p.replace("//", "/").lstrip("/") for p in potential_paths
+            ]
+
             # Check if paths exist
             for path in potential_paths:
                 if path in self.file_ids and path not in resolved_paths:
                     resolved_paths.append(path)
-        
+
         return resolved_paths
 
     def _resolve_js_import(self, module: str, file_path: str) -> Optional[str]:
@@ -1111,7 +1162,7 @@ class RepositoryAnalyzer:
         # Add components as "nodes" to be visualized
         files = self.data["files"]
         component_nodes = []
-        
+
         # Collect components for visualization
         for file in files:
             if file["type"] == "file":
@@ -1127,7 +1178,7 @@ class RepositoryAnalyzer:
                         "components": [],
                     }
                     component_nodes.append(comp_node)
-                    
+
                     # Add nodes for nested components
                     for nested in component.get("components", []):
                         nested_node = {
@@ -1140,20 +1191,20 @@ class RepositoryAnalyzer:
                             "components": [],
                         }
                         component_nodes.append(nested_node)
-        
+
         # Add component nodes to files list
         self.data["files"].extend(component_nodes)
-        
+
         # De-duplicate relationships
         unique_relationships = []
         relationship_keys = set()
-        
+
         for rel in self.relationships:
             key = f"{rel['source']}|{rel['target']}|{rel['type']}"
             if key not in relationship_keys:
                 relationship_keys.add(key)
                 unique_relationships.append(rel)
-        
+
         self.data["relationships"] = unique_relationships
 
     def _analyze_history(self) -> None:
