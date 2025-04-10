@@ -198,8 +198,8 @@ class TestRepositoryRelationships:
         analyzer = RepositoryAnalyzer("/fake/repo")
         analyzer.data["files"] = [test_file]
 
-        # In actual implementation, file-component relationships are added during _analyze_files
-        # We need to simulate that here before calling _extract_relationships
+        # In actual implementation, file-component relationships
+        # are added during _analyze_files. We need to simulate that here.
         analyzer.relationships = [
             {"source": "test.py", "target": "test.py:TestClass", "type": "contains"},
             {
