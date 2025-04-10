@@ -399,7 +399,8 @@ class RepositoryAnalyzer:
                 if parent_dir:
                     # Ensure parent_dir exists as an entry
                     if parent_dir not in self.file_ids:
-                        # Create missing directory entries (this can happen with nested directories)
+                        # Create missing directory entries
+                        # (this can happen with nested directories)
                         parts = parent_dir.split("/")
                         current_path = ""
                         for i, part in enumerate(parts):
@@ -897,7 +898,7 @@ class RepositoryAnalyzer:
 
             # Look for local function calls
             for component in file_components:
-                comp_name = component["name"]
+                # Skip if not a function or method
                 if component["type"] in ("function", "method"):
                     # Look for calls to other functions/methods in the same file
                     for other_comp in file_components:
@@ -1043,7 +1044,8 @@ class RepositoryAnalyzer:
                 f"{'/'.join(module_parts)}",
             ]
 
-            # Try resolving with package prefixes (ex: src.repo_visualizer => src/repo_visualizer)
+            # Try resolving with package prefixes
+            # (ex: src.repo_visualizer => src/repo_visualizer)
             potential_paths = local_paths + absolute_paths
 
             # Check for partial path matches
