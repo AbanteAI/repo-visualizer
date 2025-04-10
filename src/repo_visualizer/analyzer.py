@@ -254,6 +254,9 @@ class RepositoryAnalyzer:
 
     def _calculate_language_stats(self) -> Dict[str, float]:
         """Calculate language statistics based on file extensions."""
+        # Track ignored directories to avoid traversing their subtrees
+        ignored_dirs = set()
+
         extension_map = {
             "py": "Python",
             "js": "JavaScript",
