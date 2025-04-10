@@ -8,11 +8,12 @@ visualization schema.
 
 import json
 import os
-import pathspec
 import re
 import subprocess
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+import pathspec
 
 from .schema import (
     Component,
@@ -199,7 +200,7 @@ class RepositoryAnalyzer:
         # If .gitignore file exists, read the patterns
         if os.path.isfile(gitignore_path):
             try:
-                with open(gitignore_path, "r", encoding="utf-8") as f:
+                with open(gitignore_path, encoding="utf-8") as f:
                     patterns = f.readlines()
             except Exception as e:
                 print(f"Warning: Could not read .gitignore file: {e}")
