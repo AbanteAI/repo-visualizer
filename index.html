@@ -732,6 +732,8 @@
                     
                     // Add double-click handler to expand/collapse file nodes into components
                     node.on('dblclick', (event, d) => {
+                        // Prevent default behavior and stop propagation to prevent panning
+                        event.preventDefault();
                         event.stopPropagation();
                         
                         // Only handle files with components
@@ -790,10 +792,17 @@
                         // Mark the node as expanded but keep it visible
                         fileNode.expanded = true;
                         
-                        // Create component nodes
-                        const componentNodes = fileNode.components.map(comp => {
+                        // Create component nodes with positions distributed around the parent node
+                        const componentCount = fileNode.components.length;
+                        const radius = 80; // Radius for distributing component nodes
+                        const componentNodes = fileNode.components.map((comp, index) => {
                             // Calculate lines of code for proper sizing
                             const lines = (comp.lineEnd || 0) - (comp.lineStart || 0) + 1;
+                            
+                            // Calculate position in a circle around the parent node
+                            const angle = (index / componentCount) * 2 * Math.PI;
+                            const offsetX = radius * Math.cos(angle);
+                            const offsetY = radius * Math.sin(angle);
                             
                             return {
                                 id: comp.id,
@@ -804,6 +813,8 @@
                                 lines: lines,
                                 parentX: fileNode.x,
                                 parentY: fileNode.y,
+                                initialX: fileNode.x + offsetX, // Position in a circle around parent
+                                initialY: fileNode.y + offsetY, // Position in a circle around parent
                                 extension: fileNode.extension,
                                 isComponent: true,
                                 components: comp.components || [],
@@ -895,8 +906,20 @@
                             .attr('class', 'node')
                             .attr('r', d => getNodeRadius(d))
                             .attr('fill', d => d.isComponent ? getComponentColor(d) : getNodeColor(d))
-                            .attr('cx', d => d.parentX || width / 2)
-                            .attr('cy', d => d.parentY || height / 2)
+                            .attr('cx', d => {
+                                // Place component nodes at their calculated initial positions
+                                if (d.isComponent && d.initialX !== undefined) {
+                                    return d.initialX;
+                                }
+                                return d.x || d.parentX || width / 2;
+                            })
+                            .attr('cy', d => {
+                                // Place component nodes at their calculated initial positions
+                                if (d.isComponent && d.initialY !== undefined) {
+                                    return d.initialY;
+                                }
+                                return d.y || d.parentY || height / 2;
+                            })
                             .call(dragBehavior());
                             
                         // Add hover titles to new nodes
@@ -910,6 +933,8 @@
                         });
                         
                         newNodeElements.on('dblclick', (event, d) => {
+                            // Prevent default behavior and stop propagation to prevent panning
+                            event.preventDefault();
                             event.stopPropagation();
                             
                             // For file nodes
@@ -934,14 +959,26 @@
                         // Remove labels that no longer exist
                         labelSelection.exit().remove();
                         
-                        // Add new labels
+                        // Add new labels with position adjustments for component nodes
                         labelSelection.enter()
                             .append('text')
                             .attr('class', 'label')
                             .attr('x', d => d.parentX || width / 2)
                             .attr('y', d => d.parentY || height / 2)
-                            .attr('dx', d => getNodeRadius(d) + 5)
-                            .attr('dy', 4)
+                            .attr('dx', d => {
+                                // For component nodes, add additional offset to avoid overlapping
+                                if (d.isComponent) {
+                                    return getNodeRadius(d) + 5 + 25; // Add extra horizontal offset
+                                }
+                                return getNodeRadius(d) + 5;
+                            })
+                            .attr('dy', d => {
+                                // For component nodes, add some vertical offset
+                                if (d.isComponent) {
+                                    return -10; // Move label up
+                                }
+                                return 4;
+                            })
                             .text(d => d.name)
                             .style('font-size', '10px')
                             .style('pointer-events', 'none');
