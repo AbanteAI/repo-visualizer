@@ -206,7 +206,7 @@ class RepositoryAnalyzer:
                 print(f"Warning: Could not read .gitignore file: {e}")
 
         # Create a PathSpec object to match against gitignore patterns
-        return pathspec.PathSpec.from_lines('gitwildmatch', patterns)
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
     def _is_ignored(self, path: str) -> bool:
         """
