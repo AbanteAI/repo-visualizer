@@ -384,13 +384,13 @@
                     componentLegendContainer.appendChild(componentDiv);
                 }
                 
-                // Add a note about double-clicking
+                // Add a note about clicking to expand/collapse
                 const helpNote = document.createElement('div');
                 helpNote.style.marginTop = '10px';
                 helpNote.style.fontSize = '12px';
                 helpNote.style.fontStyle = 'italic';
                 helpNote.style.textAlign = 'center';
-                helpNote.textContent = 'Double-click on file nodes to expand/collapse components';
+                helpNote.textContent = 'Click on file nodes to expand/collapse components';
                 legend.appendChild(helpNote);
             }
             
@@ -724,19 +724,11 @@
                     node.append('title')
                         .text(d => d.path);
                     
-                    // Add click handler to show file details
+                    // Add click handler for both showing details and expanding/collapsing nodes
                     node.on('click', (event, d) => {
-                        showFileDetails(d);
-                        event.stopPropagation();
-                    });
-                    
-                    // Add double-click handler to expand/collapse file nodes into components
-                    node.on('dblclick', (event, d) => {
-                        // Prevent default behavior and stop propagation to prevent panning
-                        event.preventDefault();
                         event.stopPropagation();
                         
-                        // Only handle files with components
+                        // For file nodes with components, handle expand/collapse on click
                         if (d.type === 'file' && d.components && d.components.length > 0) {
                             if (d.expanded) {
                                 collapseFileNode(d);
@@ -744,6 +736,9 @@
                                 expandFileNode(d);
                             }
                         }
+                        
+                        // Always show file details regardless of node type
+                        showFileDetails(d);
                     });
                     
                     // Click on background to hide file details
@@ -763,9 +758,24 @@
                             .attr('cx', d => d.x)
                             .attr('cy', d => d.y);
                         
+                        // Update labels with appropriate offsets to prevent overlap
                         label
                             .attr('x', d => d.x)
-                            .attr('y', d => d.y);
+                            .attr('y', d => d.y)
+                            .attr('dx', d => {
+                                // Different offset for component nodes
+                                if (d.isComponent) {
+                                    return getNodeRadius(d) + 5 + 25;
+                                }
+                                return getNodeRadius(d) + 5;
+                            })
+                            .attr('dy', d => {
+                                // For component nodes, add vertical offset
+                                if (d.isComponent) {
+                                    return -10;
+                                }
+                                return 4;
+                            });
                     });
                     
                     // Helper function for drag behavior with D3 v7
@@ -926,18 +936,11 @@
                         newNodeElements.append('title')
                             .text(d => d.isComponent ? `${d.name} (${d.type}) - ${d.parentId}` : d.path);
                             
-                        // Add event handlers to new nodes
+                        // Add click handler for both showing details and expanding/collapsing
                         newNodeElements.on('click', (event, d) => {
-                            showFileDetails(d);
-                            event.stopPropagation();
-                        });
-                        
-                        newNodeElements.on('dblclick', (event, d) => {
-                            // Prevent default behavior and stop propagation to prevent panning
-                            event.preventDefault();
                             event.stopPropagation();
                             
-                            // For file nodes
+                            // For file nodes with components, handle expand/collapse
                             if (d.type === 'file' && d.components && d.components.length > 0) {
                                 if (d.expanded) {
                                     collapseFileNode(d);
@@ -945,10 +948,13 @@
                                     expandFileNode(d);
                                 }
                             }
-                            // For component nodes with nested components
+                            // For component nodes with nested components (if implemented in the future)
                             else if (d.isComponent && d.components && d.components.length > 0) {
                                 // TODO: Add handling for nested components if needed
                             }
+                            
+                            // Always show details regardless of node type
+                            showFileDetails(d);
                         });
                         
                         // Update the labels in the visualization
@@ -1134,7 +1140,7 @@
                         details += `</ul>`;
                     }
                     
-                    details += `<p><em>Double-click to expand/collapse components.</em></p>`;
+                    details += `<p><em>Click file nodes to expand/collapse components.</em></p>`;
                     
                     fileDetails.innerHTML = details;
                     fileInfo.style.display = 'block';
@@ -1186,7 +1192,7 @@
                         details += `</ul>`;
                         
                         if (file.type === 'file') {
-                            details += `<p><em>Double-click to expand/collapse components.</em></p>`;
+                            details += `<p><em>Click to expand/collapse components.</em></p>`;
                         }
                     }
                     
