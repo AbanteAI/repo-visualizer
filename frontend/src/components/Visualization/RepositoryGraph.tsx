@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
 import * as d3 from 'd3';
-import { RepositoryData, File } from '../../types/schema';
+import { RepositoryData, File, Component } from '../../types/schema';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
@@ -22,6 +22,8 @@ interface Node extends d3.SimulationNodeDatum {
   extension?: string | null;
   size: number;
   depth: number;
+  parent?: string; // Parent ID for components and files within directories
+  isComponent?: boolean; // If true, this is a component inside a file
   x?: number;
   y?: number;
 }
@@ -38,6 +40,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    
+    // State to track expanded nodes
+    const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
     
     // Extension colors mapping
     const extensionColors: Record<string, string> = {
@@ -62,6 +67,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       'pl': '#0298c3',    // Perl
       'lua': '#000080',   // Lua
       'r': '#198CE7',     // R
+    };
+
+    // Component type colors
+    const componentColors: Record<string, string> = {
+      'class': '#e67e22',     // Orange
+      'function': '#3498db',  // Blue
+      'method': '#9b59b6',    // Purple
+      'variable': '#2ecc71',  // Green
+      'default': '#f1c40f'    // Yellow (for other component types)
     };
 
     // Expose methods to parent components
@@ -104,6 +118,108 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }));
 
+    // Helper function to handle node expansion/collapse
+    const toggleExpand = (nodeId: string) => {
+      setExpandedNodes(prevExpanded => {
+        const newExpanded = new Set(prevExpanded);
+        if (newExpanded.has(nodeId)) {
+          newExpanded.delete(nodeId);
+        } else {
+          newExpanded.add(nodeId);
+        }
+        return newExpanded;
+      });
+    };
+
+    // Helper to check if a file is visible based on its parent directory's state
+    const isNodeVisible = (node: Node, visibleNodes: Node[]): boolean => {
+      // If it's a root level file/directory or component in an expanded file, it's visible
+      if (!node.parent || (node.isComponent && expandedNodes.has(node.parent))) {
+        return true;
+      }
+      
+      // If it's a file in a directory, check if the directory is expanded
+      const parentNode = visibleNodes.find(n => n.id === node.parent);
+      if (parentNode && expandedNodes.has(parentNode.id)) {
+        return true;
+      }
+      
+      return false;
+    };
+
+    // Helper function to recursively extract all components from a file
+    const extractComponents = (file: File): Node[] => {
+      const results: Node[] = [];
+      
+      const processComponent = (component: Component, parentId: string): void => {
+        const componentNode: Node = {
+          id: component.id,
+          name: component.name,
+          path: `${parentId}/${component.name}`,
+          type: component.type,
+          size: component.metrics?.linesOfCode || (component.lineEnd - component.lineStart),
+          depth: 0, // Will be ignored for components
+          parent: parentId,
+          isComponent: true
+        };
+        
+        results.push(componentNode);
+        
+        // Process nested components
+        component.components.forEach(childComponent => {
+          processComponent(childComponent, component.id);
+        });
+      };
+      
+      // Process all top-level components in the file
+      file.components.forEach(component => {
+        processComponent(component, file.id);
+      });
+      
+      return results;
+    };
+
+    // Create component relationships
+    const createComponentRelationships = (components: Node[]): Link[] => {
+      const links: Link[] = [];
+      
+      components.forEach(component => {
+        if (component.parent) {
+          links.push({
+            source: component.parent,
+            target: component.id,
+            type: 'contains'
+          });
+        }
+      });
+      
+      return links;
+    };
+
+    // Helper function to assign parent directories to files
+    const assignParentDirectories = (files: File[]): Record<string, string> => {
+      const parentMap: Record<string, string> = {};
+      
+      // Build a map of directories
+      const dirMap: Record<string, File> = {};
+      files.filter(f => f.type === 'directory').forEach(dir => {
+        dirMap[dir.path] = dir;
+      });
+      
+      // Assign parents to files
+      files.filter(f => f.type === 'file').forEach(file => {
+        const pathParts = file.path.split('/');
+        if (pathParts.length > 1) {
+          const dirPath = pathParts.slice(0, -1).join('/');
+          if (dirMap[dirPath]) {
+            parentMap[file.id] = dirMap[dirPath].id;
+          }
+        }
+      });
+      
+      return parentMap;
+    };
+
     useEffect(() => {
       if (!svgRef.current || !containerRef.current || !data) return;
 
@@ -123,9 +239,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Create a group for the graph
       const g = svg.append('g');
+      
+      // Get parent directory mapping
+      const parentDirectories = assignParentDirectories(data.files);
 
-      // Extract nodes from files
-      const nodes: Node[] = data.files.map(file => ({
+      // Extract all nodes (files, directories, and components)
+      const allFileNodes: Node[] = data.files.map(file => ({
         id: file.id,
         name: file.name,
         path: file.path,
@@ -133,18 +252,47 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         extension: file.extension,
         size: file.size,
         depth: file.depth,
+        parent: parentDirectories[file.id]
       }));
+      
+      // Extract all component nodes
+      const allComponentNodes: Node[] = data.files
+        .filter(file => file.type === 'file')
+        .flatMap(file => extractComponents(file));
 
-      // Extract links from relationships
-      const links: Link[] = data.relationships.map(rel => ({
+      // Extract all base relationships from the data
+      const baseLinks: Link[] = data.relationships.map(rel => ({
         source: rel.source,
         target: rel.target,
         type: rel.type,
       }));
+      
+      // Extract component relationships
+      const componentLinks: Link[] = createComponentRelationships(allComponentNodes);
+      
+      // All possible links
+      const allLinks = [...baseLinks, ...componentLinks];
+      
+      // Filter nodes based on expansion state
+      const visibleNodes = [...allFileNodes, ...allComponentNodes].filter(node => {
+        // Always show directories
+        if (node.type === 'directory') return true;
+        
+        // Check if node should be visible
+        return isNodeVisible(node, allFileNodes);
+      });
+      
+      // Filter links to only include those connecting visible nodes
+      const visibleNodeIds = new Set(visibleNodes.map(node => node.id));
+      const visibleLinks = allLinks.filter(link => {
+        const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
+        const targetId = typeof link.target === 'string' ? link.target : link.target.id;
+        return visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
+      });
 
       // Create a force simulation
-      const simulation = d3.forceSimulation<Node>(nodes)
-        .force('link', d3.forceLink<Node, Link>(links).id(d => d.id).distance(100))
+      const simulation = d3.forceSimulation<Node>(visibleNodes)
+        .force('link', d3.forceLink<Node, Link>(visibleLinks).id(d => d.id).distance(100))
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5));
@@ -155,7 +303,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create links
       const link = g.append('g')
         .selectAll('line')
-        .data(links)
+        .data(visibleLinks)
         .enter()
         .append('line')
         .attr('stroke', '#95a5a6')
@@ -165,11 +313,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create nodes
       const node = g.append('g')
         .selectAll('circle')
-        .data(nodes)
+        .data(visibleNodes)
         .enter()
         .append('circle')
         .attr('r', d => getNodeRadius(d))
-        .attr('fill', d => getNodeColor(d, extensionColors))
+        .attr('fill', d => getNodeColor(d, extensionColors, componentColors))
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
         .style('cursor', 'pointer')
@@ -184,6 +332,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           event.stopPropagation();
           onSelectFile(d.id);
         })
+        .on('dblclick', (event, d) => {
+          event.stopPropagation();
+          toggleExpand(d.id);
+        })
         .call(dragBehavior(simulation));
 
       // Highlight selected file
@@ -193,10 +345,35 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('stroke', '#e74c3c');
       }
 
+      // Add + or - indicators for expandable nodes
+      node.filter(d => 
+          (d.type === 'directory') || 
+          (d.type === 'file' && data.files.find(f => f.id === d.id)?.components.length > 0)
+        )
+        .each(function(d) {
+          const isExpanded = expandedNodes.has(d.id);
+          const nodeSelection = d3.select(this);
+          const radius = getNodeRadius(d);
+          
+          // Add a small indicator
+          g.append('text')
+            .attr('class', 'expansion-indicator')
+            .attr('x', d.x || 0)
+            .attr('y', d.y || 0)
+            .attr('dx', -3)
+            .attr('dy', 3)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '10px')
+            .style('font-weight', 'bold')
+            .style('fill', '#fff')
+            .style('pointer-events', 'none')
+            .text(isExpanded ? '-' : '+');
+        });
+
       // Add node labels
       const label = g.append('g')
         .selectAll('text')
-        .data(nodes)
+        .data(visibleNodes)
         .enter()
         .append('text')
         .attr('dx', d => getNodeRadius(d) + 5)
@@ -239,13 +416,23 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('cx', d => d.x || 0)
           .attr('cy', d => d.y || 0);
 
+        // Update expansion indicators
+        g.selectAll('.expansion-indicator')
+          .data(visibleNodes.filter(d => 
+            (d.type === 'directory') || 
+            (d.type === 'file' && data.files.find(f => f.id === d.id)?.components.length > 0)
+          ))
+          .attr('x', d => d.x || 0)
+          .attr('y', d => d.y || 0)
+          .text(d => expandedNodes.has(d.id) ? '-' : '+');
+
         label
           .attr('x', d => d.x || 0)
           .attr('y', d => d.y || 0);
       });
 
       // Create legend
-      createLegend(svg, width, data, extensionColors);
+      createLegend(svg, width, data, extensionColors, componentColors);
 
       // Clean up on unmount
       return () => {
@@ -253,7 +440,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           simulationRef.current.stop();
         }
       };
-    }, [data, onSelectFile, selectedFile]);
+    }, [data, onSelectFile, selectedFile, expandedNodes]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
@@ -280,6 +467,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         return 10; // Fixed size for directories
       }
       
+      if (node.isComponent) {
+        return 6; // Fixed size for components
+      }
+      
       // Scale file size to a reasonable radius
       const minRadius = 5;
       const maxRadius = 15;
@@ -300,15 +491,24 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     };
 
-    const getNodeColor = (node: Node, colors: Record<string, string>) => {
+    const getNodeColor = (
+      node: Node, 
+      fileColors: Record<string, string>,
+      compColors: Record<string, string>
+    ) => {
       // Directories have a different color
       if (node.type === 'directory') {
         return '#7f8c8d';
       }
       
+      // Component nodes use the component color scheme
+      if (node.isComponent) {
+        return compColors[node.type] || compColors.default;
+      }
+      
       // Files are colored by extension
-      if (node.extension && colors[node.extension]) {
-        return colors[node.extension];
+      if (node.extension && fileColors[node.extension]) {
+        return fileColors[node.extension];
       }
       
       // Default color for unknown file types
@@ -319,7 +519,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
       width: number,
       data: RepositoryData,
-      colors: Record<string, string>
+      fileColors: Record<string, string>,
+      compColors: Record<string, string>
     ) => {
       // Only show extensions that were actually in the data
       const usedExtensions = new Set<string>();
@@ -328,6 +529,18 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           usedExtensions.add(file.extension);
         }
       });
+
+      // Collect component types
+      const usedComponentTypes = new Set<string>();
+      data.files
+        .filter(file => file.type === 'file')
+        .forEach(file => {
+          const processComponent = (component: Component) => {
+            usedComponentTypes.add(component.type);
+            component.components.forEach(processComponent);
+          };
+          file.components.forEach(processComponent);
+        });
 
       const legendGroup = svg.append('g')
         .attr('transform', `translate(20, 20)`);
@@ -349,17 +562,37 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Add file types
       let index = 1;
       for (const ext of usedExtensions) {
-        if (colors[ext]) {
+        if (fileColors[ext]) {
           legendGroup.append('circle')
             .attr('cx', 10 + Math.floor(index / 10) * 100)
             .attr('cy', 10 + (index % 10) * 20)
             .attr('r', 6)
-            .attr('fill', colors[ext]);
+            .attr('fill', fileColors[ext]);
 
           legendGroup.append('text')
             .attr('x', 20 + Math.floor(index / 10) * 100)
             .attr('y', 14 + (index % 10) * 20)
             .text(`.${ext}`)
+            .style('font-size', '12px')
+            .style('fill', '#333');
+
+          index++;
+        }
+      }
+
+      // Add component types
+      for (const type of usedComponentTypes) {
+        if (compColors[type]) {
+          legendGroup.append('circle')
+            .attr('cx', 10 + Math.floor(index / 10) * 100)
+            .attr('cy', 10 + (index % 10) * 20)
+            .attr('r', 6)
+            .attr('fill', compColors[type]);
+
+          legendGroup.append('text')
+            .attr('x', 20 + Math.floor(index / 10) * 100)
+            .attr('y', 14 + (index % 10) * 20)
+            .text(type)
             .style('font-size', '12px')
             .style('fill', '#333');
 
@@ -385,6 +618,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     return (
       <div ref={containerRef} className="w-full h-[600px] relative">
         <svg ref={svgRef} className="w-full h-full bg-white"></svg>
+        <div className="absolute bottom-4 left-4 text-xs text-gray-500">
+          Double-click on a file or directory to expand/collapse it
+        </div>
       </div>
     );
   }
