@@ -1115,7 +1115,7 @@ class RepositoryAnalyzer:
         self, import_statement: str, source_file: str, target_file: str
     ) -> None:
         """
-        Compatibility method for tests - emulates the old regex-based component import extraction.
+        Compatibility method for tests - emulates the old regex-based import extraction.
 
         Args:
             import_statement: The full import statement string
