@@ -87,15 +87,15 @@ const App: React.FC = () => {
             </div>
 
             <div
-              className={`bg-white shadow sm:rounded-lg relative ${
-                isFullscreen 
-                  ? 'fixed inset-0 z-50 bg-white flex flex-col p-0 m-0 rounded-none' 
-                  : ''
+              className={`bg-white shadow sm:rounded-lg relative overflow-hidden ${
+                isFullscreen ? 'fixed inset-0 z-50 bg-white flex flex-col p-0 m-0 rounded-none' : ''
               }`}
               style={{ height: isFullscreen ? '100vh' : 'auto' }}
             >
-              <div className={isFullscreen ? 'flex-grow overflow-hidden' : ''} 
-                   style={{ height: isFullscreen ? 'calc(100vh - 60px)' : 'auto' }}>
+              <div
+                className={`${isFullscreen ? 'flex-grow' : ''}`}
+                style={{ height: isFullscreen ? 'calc(100vh - 64px)' : 'auto' }}
+              >
                 <RepositoryGraph
                   ref={graphRef}
                   data={repositoryData}
@@ -103,8 +103,8 @@ const App: React.FC = () => {
                   selectedFile={selectedFile}
                 />
               </div>
-              
-              <div className={`${isFullscreen ? 'absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10' : ''}`}>
+
+              <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10 shadow-sm">
                 <Controls
                   onZoomIn={handleZoomIn}
                   onZoomOut={handleZoomOut}
