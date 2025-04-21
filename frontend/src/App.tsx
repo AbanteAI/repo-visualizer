@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { RepositoryData } from './types/schema';
 import FileUpload from './components/FileUpload';
-import RepositoryGraph from './components/Visualization/RepositoryGraph';
+import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import Controls from './components/Controls';
 import FileDetails from './components/FileDetails';
 
@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [repositoryData, setRepositoryData] = useState<RepositoryData | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const graphRef = useRef<RepositoryGraphHandle>(null);
 
   const handleDataLoaded = (data: RepositoryData) => {
     setRepositoryData(data);
@@ -29,6 +30,24 @@ const App: React.FC = () => {
   const handleLoadExample = () => {
     setRepositoryData(exampleData);
     setSelectedFile(null);
+  };
+
+  const handleZoomIn = () => {
+    if (graphRef.current) {
+      graphRef.current.zoomIn();
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (graphRef.current) {
+      graphRef.current.zoomOut();
+    }
+  };
+
+  const handleResetView = () => {
+    if (graphRef.current) {
+      graphRef.current.resetView();
+    }
   };
 
   const toggleFullscreen = () => {
@@ -68,22 +87,32 @@ const App: React.FC = () => {
             </div>
 
             <div
-              className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
+              className={`bg-white shadow sm:rounded-lg relative overflow-hidden ${
+                isFullscreen ? 'fixed inset-0 z-50 bg-white flex flex-col p-0 m-0 rounded-none' : ''
+              }`}
+              style={{ height: isFullscreen ? '100vh' : 'auto' }}
             >
-              <RepositoryGraph
-                data={repositoryData}
-                onSelectFile={handleFileSelect}
-                selectedFile={selectedFile}
-              />
+              <div
+                className={`${isFullscreen ? 'flex-grow' : ''}`}
+                style={{ height: isFullscreen ? 'calc(100vh - 64px)' : 'auto' }}
+              >
+                <RepositoryGraph
+                  ref={graphRef}
+                  data={repositoryData}
+                  onSelectFile={handleFileSelect}
+                  selectedFile={selectedFile}
+                />
+              </div>
 
-              <Controls
-                onZoomIn={() => console.log('Zoom in')}
-                onZoomOut={() => console.log('Zoom out')}
-                onReset={() => console.log('Reset')}
-                onFullscreen={toggleFullscreen}
-                isFullscreen={isFullscreen}
-              />
-
+              <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10 shadow-sm">
+                <Controls
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onReset={handleResetView}
+                  onFullscreen={toggleFullscreen}
+                  isFullscreen={isFullscreen}
+                />
+              </div>
               {selectedFile && (
                 <FileDetails
                   fileId={selectedFile}
