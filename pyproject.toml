@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "pathspec>=0.11.0",
+    "astroid>=2.15.0",
 ]
 
 [project.optional-dependencies]

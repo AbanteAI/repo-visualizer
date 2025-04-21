@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 from repo_visualizer.analyzer import RepositoryAnalyzer
+from repo_visualizer.schema import create_empty_schema
 
 
 class TestRepositoryRelationships:
@@ -333,3 +334,102 @@ from config import settings as s
 
         assert len(import_rels) == 2  # Two unique imports
         assert len(contains_rels) == 1  # One unique contains
+
+    @patch("os.path.isdir")
+    def test_component_import_extraction(self, mock_isdir):
+        """Test extraction of specific component imports."""
+        mock_isdir.return_value = True
+
+        # Create analyzer with mock files and components
+        analyzer = RepositoryAnalyzer("/fake/repo")
+
+        # Create target file with components that can be imported
+        target_file = {
+            "id": "utils.py",
+            "path": "utils.py",
+            "name": "utils.py",
+            "type": "file",
+            "components": [
+                {
+                    "id": "utils.py:HelperClass",
+                    "name": "HelperClass",
+                    "type": "class",
+                    "components": [],
+                },
+                {
+                    "id": "utils.py:utility_function",
+                    "name": "utility_function",
+                    "type": "function",
+                    "components": [],
+                },
+                {
+                    "id": "utils.py:CONSTANT",
+                    "name": "CONSTANT",
+                    "type": "variable",
+                    "components": [],
+                },
+            ],
+        }
+
+        # Initialize with the correct type structure using the proper schema function
+        analyzer.data = create_empty_schema()
+        analyzer.data["files"] = [target_file]
+        analyzer.file_ids = {"utils.py"}
+
+        # Test different import styles
+        import_statements = [
+            # Regular component import
+            "from utils import HelperClass, utility_function",
+            # Import with alias
+            "from utils import HelperClass as HC, CONSTANT as C",
+            # Parenthesized import
+            "from utils import (HelperClass, utility_function)",
+            # Star import
+            "from utils import *",
+        ]
+
+        # Test each import style
+        for import_statement in import_statements:
+            # Clear existing relationships
+            analyzer.relationships = []
+
+            # Call the method directly
+            analyzer._extract_component_imports(import_statement, "main.py", "utils.py")
+
+            # Check for component import relationships
+            if "*" in import_statement:
+                # Star import should import all components
+                assert len(analyzer.relationships) == 3
+            else:
+                # Should have relationships for the specific components
+                component_imports = [
+                    r
+                    for r in analyzer.relationships
+                    if r["type"] == "imports_component"
+                ]
+
+                # Check that HelperClass was imported
+                assert any(
+                    r["source"] == "main.py"
+                    and r["target"] == "utils.py:HelperClass"
+                    and r["type"] == "imports_component"
+                    for r in component_imports
+                )
+
+                # utility_function should be imported in regular & parenthesized imports
+                if "utility_function" in import_statement:
+                    assert any(
+                        r["source"] == "main.py"
+                        and r["target"] == "utils.py:utility_function"
+                        and r["type"] == "imports_component"
+                        for r in component_imports
+                    )
+
+                # CONSTANT should be imported in the aliased import
+                if "CONSTANT" in import_statement:
+                    assert any(
+                        r["source"] == "main.py"
+                        and r["target"] == "utils.py:CONSTANT"
+                        and r["type"] == "imports_component"
+                        for r in component_imports
+                    )

@@ -13,6 +13,7 @@ import subprocess
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+import astroid
 import pathspec
 
 from .schema import (
@@ -890,57 +891,11 @@ class RepositoryAnalyzer:
             extension: File extension
         """
         if extension == "py":
-            # Extract Python imports - more comprehensive patterns
-            import_patterns = [
-                # Standard imports
-                r"import\s+([\w\.]+(?:\s*,\s*[\w\.]+)*)",
-                # From imports with specific items
-                r"from\s+([\w\.]+)\s+import\s+(?:[\w\*]+(?:\s*,\s*[\w\*]+)*|\((?:[\w\*]+(?:\s*,\s*[\w\*]+)*)\))",
-                # Relative imports
-                r"from\s+(\.*[\w\.]*)\s+import",
-                # Import with aliases
-                r"import\s+([\w\.]+)\s+as\s+\w+",
-                # From import with alias
-                r"from\s+([\w\.]+)\s+import\s+[\w\*]+\s+as\s+\w+",
-            ]
-
-            # Process each import pattern
-            for pattern in import_patterns:
-                try:
-                    matches = re.finditer(pattern, content)
-                    for match in matches:
-                        raw_modules = match.group(1)
-
-                        # Handle comma-separated imports
-                        if "," in raw_modules and "from" not in match.group(0):
-                            modules = [m.strip() for m in raw_modules.split(",")]
-                        else:
-                            modules = [raw_modules]
-
-                        for module in modules:
-                            # Try to resolve the import to a file in the repository
-                            import_paths = self._resolve_python_import(
-                                module, file_path
-                            )
-                            for import_path in import_paths:
-                                if import_path and import_path in self.file_ids:
-                                    relationship: Relationship = {
-                                        "source": file_path,
-                                        "target": import_path,
-                                        "type": "import",
-                                    }
-                                    # Check if this relationship already exists
-                                    if not any(
-                                        r["source"] == relationship["source"]
-                                        and r["target"] == relationship["target"]
-                                        and r["type"] == relationship["type"]
-                                        for r in self.relationships
-                                    ):
-                                        self.relationships.append(relationship)
-                except Exception as e:
-                    print(
-                        f"Error extracting Python relationships from {file_path}: {e}"
-                    )
+            try:
+                # Use astroid for Python code analysis
+                self._analyze_python_imports_with_astroid(content, file_path)
+            except Exception as e:
+                print(f"Error extracting Python relationships from {file_path}: {e}")
 
             # Look for function calls between modules
             self._extract_python_function_calls(content, file_path)
@@ -982,6 +937,235 @@ class RepositoryAnalyzer:
                                 self.relationships.append(relationship)
                 except Exception as e:
                     print(f"Error extracting JS/TS relationships from {file_path}: {e}")
+
+    def _analyze_python_imports_with_astroid(
+        self, content: str, file_path: str
+    ) -> None:
+        """
+        Analyze Python imports using astroid for robust AST-based parsing.
+
+        Args:
+            content: Python file content
+            file_path: Path to the file being analyzed
+        """
+        try:
+            # Parse the Python code into an AST
+            module = astroid.parse(content, file_path)
+
+            # Walk through the AST to find import nodes
+            for node in module.body:
+                # Handle 'import x' statements
+                if isinstance(node, astroid.Import):
+                    for name, _alias in node.names:
+                        # Resolve the module to a file path
+                        import_paths = self._resolve_python_import(name, file_path)
+                        self._create_file_import_relationships(file_path, import_paths)
+
+                # Handle 'from x import y' statements
+                elif isinstance(node, astroid.ImportFrom):
+                    module_name = node.modname or ""
+                    level = node.level or 0  # For relative imports
+
+                    # Handle relative imports
+                    if level > 0:
+                        # For relative imports, prepend dots to the module name
+                        relative_prefix = "." * level
+                        if module_name:
+                            full_module_name = f"{relative_prefix}{module_name}"
+                        else:
+                            full_module_name = relative_prefix
+                    else:
+                        full_module_name = module_name
+
+                    # Resolve the module to file paths
+                    import_paths = self._resolve_python_import(
+                        full_module_name, file_path
+                    )
+
+                    # Create file-to-file import relationships
+                    self._create_file_import_relationships(file_path, import_paths)
+
+                    # Process specific component imports
+                    for import_path in import_paths:
+                        if import_path and import_path in self.file_ids:
+                            # Get components from the target file
+                            target_components = self._get_file_components(import_path)
+
+                            # Process each imported name
+                            for name, _alias in node.names:
+                                if name == "*":  # Star import
+                                    # Import all components from the module
+                                    self._create_component_import_relationships(
+                                        file_path,
+                                        import_path,
+                                        target_components,
+                                        is_star_import=True,
+                                    )
+                                else:
+                                    # Import specific components
+                                    self._create_component_import_relationships(
+                                        file_path,
+                                        import_path,
+                                        target_components,
+                                        component_names=[name],
+                                    )
+        except Exception as e:
+            print(f"Error in astroid analysis for {file_path}: {e}")
+
+    def _create_file_import_relationships(
+        self, source_file: str, import_paths: List[str]
+    ) -> None:
+        """
+        Create file-to-file import relationships.
+
+        Args:
+            source_file: The file doing the importing
+            import_paths: List of resolved file paths being imported
+        """
+        for import_path in import_paths:
+            if import_path and import_path in self.file_ids:
+                relationship: Relationship = {
+                    "source": source_file,
+                    "target": import_path,
+                    "type": "import",
+                }
+                # Check if this relationship already exists
+                if not any(
+                    r["source"] == relationship["source"]
+                    and r["target"] == relationship["target"]
+                    and r["type"] == relationship["type"]
+                    for r in self.relationships
+                ):
+                    self.relationships.append(relationship)
+
+    def _get_file_components(self, file_path: str) -> List[Component]:
+        """
+        Get all components defined in a file.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            List of components in the file
+        """
+        for file in self.data.get("files", []):
+            if file["id"] == file_path:
+                return file.get("components", [])
+        return []
+
+    def _create_component_import_relationships(
+        self,
+        source_file: str,
+        target_file: str,
+        target_components: List[Component],
+        component_names: Optional[List[str]] = None,
+        is_star_import: bool = False,
+    ) -> None:
+        """
+        Create relationships between a file and imported components.
+
+        Args:
+            source_file: The file doing the importing
+            target_file: The file being imported from
+            target_components: List of components in the target file
+            component_names: List of specific component names being imported
+            is_star_import: Whether this is a star import (import *)
+        """
+        if not target_components:
+            return
+
+        if is_star_import:
+            # For star imports, create relationships with all components
+            for component in target_components:
+                self._add_component_import_relationship(source_file, component["id"])
+        elif component_names:
+            # For specific imports, create relationships only with named components
+            for component in target_components:
+                if component["name"] in component_names:
+                    self._add_component_import_relationship(
+                        source_file, component["id"]
+                    )
+
+    def _add_component_import_relationship(
+        self, source_file: str, component_id: str
+    ) -> None:
+        """
+        Add a component import relationship if it doesn't already exist.
+
+        Args:
+            source_file: The importing file
+            component_id: ID of the component being imported
+        """
+        relationship: Relationship = {
+            "source": source_file,
+            "target": component_id,
+            "type": "imports_component",
+        }
+
+        # Check if this relationship already exists
+        if not any(
+            r["source"] == relationship["source"]
+            and r["target"] == relationship["target"]
+            and r["type"] == relationship["type"]
+            for r in self.relationships
+        ):
+            self.relationships.append(relationship)
+
+    def _extract_component_imports(
+        self, import_statement: str, source_file: str, target_file: str
+    ) -> None:
+        """
+        Compatibility method for tests - emulates the old regex-based import extraction.
+
+        Args:
+            import_statement: The full import statement string
+            source_file: The file doing the importing
+            target_file: The file being imported from
+        """
+        # Get components in the target file
+        target_components = self._get_file_components(target_file)
+
+        if not target_components:
+            return
+
+        # Handle star imports
+        if "*" in import_statement and "import *" in import_statement:
+            # Import all components
+            self._create_component_import_relationships(
+                source_file, target_file, target_components, is_star_import=True
+            )
+            return
+
+        # Extract component names from the import statement
+        component_names = []
+
+        # Handle different import patterns
+        if "from" in import_statement and "import" in import_statement:
+            # Extract the part after "import"
+            after_import = import_statement.split("import")[1].strip()
+
+            # Handle parenthesized imports: from utils import (Class, Function)
+            if after_import.startswith("(") and ")" in after_import:
+                after_import = after_import.strip("()")
+
+            # Split by comma to get individual components
+            for item in after_import.split(","):
+                item = item.strip()
+                if " as " in item:
+                    # For aliased imports, get the original name
+                    component_name = item.split(" as ")[0].strip()
+                    component_names.append(component_name)
+                elif item:  # Skip empty items
+                    component_names.append(item)
+
+        # Create relationships for the extracted component names
+        if component_names:
+            self._create_component_import_relationships(
+                source_file,
+                target_file,
+                target_components,
+                component_names=component_names,
+            )
 
     def _extract_python_function_calls(self, content: str, file_path: str) -> None:
         """
