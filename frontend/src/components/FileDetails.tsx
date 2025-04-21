@@ -1,5 +1,5 @@
 import React from 'react';
-import { RepositoryData, File } from '../types/schema';
+import { RepositoryData, Component } from '../types/schema';
 
 interface FileDetailsProps {
   fileId: string;
@@ -32,7 +32,7 @@ const FileDetails: React.FC<FileDetailsProps> = ({ fileId, data, onClose }) => {
   };
 
   // Render a component and its children
-  const renderComponent = (component: any, depth = 0) => {
+  const renderComponent = (component: Component, depth = 0) => {
     return (
       <div key={component.id} className="ml-4">
         <div className="font-medium">
@@ -45,7 +45,7 @@ const FileDetails: React.FC<FileDetailsProps> = ({ fileId, data, onClose }) => {
         )}
         {component.components && component.components.length > 0 && (
           <div className="ml-4 mt-2 border-l-2 border-gray-200 pl-2">
-            {component.components.map((subComp: any) => renderComponent(subComp, depth + 1))}
+            {component.components.map((subComp: Component) => renderComponent(subComp, depth + 1))}
           </div>
         )}
       </div>
