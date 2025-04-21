@@ -1,0 +1,147 @@
+import { RepositoryData } from '../types/schema';
+
+export const exampleData: RepositoryData = {
+  "metadata": {
+    "repoName": "example-repo",
+    "description": "An example repository for visualization",
+    "schemaVersion": "1.0.0",
+    "analysisDate": "2025-03-20T12:00:00Z",
+    "language": {
+      "Python": 0.6,
+      "JavaScript": 0.3,
+      "Markdown": 0.1
+    }
+  },
+  "files": [
+    {
+      "id": "src",
+      "path": "src",
+      "name": "src",
+      "size": 0,
+      "type": "directory",
+      "depth": 0,
+      "components": []
+    },
+    {
+      "id": "src/main.py",
+      "path": "src/main.py",
+      "name": "main.py",
+      "extension": "py",
+      "size": 1024,
+      "type": "file",
+      "depth": 1,
+      "components": [
+        {
+          "id": "src/main.py:main",
+          "name": "main",
+          "type": "function",
+          "lineStart": 10,
+          "lineEnd": 20,
+          "components": []
+        },
+        {
+          "id": "src/main.py:ExampleClass",
+          "name": "ExampleClass",
+          "type": "class",
+          "lineStart": 25,
+          "lineEnd": 100,
+          "components": [
+            {
+              "id": "src/main.py:ExampleClass.method1",
+              "name": "method1",
+              "type": "method",
+              "lineStart": 40,
+              "lineEnd": 50,
+              "components": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "src/utils.py",
+      "path": "src/utils.py",
+      "name": "utils.py",
+      "extension": "py",
+      "size": 512,
+      "type": "file",
+      "depth": 1,
+      "components": [
+        {
+          "id": "src/utils.py:helper_function",
+          "name": "helper_function",
+          "type": "function",
+          "lineStart": 5,
+          "lineEnd": 15,
+          "components": []
+        }
+      ]
+    },
+    {
+      "id": "src/web",
+      "path": "src/web",
+      "name": "web",
+      "size": 0,
+      "type": "directory",
+      "depth": 1,
+      "components": []
+    },
+    {
+      "id": "src/web/app.js",
+      "path": "src/web/app.js",
+      "name": "app.js",
+      "extension": "js",
+      "size": 768,
+      "type": "file",
+      "depth": 2,
+      "components": []
+    },
+    {
+      "id": "README.md",
+      "path": "README.md",
+      "name": "README.md",
+      "extension": "md",
+      "size": 256,
+      "type": "file",
+      "depth": 0,
+      "components": []
+    }
+  ],
+  "relationships": [
+    {
+      "source": "src/main.py",
+      "target": "src/utils.py",
+      "type": "import"
+    },
+    {
+      "source": "src",
+      "target": "src/main.py",
+      "type": "contains"
+    },
+    {
+      "source": "src",
+      "target": "src/utils.py",
+      "type": "contains"
+    },
+    {
+      "source": "src",
+      "target": "src/web",
+      "type": "contains"
+    },
+    {
+      "source": "src/web",
+      "target": "src/web/app.js",
+      "type": "contains"
+    },
+    {
+      "source": "src/main.py:main",
+      "target": "src/utils.py:helper_function",
+      "type": "call"
+    },
+    {
+      "source": "src/web/app.js",
+      "target": "src/main.py",
+      "type": "reference"
+    }
+  ]
+};
