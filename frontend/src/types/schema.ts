@@ -8,7 +8,7 @@ export interface RepositoryData {
   files: File[];
   relationships: Relationship[];
   history?: History;
-  customData?: Record<string, any>;
+  customData?: Record<string, unknown>;
 }
 
 export interface Metadata {
@@ -41,7 +41,7 @@ export interface FileMetrics {
   linesOfCode?: number;
   commentLines?: number;
   emptyLines?: number;
-  custom?: Record<string, any>;
+  custom?: Record<string, unknown>;
 }
 
 export interface Component {
@@ -57,7 +57,7 @@ export interface Component {
 export interface ComponentMetrics {
   complexity?: number;
   linesOfCode?: number;
-  custom?: Record<string, any>;
+  custom?: Record<string, unknown>;
 }
 
 export interface Relationship {
@@ -65,7 +65,7 @@ export interface Relationship {
   target: string;
   type: string;
   strength?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface FileChange {
@@ -85,7 +85,7 @@ export interface Commit {
 
 export interface TimelinePoint {
   commitId: string;
-  state: Record<string, any>;
+  state: Record<string, unknown>;
   snapshot: {
     files?: File[];
     relationships?: Relationship[];

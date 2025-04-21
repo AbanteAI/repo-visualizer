@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import * as d3 from 'd3';
-import { RepositoryData, File } from '../../types/schema';
+import { RepositoryData } from '../../types/schema';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
@@ -179,10 +179,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
         .style('cursor', 'pointer')
-        .on('mouseover', function (event, d) {
+        .on('mouseover', function () {
           d3.select(this).attr('stroke-width', 3);
         })
-        .on('mouseout', function (event, d) {
+        .on('mouseout', function (_event, d) {
           d3.select(this).attr('stroke-width', d.id === selectedFile ? 3 : 1.5);
         })
         .on('click', (event, d) => {
@@ -399,4 +399,5 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
   }
 );
 
+RepositoryGraph.displayName = 'RepositoryGraph';
 export default RepositoryGraph;
