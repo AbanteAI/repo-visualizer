@@ -1111,6 +1111,59 @@ class RepositoryAnalyzer:
         ):
             self.relationships.append(relationship)
 
+    def _extract_component_imports(
+        self, import_statement: str, source_file: str, target_file: str
+    ) -> None:
+        """
+        Compatibility method for tests - emulates the old regex-based component import extraction.
+        
+        Args:
+            import_statement: The full import statement string
+            source_file: The file doing the importing
+            target_file: The file being imported from
+        """
+        # Get components in the target file
+        target_components = self._get_file_components(target_file)
+        
+        if not target_components:
+            return
+            
+        # Handle star imports
+        if "*" in import_statement and "import *" in import_statement:
+            # Import all components
+            self._create_component_import_relationships(
+                source_file, target_file, target_components, is_star_import=True
+            )
+            return
+        
+        # Extract component names from the import statement
+        component_names = []
+        
+        # Handle different import patterns
+        if "from" in import_statement and "import" in import_statement:
+            # Extract the part after "import"
+            after_import = import_statement.split("import")[1].strip()
+            
+            # Handle parenthesized imports: from utils import (Class, Function)
+            if after_import.startswith("(") and ")" in after_import:
+                after_import = after_import.strip("()")
+            
+            # Split by comma to get individual components
+            for item in after_import.split(","):
+                item = item.strip()
+                if " as " in item:
+                    # For aliased imports, get the original name
+                    component_name = item.split(" as ")[0].strip()
+                    component_names.append(component_name)
+                elif item:  # Skip empty items
+                    component_names.append(item)
+        
+        # Create relationships for the extracted component names
+        if component_names:
+            self._create_component_import_relationships(
+                source_file, target_file, target_components, component_names=component_names
+            )
+
     def _extract_python_function_calls(self, content: str, file_path: str) -> None:
         """
         Extract Python function calls between components.
