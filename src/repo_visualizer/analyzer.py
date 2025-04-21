@@ -956,7 +956,7 @@ class RepositoryAnalyzer:
             for node in module.body:
                 # Handle 'import x' statements
                 if isinstance(node, astroid.Import):
-                    for name, alias in node.names:
+                    for name, _alias in node.names:
                         # Resolve the module to a file path
                         import_paths = self._resolve_python_import(name, file_path)
                         self._create_file_import_relationships(file_path, import_paths)
@@ -992,7 +992,7 @@ class RepositoryAnalyzer:
                             target_components = self._get_file_components(import_path)
 
                             # Process each imported name
-                            for name, alias in node.names:
+                            for name, _alias in node.names:
                                 if name == "*":  # Star import
                                     # Import all components from the module
                                     self._create_component_import_relationships(
@@ -1058,7 +1058,7 @@ class RepositoryAnalyzer:
         source_file: str,
         target_file: str,
         target_components: List[Component],
-        component_names: List[str] = None,
+        component_names: Optional[List[str]] = None,
         is_star_import: bool = False,
     ) -> None:
         """
