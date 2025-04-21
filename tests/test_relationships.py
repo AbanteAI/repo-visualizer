@@ -414,7 +414,7 @@ from config import settings as s
                     for r in component_imports
                 )
 
-                # utility_function should be imported in regular and parenthesized imports
+                # utility_function should be imported in regular & parenthesized imports
                 if "utility_function" in import_statement:
                     assert any(
                         r["source"] == "main.py"
