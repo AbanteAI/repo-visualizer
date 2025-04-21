@@ -963,8 +963,8 @@ class RepositoryAnalyzer:
 
                 # Handle 'from x import y' statements
                 elif isinstance(node, astroid.ImportFrom):
-                    module_name = node.modname
-                    level = node.level  # For relative imports
+                    module_name = node.modname or ""
+                    level = node.level or 0  # For relative imports
 
                     # Handle relative imports
                     if level > 0:
