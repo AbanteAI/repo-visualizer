@@ -105,6 +105,19 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }));
 
+    // Function to stabilize simulation
+    const stabilizeSimulation = () => {
+      if (!simulationRef.current) return;
+      
+      // Run the simulation for a few ticks to stabilize it
+      for (let i = 0; i < 100; i++) {
+        simulationRef.current.tick();
+      }
+      
+      // Then stop it moving
+      simulationRef.current.alpha(0).stop();
+    };
+    
     useEffect(() => {
       if (!svgRef.current || !containerRef.current || !data) return;
 
@@ -156,10 +169,23 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .force('link', d3.forceLink<Node, Link>(links).id(d => d.id).distance(100))
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5));
+        .force('collision', d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5))
+        .alpha(1)  // Start with a high alpha
+        .alphaDecay(0.02); // Faster decay for quicker initial stabilization
 
       // Save simulation to ref for potential future interactions
       simulationRef.current = simulation;
+      
+      // Make sure we stabilize after initial layout
+      simulation.on('end', () => {
+        // Fix positions of all nodes once initial layout is done
+        nodes.forEach(node => {
+          if (node.x && node.y) {
+            node.fx = node.x;
+            node.fy = node.y;
+          }
+        });
+      });
 
       // Create links
       const link = g.append('g')
@@ -196,18 +222,21 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .on('click', (event, d) => {
           event.stopPropagation();
-          // Fix the node position when selected to prevent random movement
-          d.fx = d.x;
-          d.fy = d.y;
+          
+          // Ensure all nodes are fixed at their current positions to prevent unwanted movement
+          nodes.forEach(node => {
+            if (node.x && node.y) {
+              node.fx = node.x;
+              node.fy = node.y;
+            }
+          });
+          
+          // Select the node without causing movement
           onSelectFile(d.id);
           
-          // Release previously selected node if different
-          if (selectedFile && selectedFile !== d.id) {
-            const prevNode = nodes.find(n => n.id === selectedFile);
-            if (prevNode) {
-              prevNode.fx = null;
-              prevNode.fy = null;
-            }
+          // Make sure simulation is stopped
+          if (simulationRef.current) {
+            simulationRef.current.alpha(0).stop();
           }
         })
         .call(dragBehavior(simulation));
@@ -285,23 +314,34 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         resizeObserverRef.current.disconnect();
       }
       
+      // Keep track of previous dimensions to avoid unnecessary updates
+      let prevWidth = width;
+      let prevHeight = height;
+      
       resizeObserverRef.current = new ResizeObserver(() => {
         if (!containerRef.current || !svgRef.current) return;
         
-        const { width, height } = getContainerDimensions();
+        const { width: newWidth, height: newHeight } = getContainerDimensions();
         
-        // Update SVG dimensions
-        svg
-          .attr('width', width)
-          .attr('height', height)
-          .attr('viewBox', [0, 0, width, height]);
-        
-        // Update force simulation center
-        if (simulationRef.current) {
-          simulationRef.current
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .alpha(0.3)
-            .restart();
+        // Only update if dimensions have actually changed significantly
+        // This prevents resize feedback loops
+        if (Math.abs(newWidth - prevWidth) > 5 || Math.abs(newHeight - prevHeight) > 5) {
+          prevWidth = newWidth;
+          prevHeight = newHeight;
+          
+          // Update SVG dimensions
+          svg
+            .attr('width', newWidth)
+            .attr('height', newHeight)
+            .attr('viewBox', [0, 0, newWidth, newHeight]);
+          
+          // Update force simulation center
+          if (simulationRef.current) {
+            simulationRef.current
+              .force('center', d3.forceCenter(newWidth / 2, newHeight / 2))
+              .alpha(0.1) // Lower alpha for gentler transitions
+              .restart();
+          }
         }
       });
       
@@ -450,7 +490,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     };
 
     return (
-      <div ref={containerRef} className="w-full h-[calc(100vh-200px)] min-h-[600px] relative">
+      <div ref={containerRef} className="w-full h-[600px] max-h-[80vh] relative">
         <svg ref={svgRef} className="w-full h-full bg-white"></svg>
       </div>
     );

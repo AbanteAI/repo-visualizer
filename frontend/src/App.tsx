@@ -92,8 +92,10 @@ const App: React.FC = () => {
                   ? 'fixed inset-0 z-50 bg-white flex flex-col p-0 m-0 rounded-none' 
                   : ''
               }`}
+              style={{ height: isFullscreen ? '100vh' : 'auto' }}
             >
-              <div className={`flex-grow ${isFullscreen ? 'h-[calc(100vh-60px)]' : ''}`}>
+              <div className={isFullscreen ? 'flex-grow overflow-hidden' : ''} 
+                   style={{ height: isFullscreen ? 'calc(100vh - 60px)' : 'auto' }}>
                 <RepositoryGraph 
                   ref={graphRef}
                   data={repositoryData} 
@@ -102,7 +104,7 @@ const App: React.FC = () => {
                 />
               </div>
               
-              <div className={`${isFullscreen ? 'absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200' : ''}`}>
+              <div className={`${isFullscreen ? 'absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10' : ''}`}>
                 <Controls 
                   onZoomIn={handleZoomIn} 
                   onZoomOut={handleZoomOut} 
