@@ -38,14 +38,8 @@ import { exampleData } from './utils/exampleData';
 function App() {
   const [data, setData] = useState(exampleData);
   const [selectedFile, setSelectedFile] = useState(null);
-  
-  return (
-    <RepositoryGraph 
-      data={data}
-      onSelectFile={setSelectedFile}
-      selectedFile={selectedFile}
-    />
-  );
+
+  return <RepositoryGraph data={data} onSelectFile={setSelectedFile} selectedFile={selectedFile} />;
 }
 ```
 

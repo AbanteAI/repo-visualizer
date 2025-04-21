@@ -13,7 +13,7 @@ const Controls: React.FC<ControlsProps> = ({
   onZoomOut,
   onReset,
   onFullscreen,
-  isFullscreen
+  isFullscreen,
 }) => {
   return (
     <div className="flex justify-center gap-2 p-4">

@@ -17,6 +17,10 @@ else
     PYTHON_CMD=""
 fi
 
+#
+# PYTHON CHECKS
+#
+
 # Find appropriate commands for our tools
 RUFF_CMD=""
 PYRIGHT_CMD=""
@@ -85,6 +89,66 @@ if [ -n "$PYRIGHT_CMD" ]; then
     fi
 else
     echo "Skipping pyright type checking due to missing tool"
+fi
+
+#
+# FRONTEND CHECKS
+#
+
+# Check if we have frontend code that needs formatting
+if [ -d "frontend" ]; then
+    echo "Found frontend directory. Running frontend checks..."
+    
+    # Change to frontend directory
+    cd frontend || { echo "Failed to change to frontend directory"; exit 1; }
+    
+    # Check for npm/node
+    if command -v npm &> /dev/null; then
+        echo "Found npm. Running frontend formatting..."
+        
+        # Check for Prettier
+        if [ -f "node_modules/.bin/prettier" ] || npm list --depth 0 prettier &> /dev/null; then
+            echo "Running Prettier formatter..."
+            npm run format || {
+                echo "Warning: Prettier formatting failed, continuing with other checks"
+                SUCCESS=false
+            }
+        else
+            echo "Prettier not found in node_modules. Attempting to install..."
+            npm install --silent || {
+                echo "Warning: Failed to install frontend dependencies. Skipping frontend formatting."
+                SUCCESS=false
+            }
+            
+            # Try running format after install
+            if [ -f "node_modules/.bin/prettier" ]; then
+                echo "Running Prettier formatter after install..."
+                npm run format || {
+                    echo "Warning: Prettier formatting failed, continuing with other checks"
+                    SUCCESS=false
+                }
+            fi
+        fi
+        
+        # Check for ESLint
+        if [ -f "node_modules/.bin/eslint" ] || npm list --depth 0 eslint &> /dev/null; then
+            echo "Running ESLint with auto-fixes..."
+            npm run lint:fix || {
+                echo "Warning: ESLint checks failed, continuing with other checks"
+                SUCCESS=false
+            }
+        else
+            echo "ESLint not found in node_modules. Skipping frontend linting."
+        fi
+    else
+        echo "npm not found. Skipping frontend formatting."
+        SUCCESS=false
+    fi
+    
+    # Return to the root directory
+    cd ..
+else
+    echo "No frontend directory found. Skipping frontend checks."
 fi
 
 # Indicate overall success or failure

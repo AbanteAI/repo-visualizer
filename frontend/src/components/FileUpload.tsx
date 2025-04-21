@@ -30,10 +30,16 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
     try {
       const fileContent = await readFileContent(selectedFile);
       const jsonData = JSON.parse(fileContent);
-      
+
       // Basic validation
-      if (!jsonData.metadata || !Array.isArray(jsonData.files) || !Array.isArray(jsonData.relationships)) {
-        setError('Invalid repository data format. The file should contain metadata, files, and relationships arrays.');
+      if (
+        !jsonData.metadata ||
+        !Array.isArray(jsonData.files) ||
+        !Array.isArray(jsonData.relationships)
+      ) {
+        setError(
+          'Invalid repository data format. The file should contain metadata, files, and relationships arrays.'
+        );
         setLoading(false);
         return;
       }
@@ -50,8 +56,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
   const readFileContent = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.onerror = (e) => reject(new Error('Failed to read file'));
+      reader.onload = e => resolve(e.target?.result as string);
+      reader.onerror = e => reject(new Error('Failed to read file'));
       reader.readAsText(file);
     });
   };
@@ -59,7 +65,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
   return (
     <div className="text-center">
       <h2 className="text-lg font-medium mb-4">Upload Repository JSON</h2>
-      
+
       <div className="mb-6">
         <input
           type="file"
@@ -79,13 +85,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
           {selectedFile ? selectedFile.name : 'No file selected'}
         </div>
       </div>
-      
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-          {error}
-        </div>
-      )}
-      
+
+      {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">{error}</div>}
+
       <div className="flex justify-center gap-4">
         <button
           onClick={handleVisualize}
@@ -94,7 +96,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
         >
           {loading ? 'Processing...' : 'Visualize Repository'}
         </button>
-        
+
         <button
           onClick={onLoadExample}
           className="bg-gray-600 text-white py-2 px-4 rounded shadow hover:bg-gray-700 transition-colors"
