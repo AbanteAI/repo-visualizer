@@ -67,26 +67,28 @@ const App: React.FC = () => {
               </h2>
             </div>
 
-            <div className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
-              <RepositoryGraph 
-                data={repositoryData} 
-                onSelectFile={handleFileSelect} 
-                selectedFile={selectedFile} 
+            <div
+              className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
+            >
+              <RepositoryGraph
+                data={repositoryData}
+                onSelectFile={handleFileSelect}
+                selectedFile={selectedFile}
               />
-              
-              <Controls 
-                onZoomIn={() => console.log('Zoom in')} 
-                onZoomOut={() => console.log('Zoom out')} 
-                onReset={() => console.log('Reset')} 
-                onFullscreen={toggleFullscreen} 
-                isFullscreen={isFullscreen} 
+
+              <Controls
+                onZoomIn={() => console.log('Zoom in')}
+                onZoomOut={() => console.log('Zoom out')}
+                onReset={() => console.log('Reset')}
+                onFullscreen={toggleFullscreen}
+                isFullscreen={isFullscreen}
               />
-              
+
               {selectedFile && (
-                <FileDetails 
-                  fileId={selectedFile} 
-                  data={repositoryData} 
-                  onClose={handleCloseFileDetails} 
+                <FileDetails
+                  fileId={selectedFile}
+                  data={repositoryData}
+                  onClose={handleCloseFileDetails}
                 />
               )}
             </div>

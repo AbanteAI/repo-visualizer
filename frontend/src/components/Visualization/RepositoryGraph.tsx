@@ -38,30 +38,30 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-    
+
     // Extension colors mapping
     const extensionColors: Record<string, string> = {
-      'py': '#3572A5',    // Python
-      'js': '#f7df1e',    // JavaScript
-      'html': '#e34c26',  // HTML
-      'css': '#563d7c',   // CSS
-      'md': '#083fa1',    // Markdown
-      'json': '#292929',  // JSON
-      'java': '#b07219',  // Java
-      'cpp': '#f34b7d',   // C++
-      'c': '#555555',     // C
-      'rb': '#701516',    // Ruby
-      'php': '#4F5D95',   // PHP
-      'ts': '#2b7489',    // TypeScript
-      'sh': '#89e051',    // Shell
-      'go': '#00ADD8',    // Go
-      'rs': '#dea584',    // Rust
-      'swift': '#ffac45', // Swift
-      'kt': '#F18E33',    // Kotlin
-      'scala': '#c22d40', // Scala
-      'pl': '#0298c3',    // Perl
-      'lua': '#000080',   // Lua
-      'r': '#198CE7',     // R
+      py: '#3572A5', // Python
+      js: '#f7df1e', // JavaScript
+      html: '#e34c26', // HTML
+      css: '#563d7c', // CSS
+      md: '#083fa1', // Markdown
+      json: '#292929', // JSON
+      java: '#b07219', // Java
+      cpp: '#f34b7d', // C++
+      c: '#555555', // C
+      rb: '#701516', // Ruby
+      php: '#4F5D95', // PHP
+      ts: '#2b7489', // TypeScript
+      sh: '#89e051', // Shell
+      go: '#00ADD8', // Go
+      rs: '#dea584', // Rust
+      swift: '#ffac45', // Swift
+      kt: '#F18E33', // Kotlin
+      scala: '#c22d40', // Scala
+      pl: '#0298c3', // Perl
+      lua: '#000080', // Lua
+      r: '#198CE7', // R
     };
 
     // Expose methods to parent components
@@ -70,7 +70,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         if (!svgRef.current || !zoomRef.current) return;
         const svg = d3.select(svgRef.current);
         const currentTransform = d3.zoomTransform(svg.node()!);
-        svg.transition()
+        svg
+          .transition()
           .duration(250)
           .call(
             zoomRef.current.transform,
@@ -83,7 +84,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         if (!svgRef.current || !zoomRef.current) return;
         const svg = d3.select(svgRef.current);
         const currentTransform = d3.zoomTransform(svg.node()!);
-        svg.transition()
+        svg
+          .transition()
           .duration(250)
           .call(
             zoomRef.current.transform,
@@ -95,13 +97,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       resetView: () => {
         if (!svgRef.current || !zoomRef.current) return;
         const svg = d3.select(svgRef.current);
-        svg.transition()
-          .duration(750)
-          .call(
-            zoomRef.current.transform,
-            d3.zoomIdentity
-          );
-      }
+        svg.transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
+      },
     }));
 
     useEffect(() => {
@@ -116,10 +113,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const height = 600; // Fixed height, could be made responsive
 
       // Update SVG dimensions
-      svg
-        .attr('width', width)
-        .attr('height', height)
-        .attr('viewBox', [0, 0, width, height]);
+      svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
 
       // Create a group for the graph
       const g = svg.append('g');
@@ -143,17 +137,28 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }));
 
       // Create a force simulation
-      const simulation = d3.forceSimulation<Node>(nodes)
-        .force('link', d3.forceLink<Node, Link>(links).id(d => d.id).distance(100))
+      const simulation = d3
+        .forceSimulation<Node>(nodes)
+        .force(
+          'link',
+          d3
+            .forceLink<Node, Link>(links)
+            .id(d => d.id)
+            .distance(100)
+        )
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5));
+        .force(
+          'collision',
+          d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5)
+        );
 
       // Save simulation to ref for potential future interactions
       simulationRef.current = simulation;
 
       // Create links
-      const link = g.append('g')
+      const link = g
+        .append('g')
         .selectAll('line')
         .data(links)
         .enter()
@@ -163,7 +168,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('stroke-width', d => getLinkWidth(d));
 
       // Create nodes
-      const node = g.append('g')
+      const node = g
+        .append('g')
         .selectAll('circle')
         .data(nodes)
         .enter()
@@ -173,12 +179,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
         .style('cursor', 'pointer')
-        .on('mouseover', function(event, d) {
+        .on('mouseover', function (event, d) {
           d3.select(this).attr('stroke-width', 3);
         })
-        .on('mouseout', function(event, d) {
-          d3.select(this)
-            .attr('stroke-width', d.id === selectedFile ? 3 : 1.5);
+        .on('mouseout', function (event, d) {
+          d3.select(this).attr('stroke-width', d.id === selectedFile ? 3 : 1.5);
         })
         .on('click', (event, d) => {
           event.stopPropagation();
@@ -188,13 +193,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Highlight selected file
       if (selectedFile) {
-        node.filter(d => d.id === selectedFile)
+        node
+          .filter(d => d.id === selectedFile)
           .attr('stroke-width', 3)
           .attr('stroke', '#e74c3c');
       }
 
       // Add node labels
-      const label = g.append('g')
+      const label = g
+        .append('g')
         .selectAll('text')
         .data(nodes)
         .enter()
@@ -207,8 +214,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('fill', '#333');
 
       // Add hover titles to nodes
-      node.append('title')
-        .text(d => d.path);
+      node.append('title').text(d => d.path);
 
       // Click on background to clear selection
       svg.on('click', () => {
@@ -216,15 +222,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       });
 
       // Create zoom behavior
-      const zoom = d3.zoom<SVGSVGElement, unknown>()
+      const zoom = d3
+        .zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 10])
-        .on('zoom', (event) => {
+        .on('zoom', event => {
           g.attr('transform', event.transform);
         });
 
       // Save zoom to ref for external access
       zoomRef.current = zoom;
-      
+
       svg.call(zoom);
 
       // Update positions on each tick
@@ -235,13 +242,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('x2', d => (d.target as Node).x || 0)
           .attr('y2', d => (d.target as Node).y || 0);
 
-        node
-          .attr('cx', d => d.x || 0)
-          .attr('cy', d => d.y || 0);
+        node.attr('cx', d => d.x || 0).attr('cy', d => d.y || 0);
 
-        label
-          .attr('x', d => d.x || 0)
-          .attr('y', d => d.y || 0);
+        label.attr('x', d => d.x || 0).attr('y', d => d.y || 0);
       });
 
       // Create legend
@@ -257,7 +260,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
-      return d3.drag<SVGCircleElement, Node>()
+      return d3
+        .drag<SVGCircleElement, Node>()
         .on('start', (event, d) => {
           if (!event.active) simulation.alphaTarget(0.3).restart();
           d.fx = d.x;
@@ -279,12 +283,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       if (node.type === 'directory') {
         return 10; // Fixed size for directories
       }
-      
+
       // Scale file size to a reasonable radius
       const minRadius = 5;
       const maxRadius = 15;
       const baseRadius = node.size ? Math.sqrt(node.size) / 15 : minRadius;
-      
+
       return Math.max(minRadius, Math.min(maxRadius, baseRadius));
     };
 
@@ -324,12 +328,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       if (node.type === 'directory') {
         return '#7f8c8d';
       }
-      
+
       // Files are colored by extension
       if (node.extension && colors[node.extension]) {
         return colors[node.extension];
       }
-      
+
       // Default color for unknown file types
       return '#aaaaaa';
     };
@@ -355,11 +359,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       });
 
       // Create legend group
-      const legendGroup = svg.append('g')
-        .attr('transform', `translate(20, 20)`);
+      const legendGroup = svg.append('g').attr('transform', `translate(20, 20)`);
       
       // Title for node types
-      legendGroup.append('text')
+      legendGroup
+        .append('text')
         .attr('x', 0)
         .attr('y', 0)
         .text('Node Types')
@@ -368,13 +372,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('fill', '#333');
 
       // Add directory type
-      legendGroup.append('circle')
+      legendGroup
+        .append('circle')
         .attr('cx', 10)
         .attr('cy', 20)
         .attr('r', 6)
         .attr('fill', '#7f8c8d');
 
-      legendGroup.append('text')
+      legendGroup
+        .append('text')
         .attr('x', 20)
         .attr('y', 24)
         .text('Directory')
@@ -385,13 +391,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       let index = 1;
       for (const ext of usedExtensions) {
         if (colors[ext]) {
-          legendGroup.append('circle')
+          legendGroup
+            .append('circle')
             .attr('cx', 10 + Math.floor(index / 10) * 100)
             .attr('cy', 20 + (index % 10) * 20)
             .attr('r', 6)
             .attr('fill', colors[ext]);
 
-          legendGroup.append('text')
+          legendGroup
+            .append('text')
             .attr('x', 20 + Math.floor(index / 10) * 100)
             .attr('y', 24 + (index % 10) * 20)
             .text(`.${ext}`)
@@ -403,13 +411,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
 
       // Add "Other" type
-      legendGroup.append('circle')
+      legendGroup
+        .append('circle')
         .attr('cx', 10 + Math.floor(index / 10) * 100)
         .attr('cy', 20 + (index % 10) * 20)
         .attr('r', 6)
         .attr('fill', '#aaaaaa');
 
-      legendGroup.append('text')
+      legendGroup
+        .append('text')
         .attr('x', 20 + Math.floor(index / 10) * 100)
         .attr('y', 24 + (index % 10) * 20)
         .text('Other')
@@ -420,7 +430,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const nodeTypeHeight = 24 + (Math.min(index + 1, 10) * 20);
       
       // Title for relationship types with some spacing
-      legendGroup.append('text')
+      legendGroup
+        .append('text')
         .attr('x', 0)
         .attr('y', nodeTypeHeight + 30)
         .text('Relationship Types')
@@ -444,7 +455,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Add relationship legend
       filteredRelationships.forEach((rel, i) => {
         // Draw a small line instead of a circle for links
-        legendGroup.append('line')
+        legendGroup
+          .append('line')
           .attr('x1', 0)
           .attr('y1', nodeTypeHeight + 50 + (i * 20))
           .attr('x2', 20)
@@ -452,7 +464,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('stroke', rel.color)
           .attr('stroke-width', rel.type === 'contains' ? 1 : 2);
           
-        legendGroup.append('text')
+        legendGroup
+          .append('text')
           .attr('x', 30)
           .attr('y', nodeTypeHeight + 54 + (i * 20))
           .text(rel.label)
