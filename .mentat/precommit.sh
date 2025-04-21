@@ -1,6 +1,13 @@
 #!/bin/bash
 set +e  # Don't exit on error so we can handle failures gracefully
 
+# Check if there are changes in the frontend directory
+FRONTEND_CHANGES=$(git diff --cached --name-only | grep -E '
+^
+frontend/')
+BACKEND_SUCCESS=true
+FRONTEND_SUCCESS=true
+
 # Try to activate virtual environment, but don't fail if it doesn't exist
 if [ -d ".venv" ]; then
     echo "Attempting to activate virtual environment..."
@@ -60,7 +67,7 @@ if [ -n "$RUFF_CMD" ]; then
     $RUFF_CMD format .
     if [ $? -ne 0 ]; then
         echo "Warning: Ruff formatting failed, continuing with other checks"
-        SUCCESS=false
+        BACKEND_SUCCESS=false
     fi
 
     # Fix linting issues with ruff
@@ -68,11 +75,11 @@ if [ -n "$RUFF_CMD" ]; then
     $RUFF_CMD check --fix .
     if [ $? -ne 0 ]; then
         echo "Warning: Ruff linting failed, continuing with other checks"
-        SUCCESS=false
+        BACKEND_SUCCESS=false
     fi
 else
     echo "Skipping ruff formatting and linting due to missing tool"
-    SUCCESS=false
+    BACKEND_SUCCESS=false
 fi
 
 # Run type checking with pyright
@@ -87,8 +94,21 @@ else
     echo "Skipping pyright type checking due to missing tool"
 fi
 
+# Run frontend tests if changes were made to frontend files
+if [ -n "$FRONTEND_CHANGES" ]; then
+    echo "Frontend changes detected. Running frontend tests..."
+    cd frontend && npm test
+    if [ $? -ne 0 ]; then
+        echo "Warning: Frontend tests failed"
+        FRONTEND_SUCCESS=false
+    else
+        echo "Frontend tests passed!"
+    fi
+    cd ..
+fi
+
 # Indicate overall success or failure
-if [ "$SUCCESS" = true ]; then
+if [ "$BACKEND_SUCCESS" = true ] && [ "$FRONTEND_SUCCESS" = true ]; then
     echo "All available checks completed successfully!"
     exit 0
 else
@@ -96,7 +116,3 @@ else
     # Exit with success anyway to not block commits - CI will catch real errors
     exit 0
 fi
-
-# Tests are run in CI, so we don't need to run them here
-# If you need to run tests locally, uncomment the line below
-# pytest
