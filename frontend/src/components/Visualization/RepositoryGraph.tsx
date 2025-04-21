@@ -38,6 +38,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const resizeObserverRef = useRef<ResizeObserver | null>(null);
     
     // Extension colors mapping
     const extensionColors: Record<string, string> = {
@@ -112,8 +113,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       svg.selectAll('*').remove();
 
       // Set up dimensions
-      const width = containerRef.current.clientWidth;
-      const height = 600; // Fixed height, could be made responsive
+      const getContainerDimensions = () => {
+        const container = containerRef.current;
+        if (!container) return { width: 800, height: 600 };
+        return {
+          width: container.clientWidth,
+          height: container.clientHeight
+        };
+      };
+
+      const { width, height } = getContainerDimensions();
 
       // Update SVG dimensions
       svg
@@ -174,15 +183,32 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('stroke-width', 1.5)
         .style('cursor', 'pointer')
         .on('mouseover', function(event, d) {
-          d3.select(this).attr('stroke-width', 3);
+          d3.select(this)
+            .attr('stroke', '#e74c3c')
+            .attr('stroke-width', 3);
         })
         .on('mouseout', function(event, d) {
-          d3.select(this)
-            .attr('stroke-width', d.id === selectedFile ? 3 : 1.5);
+          if (d.id !== selectedFile) {
+            d3.select(this)
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1.5);
+          }
         })
         .on('click', (event, d) => {
           event.stopPropagation();
+          // Fix the node position when selected to prevent random movement
+          d.fx = d.x;
+          d.fy = d.y;
           onSelectFile(d.id);
+          
+          // Release previously selected node if different
+          if (selectedFile && selectedFile !== d.id) {
+            const prevNode = nodes.find(n => n.id === selectedFile);
+            if (prevNode) {
+              prevNode.fx = null;
+              prevNode.fy = null;
+            }
+          }
         })
         .call(dragBehavior(simulation));
 
@@ -191,6 +217,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         node.filter(d => d.id === selectedFile)
           .attr('stroke-width', 3)
           .attr('stroke', '#e74c3c');
+          
+        // Fix position of selected node to prevent movement
+        const selectedNode = nodes.find(n => n.id === selectedFile);
+        if (selectedNode && selectedNode.x && selectedNode.y) {
+          selectedNode.fx = selectedNode.x;
+          selectedNode.fy = selectedNode.y;
+        }
       }
 
       // Add node labels
@@ -247,10 +280,43 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create legend
       createLegend(svg, width, data, extensionColors);
 
+      // Set up resize observer to handle container size changes
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+      
+      resizeObserverRef.current = new ResizeObserver(() => {
+        if (!containerRef.current || !svgRef.current) return;
+        
+        const { width, height } = getContainerDimensions();
+        
+        // Update SVG dimensions
+        svg
+          .attr('width', width)
+          .attr('height', height)
+          .attr('viewBox', [0, 0, width, height]);
+        
+        // Update force simulation center
+        if (simulationRef.current) {
+          simulationRef.current
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .alpha(0.3)
+            .restart();
+        }
+      });
+      
+      if (containerRef.current) {
+        resizeObserverRef.current.observe(containerRef.current);
+      }
+
       // Clean up on unmount
       return () => {
         if (simulationRef.current) {
           simulationRef.current.stop();
+        }
+        
+        if (resizeObserverRef.current) {
+          resizeObserverRef.current.disconnect();
         }
       };
     }, [data, onSelectFile, selectedFile]);
@@ -269,8 +335,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .on('end', (event, d) => {
           if (!event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
+          // Keep node fixed in place after dragging to prevent random movement
+          // d.fx = null;
+          // d.fy = null;
         });
     };
 
@@ -383,7 +450,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     };
 
     return (
-      <div ref={containerRef} className="w-full h-[600px] relative">
+      <div ref={containerRef} className="w-full h-[calc(100vh-200px)] min-h-[600px] relative">
         <svg ref={svgRef} className="w-full h-full bg-white"></svg>
       </div>
     );
