@@ -306,20 +306,20 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           return 1.5;
       }
     };
-    
+
     const getLinkColor = (link: Link) => {
       switch (link.type) {
         case 'import':
-          return '#3498db';  // Blue color for file-level imports
+          return '#3498db'; // Blue color for file-level imports
         case 'imports_component':
-          return '#9b59b6';  // Purple color for component-level imports
+          return '#9b59b6'; // Purple color for component-level imports
         case 'call':
         case 'calls':
-          return '#e74c3c';  // Red color for function calls
+          return '#e74c3c'; // Red color for function calls
         case 'contains':
-          return '#95a5a6';  // Gray color for containment relationships
+          return '#95a5a6'; // Gray color for containment relationships
         default:
-          return '#95a5a6';  // Default gray color
+          return '#95a5a6'; // Default gray color
       }
     };
 
@@ -360,7 +360,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Create legend group
       const legendGroup = svg.append('g').attr('transform', `translate(20, 20)`);
-      
+
       // Title for node types
       legendGroup
         .append('text')
@@ -425,10 +425,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .text('Other')
         .style('font-size', '12px')
         .style('fill', '#333');
-        
+
       // Find maximum Y position used by node type legend
-      const nodeTypeHeight = 24 + (Math.min(index + 1, 10) * 20);
-      
+      const nodeTypeHeight = 24 + Math.min(index + 1, 10) * 20;
+
       // Title for relationship types with some spacing
       legendGroup
         .append('text')
@@ -438,36 +438,36 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('font-size', '14px')
         .style('font-weight', 'bold')
         .style('fill', '#333');
-        
+
       // Link legend entries
       const relationshipTypes = [
         { type: 'contains', color: '#95a5a6', label: 'Contains' },
         { type: 'import', color: '#3498db', label: 'File Import' },
         { type: 'imports_component', color: '#9b59b6', label: 'Component Import' },
-        { type: 'call', color: '#e74c3c', label: 'Function Call' }
+        { type: 'call', color: '#e74c3c', label: 'Function Call' },
       ];
-      
+
       // Only show relationship types that are present in the data
       const filteredRelationships = relationshipTypes.filter(
         rel => usedRelationTypes.has(rel.type) || rel.type === 'imports_component'
       );
-      
+
       // Add relationship legend
       filteredRelationships.forEach((rel, i) => {
         // Draw a small line instead of a circle for links
         legendGroup
           .append('line')
           .attr('x1', 0)
-          .attr('y1', nodeTypeHeight + 50 + (i * 20))
+          .attr('y1', nodeTypeHeight + 50 + i * 20)
           .attr('x2', 20)
-          .attr('y2', nodeTypeHeight + 50 + (i * 20))
+          .attr('y2', nodeTypeHeight + 50 + i * 20)
           .attr('stroke', rel.color)
           .attr('stroke-width', rel.type === 'contains' ? 1 : 2);
-          
+
         legendGroup
           .append('text')
           .attr('x', 30)
-          .attr('y', nodeTypeHeight + 54 + (i * 20))
+          .attr('y', nodeTypeHeight + 54 + i * 20)
           .text(rel.label)
           .style('font-size', '12px')
           .style('fill', '#333');
