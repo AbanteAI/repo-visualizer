@@ -937,6 +937,13 @@ class RepositoryAnalyzer:
                                         for r in self.relationships
                                     ):
                                         self.relationships.append(relationship)
+
+                                    # Extract specific component imports
+                                    full_match = match.group(0)
+                                    if "from" in full_match and "import" in full_match:
+                                        self._extract_component_imports(
+                                            full_match, file_path, import_path
+                                        )
                 except Exception as e:
                     print(
                         f"Error extracting Python relationships from {file_path}: {e}"
@@ -982,6 +989,91 @@ class RepositoryAnalyzer:
                                 self.relationships.append(relationship)
                 except Exception as e:
                     print(f"Error extracting JS/TS relationships from {file_path}: {e}")
+
+    def _extract_component_imports(
+        self, import_statement: str, source_file: str, target_file: str
+    ) -> None:
+        """
+        Extract specific component imports from a Python import statement.
+
+        Args:
+            import_statement: The full import statement
+            source_file: The file doing the importing
+            target_file: The file being imported from
+        """
+        try:
+            # Get components in the target file
+            target_components = []
+            for file in self.data.get("files", []):
+                if file["id"] == target_file:
+                    target_components = file.get("components", [])
+                    break
+
+            if not target_components:
+                return
+
+            # Handle star imports - import all components
+            if re.search(r"from\s+[\w\.]+\s+import\s+\*", import_statement):
+                for component in target_components:
+                    relationship: Relationship = {
+                        "source": source_file,
+                        "target": component["id"],
+                        "type": "imports_component",
+                    }
+                    if not any(
+                        r["source"] == relationship["source"]
+                        and r["target"] == relationship["target"]
+                        and r["type"] == relationship["type"]
+                        for r in self.relationships
+                    ):
+                        self.relationships.append(relationship)
+                return
+
+            # Different patterns to extract component names
+            patterns = [
+                # Regular imports: from module import Class, Function
+                r"from\s+[\w\.]+\s+import\s+([\w\s,]+)(?!\s+as)",
+                # Parenthesized imports: from module import (Class, Function)
+                r"from\s+[\w\.]+\s+import\s+\(([\w\s,]+)\)",
+                # Aliased imports: from module import Class as C, Function as F
+                r"from\s+[\w\.]+\s+import\s+((?:[\w]+(?:\s+as\s+[\w]+)?)(?:\s*,\s*[\w]+(?:\s+as\s+[\w]+)?)*)",
+            ]
+
+            component_names = []
+            for pattern in patterns:
+                match = re.search(pattern, import_statement)
+                if match:
+                    components_str = match.group(1)
+
+                    # Handle possible aliases
+                    for item in components_str.split(","):
+                        item = item.strip()
+                        if " as " in item:
+                            # Extract the actual component name before 'as'
+                            component_name = item.split(" as ")[0].strip()
+                            component_names.append(component_name)
+                        elif item:  # Skip empty items
+                            component_names.append(item)
+
+            # Create relationships for matching components
+            for component in target_components:
+                if component["name"] in component_names:
+                    relationship: Relationship = {
+                        "source": source_file,
+                        "target": component["id"],
+                        "type": "imports_component",
+                    }
+
+                    # Check if this relationship already exists
+                    if not any(
+                        r["source"] == relationship["source"]
+                        and r["target"] == relationship["target"]
+                        and r["type"] == relationship["type"]
+                        for r in self.relationships
+                    ):
+                        self.relationships.append(relationship)
+        except Exception as e:
+            print(f"Error extracting component imports from {import_statement}: {e}")
 
     def _extract_python_function_calls(self, content: str, file_path: str) -> None:
         """
