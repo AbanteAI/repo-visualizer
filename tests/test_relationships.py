@@ -370,8 +370,19 @@ from config import settings as s
             ],
         }
 
-        # Add the target file to the analyzer's data
-        analyzer.data = {"files": [target_file], "relationships": []}
+        # Properly initialize analyzer data with a complete schema
+        analyzer.data = {
+            "metadata": {
+                "repoName": "test-repo",
+                "description": "Test repository",
+                "schemaVersion": "1.0.0",
+                "analysisDate": "2025-01-01T00:00:00Z",
+            },
+            "files": [target_file],
+            "relationships": [],
+            "history": None,
+            "customData": {},
+        }
         analyzer.file_ids = {"utils.py"}
 
         # Test different import styles
