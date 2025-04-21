@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 from repo_visualizer.analyzer import RepositoryAnalyzer
+from repo_visualizer.schema import create_empty_schema
 
 
 class TestRepositoryRelationships:
@@ -370,19 +371,9 @@ from config import settings as s
             ],
         }
 
-        # Properly initialize analyzer data with a complete schema
-        analyzer.data = {
-            "metadata": {
-                "repoName": "test-repo",
-                "description": "Test repository",
-                "schemaVersion": "1.0.0",
-                "analysisDate": "2025-01-01T00:00:00Z",
-            },
-            "files": [target_file],
-            "relationships": [],
-            "history": None,
-            "customData": {},
-        }
+        # Initialize with the correct type structure using the proper schema function
+        analyzer.data = create_empty_schema()
+        analyzer.data["files"] = [target_file]
         analyzer.file_ids = {"utils.py"}
 
         # Test different import styles
