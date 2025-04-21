@@ -86,7 +86,7 @@ const App: React.FC = () => {
               </h2>
             </div>
 
-            <div 
+            <div
               className={`bg-white shadow sm:rounded-lg relative ${
                 isFullscreen 
                   ? 'fixed inset-0 z-50 bg-white flex flex-col p-0 m-0 rounded-none' 
@@ -96,29 +96,28 @@ const App: React.FC = () => {
             >
               <div className={isFullscreen ? 'flex-grow overflow-hidden' : ''} 
                    style={{ height: isFullscreen ? 'calc(100vh - 60px)' : 'auto' }}>
-                <RepositoryGraph 
+                <RepositoryGraph
                   ref={graphRef}
-                  data={repositoryData} 
-                  onSelectFile={handleFileSelect} 
-                  selectedFile={selectedFile} 
+                  data={repositoryData}
+                  onSelectFile={handleFileSelect}
+                  selectedFile={selectedFile}
                 />
               </div>
               
               <div className={`${isFullscreen ? 'absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10' : ''}`}>
-                <Controls 
-                  onZoomIn={handleZoomIn} 
-                  onZoomOut={handleZoomOut} 
-                  onReset={handleResetView} 
-                  onFullscreen={toggleFullscreen} 
-                  isFullscreen={isFullscreen} 
+                <Controls
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onReset={handleResetView}
+                  onFullscreen={toggleFullscreen}
+                  isFullscreen={isFullscreen}
                 />
               </div>
-              
               {selectedFile && (
-                <FileDetails 
-                  fileId={selectedFile} 
-                  data={repositoryData} 
-                  onClose={handleCloseFileDetails} 
+                <FileDetails
+                  fileId={selectedFile}
+                  data={repositoryData}
+                  onClose={handleCloseFileDetails}
                 />
               )}
             </div>
