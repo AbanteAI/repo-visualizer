@@ -65,3 +65,5 @@ dmypy.json
 
 # Local development settings
 local_settings.py
+repos
+repo_data.json
