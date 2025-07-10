@@ -118,16 +118,55 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create a group for the graph
       const g = svg.append('g');
 
-      // Extract nodes from files
-      const nodes: Node[] = data.files.map(file => ({
-        id: file.id,
-        name: file.name,
-        path: file.path,
-        type: file.type,
-        extension: file.extension,
-        size: file.size,
-        depth: file.depth,
-      }));
+      // Extract nodes from files and their components
+      const nodes: Node[] = [];
+
+      // Add file nodes
+      data.files.forEach(file => {
+        nodes.push({
+          id: file.id,
+          name: file.name,
+          path: file.path,
+          type: file.type,
+          extension: file.extension,
+          size: file.size,
+          depth: file.depth,
+        });
+
+        // Add component nodes
+        if (file.components) {
+          file.components.forEach(component => {
+            nodes.push({
+              id: component.id,
+              name: component.name,
+              path: file.path,
+              type: component.type,
+              extension: file.extension,
+              size: 0, // Components don't have file size
+              depth: file.depth + 1,
+            });
+
+            // Add nested component nodes recursively
+            const addNestedComponents = (comp: any, currentDepth: number) => {
+              if (comp.components) {
+                comp.components.forEach((nestedComp: any) => {
+                  nodes.push({
+                    id: nestedComp.id,
+                    name: nestedComp.name,
+                    path: file.path,
+                    type: nestedComp.type,
+                    extension: file.extension,
+                    size: 0,
+                    depth: currentDepth + 1,
+                  });
+                  addNestedComponents(nestedComp, currentDepth + 1);
+                });
+              }
+            };
+            addNestedComponents(component, file.depth + 1);
+          });
+        }
+      });
 
       // Extract links from relationships
       const links: Link[] = data.relationships.map(rel => ({
