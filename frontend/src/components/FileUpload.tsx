@@ -27,7 +27,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
 
       for (const file of knownFiles) {
         try {
-          const response = await fetch(`/data/${file}`, { method: 'HEAD' });
+          // Use GET request since HEAD is not supported by Vite dev server
+          const response = await fetch(`/data/${file}`);
           if (response.ok) {
             availableFiles.push(file);
           }
