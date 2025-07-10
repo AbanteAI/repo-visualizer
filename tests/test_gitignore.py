@@ -90,7 +90,7 @@ sample/ignore_me/
             assert analyzer._is_ignored("path/with/.git/inside") is True
 
     def test_missing_gitignore_file(self):
-        """Test behavior when .gitignore file is missing."""
+        """Test behavior when .gitignore file is missing and always-ignore rules."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a fake git repo without a .gitignore file
             git_dir = os.path.join(temp_dir, ".git")
@@ -104,10 +104,14 @@ sample/ignore_me/
             ):
                 analyzer = RepositoryAnalyzer(temp_dir)
 
-            # Check that only .git directory is ignored
+            # Check that common directories are always ignored
             assert analyzer._is_ignored(".git") is True
+            assert analyzer._is_ignored("node_modules") is True  # Always ignored
+            assert analyzer._is_ignored("dist/") is True  # Always ignored
             assert analyzer._is_ignored("file.pyc") is False  # No rule to ignore this
-            assert analyzer._is_ignored("dist/") is False  # No rule to ignore this
+            assert (
+                analyzer._is_ignored("regular_file.py") is False
+            )  # No rule to ignore this
 
     def test_respect_gitignore_in_file_scanning(self):
         """Test that file scanning respects gitignore patterns."""

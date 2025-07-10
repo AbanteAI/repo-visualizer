@@ -295,12 +295,12 @@ class RepositoryAnalyzer:
         import re
 
         # Remove credentials from HTTPS URLs
-        # Pattern matches: https://username:token@github.com/...
-        url = re.sub(r"https://[^@]+@([^/]+)", r"https://\1", url)
+        # Pattern matches: https://username:token@github.com/org/repo.git
+        url = re.sub(r"https://[^@]+@([^/]+)(/.*)$", r"https://\1\2", url)
 
         # Remove credentials from SSH URLs if any
-        # Pattern matches: ssh://user:pass@host/...
-        url = re.sub(r"ssh://[^@]+@([^/]+)", r"ssh://\1", url)
+        # Pattern matches: ssh://user:pass@host/path
+        url = re.sub(r"ssh://[^@]+@([^/]+)(/.*)$", r"ssh://\1\2", url)
 
         return url
 
