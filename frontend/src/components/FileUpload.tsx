@@ -21,24 +21,25 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
 
   const fetchServerFiles = async () => {
     try {
-      // Try to fetch the data directory listing
-      // This works because Vite serves the public folder at the root
-      const response = await fetch('/data/');
-      if (response.ok) {
-        const html = await response.text();
-        // Parse HTML to extract .json files
-        const files =
-          html
-            .match(/href="[^"]*\.json"/g)
-            ?.map(match => match.replace('href="', '').replace('"', '')) || [];
-        setServerFiles(files);
-      } else {
-        // If directory listing fails, try known files
-        setServerFiles(['repo_data.json']);
+      // Try to fetch known files and see which ones exist
+      const knownFiles = ['repo_data.json'];
+      const availableFiles: string[] = [];
+
+      for (const file of knownFiles) {
+        try {
+          const response = await fetch(`/data/${file}`, { method: 'HEAD' });
+          if (response.ok) {
+            availableFiles.push(file);
+          }
+        } catch (err) {
+          console.warn(`File ${file} not accessible:`, err);
+        }
       }
+
+      setServerFiles(availableFiles);
     } catch (err) {
       console.warn('Could not fetch server files:', err);
-      // Fallback to known files
+      // Fallback to assume the file exists
       setServerFiles(['repo_data.json']);
     }
   };
