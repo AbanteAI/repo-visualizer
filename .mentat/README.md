@@ -69,6 +69,49 @@ The current development focus is on establishing the foundational components as 
 
 Refer to ROADMAP.md for the complete development trajectory.
 
+## How to Start the Server
+
+When users ask to run the repository visualizer, follow these steps that have been tested to work:
+
+### 1. Generate Repository Data
+```bash
+# Install the analyzer package
+pip install -e .
+
+# Generate data for the current repository
+python -m repo_visualizer . -o repo_data.json -v
+```
+
+### 2. Prepare Frontend
+```bash
+# Copy the generated data to frontend directory
+cp repo_data.json frontend/
+
+# Navigate to frontend
+cd frontend
+
+# Install dependencies (if not already installed)
+npm install
+```
+
+### 3. Start the Development Server
+```bash
+# Start Vite dev server with proper host binding for external access
+npm run dev -- --host 0.0.0.0
+```
+
+### 4. Access the Application
+- **Local URL**: http://localhost:5173/
+- **Network URL**: Will be shown in terminal (e.g., http://172.17.0.3:5173/)
+- **Usage**: 
+  - Click "Choose File" and select `repo_data.json` to visualize the current repository
+  - Or click "Load Example Data" to see a demo visualization
+
+### Troubleshooting
+- If `npm run dev` fails with "vite: not found", run `npm install` first
+- If users can't access the server, ensure `--host 0.0.0.0` is used for external access
+- Python's basic HTTP server has MIME type issues with .tsx files - always use Vite for the React app
+
 ## Important Implementation Notes
 
 - The JSON format should be designed to be both human-readable and efficient
