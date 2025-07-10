@@ -117,7 +117,10 @@ class RepositoryAnalyzer:
                 check=False,
             )
             if result.returncode == 0:
-                return f"Git repository at {result.stdout.strip()}"
+                git_url = result.stdout.strip()
+                # Sanitize URL to remove any embedded credentials
+                git_url = self._sanitize_git_url(git_url)
+                return f"Git repository at {git_url}"
             return ""
         except Exception:
             return ""
@@ -220,9 +223,39 @@ class RepositoryAnalyzer:
         Returns:
             True if the path should be ignored, False otherwise
         """
-        # Always ignore the .git directory
-        if ".git" in path.split(os.path.sep):
-            return True
+        # Always ignore common directories that shouldn't be visualized
+        always_ignore = {
+            ".git",
+            "node_modules",
+            ".venv",
+            "venv",
+            "__pycache__",
+            ".pytest_cache",
+            "build",
+            "dist",
+            ".next",
+            ".nuxt",
+            "coverage",
+            ".coverage",
+            "*.egg-info",
+            ".tox",
+            ".nox",
+            "vendor",
+            ".DS_Store",
+            "Thumbs.db",
+        }
+
+        path_parts = path.split(os.path.sep)
+        for part in path_parts:
+            if part in always_ignore:
+                return True
+            # Handle glob patterns like *.egg-info
+            for ignore_pattern in always_ignore:
+                if "*" in ignore_pattern:
+                    import fnmatch
+
+                    if fnmatch.fnmatch(part, ignore_pattern):
+                        return True
 
         # Normalize path separator to forward slash for consistency
         norm_path = path.replace(os.path.sep, "/")
@@ -248,6 +281,28 @@ class RepositoryAnalyzer:
                     return True
 
         return False
+
+    def _sanitize_git_url(self, url: str) -> str:
+        """
+        Remove credentials from git URLs to prevent token exposure.
+
+        Args:
+            url: Git URL that may contain credentials
+
+        Returns:
+            Sanitized URL without credentials
+        """
+        import re
+
+        # Remove credentials from HTTPS URLs
+        # Pattern matches: https://username:token@github.com/...
+        url = re.sub(r"https://[^@]+@([^/]+)", r"https://\1", url)
+
+        # Remove credentials from SSH URLs if any
+        # Pattern matches: ssh://user:pass@host/...
+        url = re.sub(r"ssh://[^@]+@([^/]+)", r"ssh://\1", url)
+
+        return url
 
     def _calculate_language_stats(self) -> Dict[str, float]:
         """Calculate language statistics based on file extensions."""
