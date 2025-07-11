@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { RepositoryData } from './types/schema';
 import FileUpload from './components/FileUpload';
-import RepositoryGraph from './components/Visualization/RepositoryGraph';
+import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import Controls from './components/Controls';
 import FileDetails from './components/FileDetails';
 
@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [repositoryData, setRepositoryData] = useState<RepositoryData | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   const handleDataLoaded = (data: RepositoryData) => {
     setRepositoryData(data);
@@ -71,15 +72,16 @@ const App: React.FC = () => {
               className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
             >
               <RepositoryGraph
+                ref={graphRef}
                 data={repositoryData}
                 onSelectFile={handleFileSelect}
                 selectedFile={selectedFile}
               />
 
               <Controls
-                onZoomIn={() => console.log('Zoom in')}
-                onZoomOut={() => console.log('Zoom out')}
-                onReset={() => console.log('Reset')}
+                onZoomIn={() => graphRef.current?.zoomIn()}
+                onZoomOut={() => graphRef.current?.zoomOut()}
+                onReset={() => graphRef.current?.resetView()}
                 onFullscreen={toggleFullscreen}
                 isFullscreen={isFullscreen}
               />
