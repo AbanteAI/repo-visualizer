@@ -368,7 +368,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('stroke', '#e74c3c')
           .attr('stroke-width', 3);
       }
-    }, [selectedFile, data]);
+    }, [selectedFile, data, expandedFiles]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
