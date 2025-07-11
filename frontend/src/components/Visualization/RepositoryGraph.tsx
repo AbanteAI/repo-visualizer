@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
 import * as d3 from 'd3';
-import { RepositoryData, File } from '../../types/schema';
+import { RepositoryData } from '../../types/schema';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
-  onSelectFile: (fileId: string) => void;
+  onSelectFile: (fileId: string | null) => void;
   selectedFile: string | null;
 }
 
@@ -275,13 +275,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Function to toggle node expansion
       function toggleNodeExpansion(fileId: string) {
-        const newExpandedFiles = new Set(expandedFiles);
-        if (newExpandedFiles.has(fileId)) {
-          newExpandedFiles.delete(fileId);
-        } else {
-          newExpandedFiles.add(fileId);
-        }
-        setExpandedFiles(newExpandedFiles);
+        setExpandedFiles(prev => {
+          const next = new Set(prev);
+          if (next.has(fileId)) {
+            next.delete(fileId);
+          } else {
+            next.add(fileId);
+          }
+          return next;
+        });
       }
 
       // Highlight selected file
@@ -307,7 +309,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Click on background to clear selection
       svg.on('click', () => {
-        onSelectFile('');
+        onSelectFile(null);
       });
 
       // Create zoom behavior
@@ -342,6 +344,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         if (simulationRef.current) {
           simulationRef.current.stop();
         }
+        // Clean up event listeners
+        svg.on('.zoom', null);
+        svg.on('click', null);
       };
     }, [data, onSelectFile, selectedFile, expandedFiles]);
 
@@ -388,6 +393,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       switch (link.type) {
         case 'import':
         case 'call':
+        case 'calls':
           return 2;
         case 'contains':
           return 1;

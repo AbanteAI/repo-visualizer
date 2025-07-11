@@ -19,7 +19,7 @@ const App: React.FC = () => {
     setSelectedFile(null);
   };
 
-  const handleFileSelect = (fileId: string) => {
+  const handleFileSelect = (fileId: string | null) => {
     setSelectedFile(fileId);
   };
 
