@@ -90,6 +90,10 @@ cp repo_data.json frontend/
 # Navigate to frontend
 cd frontend
 
+# Set up public directory structure for "Select from Server" functionality
+mkdir -p public/data
+cp repo_data.json public/data/
+
 # Install dependencies (if not already installed)
 npm install
 ```
@@ -104,12 +108,14 @@ npm run dev -- --host 0.0.0.0
 - **Local URL**: http://localhost:5173/
 - **Network URL**: Will be shown in terminal (e.g., http://172.17.0.3:5173/)
 - **Usage**: 
-  - Click "Choose File" and select `repo_data.json` to visualize the current repository
-  - Or click "Load Example Data" to see a demo visualization
+  - **Select from Server**: Use the dropdown to select `repo_data.json` (recommended)
+  - **Upload from Computer**: Click "Choose File" and manually select the `repo_data.json` file
+  - **Load Example Data**: Click to see a demo visualization
 
 ### Troubleshooting
 - If `npm run dev` fails with "vite: not found", run `npm install` first
 - If users can't access the server, ensure `--host 0.0.0.0` is used for external access
+- If "Select from Server" shows JSON parsing errors, ensure `public/data/repo_data.json` exists
 - Python's basic HTTP server has MIME type issues with .tsx files - always use Vite for the React app
 
 ## Important Implementation Notes
