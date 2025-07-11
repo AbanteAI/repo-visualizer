@@ -1455,7 +1455,7 @@ class RepositoryAnalyzer:
                             )
 
     def _add_semantic_similarity_relationships(self) -> None:
-        """Add relationships between files based on semantic similarity using embeddings."""
+        """Add relationships between files based on semantic similarity."""
         if not OPENAI_AVAILABLE or not NUMPY_AVAILABLE:
             print(
                 "Warning: OpenAI and NumPy are required for semantic similarity. "
