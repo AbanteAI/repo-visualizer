@@ -105,6 +105,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       },
     }));
 
+    // Initial setup effect - runs when data changes
     useEffect(() => {
       if (!svgRef.current || !containerRef.current || !data) return;
 
@@ -172,30 +173,34 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         }
       });
 
-      // Extract links from relationships with weights applied
-      const links: Link[] = data.relationships
-        .map(rel => {
-          let weight = 0;
+      // Create initial links with current weights
+      const createLinks = () => {
+        return data.relationships
+          .map(rel => {
+            let weight = 0;
 
-          // Apply weights based on connection type
-          if (rel.type === 'filesystem_proximity') {
-            weight = filesystemWeight / 100;
-          } else if (rel.type === 'import' || rel.type === 'call' || rel.type === 'contains') {
-            weight = referenceWeight / 100;
-          } else {
-            // Other relationship types get reference weight
-            weight = referenceWeight / 100;
-          }
+            // Apply weights based on connection type
+            if (rel.type === 'filesystem_proximity') {
+              weight = filesystemWeight / 100;
+            } else if (rel.type === 'import' || rel.type === 'call' || rel.type === 'contains') {
+              weight = referenceWeight / 100;
+            } else {
+              // Other relationship types get reference weight
+              weight = referenceWeight / 100;
+            }
 
-          return {
-            source: rel.source,
-            target: rel.target,
-            type: rel.type,
-            weight: weight,
-            originalStrength: rel.strength || 1,
-          };
-        })
-        .filter(link => link.weight > 0); // Only include links with non-zero weight
+            return {
+              source: rel.source,
+              target: rel.target,
+              type: rel.type,
+              weight: weight,
+              originalStrength: rel.strength || 1,
+            };
+          })
+          .filter(link => link.weight > 0); // Only include links with non-zero weight
+      };
+
+      const links = createLinks();
 
       // Create a force simulation
       const simulation = d3
@@ -335,13 +340,87 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create legend
       createLegend(svg, width, data, extensionColors);
 
+      // Store references for weight updates
+      (simulation as any).__linkSelection = link;
+      (simulation as any).__nodeSelection = node;
+
       // Clean up on unmount
       return () => {
         if (simulationRef.current) {
           simulationRef.current.stop();
         }
       };
-    }, [data, onSelectFile, selectedFile, referenceWeight, filesystemWeight]);
+    }, [data, onSelectFile, selectedFile]);
+
+    // Weight update effect - runs when weights change
+    useEffect(() => {
+      if (!simulationRef.current || !data) return;
+
+      const simulation = simulationRef.current;
+      const linkSelection = (simulation as any).__linkSelection;
+
+      if (!linkSelection) return;
+
+      // Recreate links with new weights
+      const updatedLinks = data.relationships
+        .map(rel => {
+          let weight = 0;
+
+          // Apply weights based on connection type
+          if (rel.type === 'filesystem_proximity') {
+            weight = filesystemWeight / 100;
+          } else if (rel.type === 'import' || rel.type === 'call' || rel.type === 'contains') {
+            weight = referenceWeight / 100;
+          } else {
+            // Other relationship types get reference weight
+            weight = referenceWeight / 100;
+          }
+
+          return {
+            source: rel.source,
+            target: rel.target,
+            type: rel.type,
+            weight: weight,
+            originalStrength: rel.strength || 1,
+          };
+        })
+        .filter(link => link.weight > 0);
+
+      // Update the force simulation with new link data
+      const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
+      linkForce
+        .links(updatedLinks)
+        .distance(d => {
+          const baseDistance = 100;
+          const weight = d.weight || 0;
+          const strength = d.originalStrength || 1;
+
+          if (d.type === 'filesystem_proximity') {
+            return baseDistance * (1 - weight * 0.5) * (1 / strength);
+          } else if (d.type === 'contains') {
+            return baseDistance * 0.3 * (1 - weight * 0.3);
+          } else {
+            return baseDistance * (1 - weight * 0.3);
+          }
+        })
+        .strength(d => {
+          const baseStrength = 1;
+          const weight = d.weight || 0;
+          const strength = d.originalStrength || 1;
+
+          return baseStrength * weight * strength;
+        });
+
+      // Update link visual properties
+      linkSelection
+        .data(updatedLinks)
+        .attr('stroke', (d: Link) => getLinkColor(d))
+        .attr('stroke-opacity', (d: Link) => 0.2 + (d.weight || 0) * 0.6)
+        .attr('stroke-width', (d: Link) => getLinkWidth(d));
+
+      // Restart simulation with smooth animation
+      simulation.alpha(0.3).restart();
+    }, [referenceWeight, filesystemWeight, data]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
