@@ -14,7 +14,7 @@ const App: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [referenceWeight, setReferenceWeight] = useState(70);
   const [filesystemWeight, setFilesystemWeight] = useState(30);
-  const graphRef = useRef<RepositoryGraphHandle>(null);
+  const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   const handleDataLoaded = (data: RepositoryData) => {
     setRepositoryData(data);
