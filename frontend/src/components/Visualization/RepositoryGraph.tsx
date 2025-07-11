@@ -268,8 +268,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                 // Filesystem connections should be closer
                 return baseDistance * (1 - weight * 0.5) * (1 / strength);
               } else if (d.type === 'contains') {
-                // Containment relationships should be very close
-                return baseDistance * 0.3 * (1 - weight * 0.3);
+                // Containment relationships should be very close for clear hierarchy
+                return 50; // Much shorter distance for parent-child relationships
               } else {
                 // Reference connections
                 return baseDistance * (1 - weight * 0.3);
@@ -280,6 +280,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               const baseStrength = 1;
               const weight = d.weight || 0;
               const strength = d.originalStrength || 1;
+
+              if (d.type === 'contains') {
+                // Strong attraction for parent-child relationships
+                return 2; // Stronger force for containment
+              }
 
               return baseStrength * weight * strength;
             })
@@ -302,7 +307,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .enter()
         .append('line')
         .attr('stroke', d => getLinkColor(d))
-        .attr('stroke-opacity', d => 0.2 + (d.weight || 0) * 0.6)
+        .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', d => getLinkWidth(d));
 
       // Create node groups (to hold both circles and expand/collapse indicators)
@@ -589,7 +594,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         case 'calls':
           return 2;
         case 'contains':
-          return 1;
+          return 3; // Thicker lines for containment to make hierarchy clear
         default:
           return 1.5;
       }
@@ -603,7 +608,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         case 'call':
           return '#3498db'; // Blue for reference connections
         case 'contains':
-          return '#95a5a6'; // Gray for containment
+          return '#2c3e50'; // Dark blue-gray for containment - more visible
         default:
           return '#95a5a6';
       }
