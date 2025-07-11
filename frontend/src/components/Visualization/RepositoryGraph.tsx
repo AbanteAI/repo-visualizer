@@ -292,10 +292,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
-      if (!svgRef.current) return;
+      if (!svgRef.current || !data) return;
 
       const svg = d3.select(svgRef.current);
       const nodes = svg.selectAll('circle');
+
+      // Only proceed if nodes exist
+      if (nodes.empty()) return;
 
       // Reset all nodes to default stroke
       nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
@@ -303,11 +306,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Highlight selected file
       if (selectedFile) {
         nodes
-          .filter((d: any) => d.id === selectedFile)
+          .filter((d: Node) => d.id === selectedFile)
           .attr('stroke', '#e74c3c')
           .attr('stroke-width', 3);
       }
-    }, [selectedFile]);
+    }, [selectedFile, data]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
