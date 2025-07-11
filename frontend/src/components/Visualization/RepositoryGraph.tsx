@@ -209,10 +209,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create nodes
       const node = g
         .append('g')
+        .attr('class', 'nodes')
         .selectAll('circle')
         .data(nodes)
         .enter()
         .append('circle')
+        .attr('class', 'node')
         .attr('r', d => getNodeRadius(d))
         .attr('fill', d => getNodeColor(d, extensionColors))
         .attr('stroke', '#fff')
@@ -222,21 +224,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d3.select(this).attr('stroke-width', 3);
         })
         .on('mouseout', function (event, d) {
-          d3.select(this).attr('stroke-width', d.id === selectedFile ? 3 : 1.5);
+          // Reset to default hover state, but preserve selection highlighting
+          const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
+          d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
         })
         .on('click', (event, d) => {
           event.stopPropagation();
           onSelectFile(d.id);
         })
         .call(dragBehavior(simulation));
-
-      // Highlight selected file
-      if (selectedFile) {
-        node
-          .filter(d => d.id === selectedFile)
-          .attr('stroke-width', 3)
-          .attr('stroke', '#e74c3c');
-      }
 
       // Add node labels
       const label = g
@@ -257,7 +253,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Click on background to clear selection
       svg.on('click', () => {
-        onSelectFile('');
+        onSelectFile(null);
       });
 
       // Create zoom behavior
@@ -295,7 +291,31 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           simulationRef.current.stop();
         }
       };
-    }, [data, onSelectFile, selectedFile]);
+    }, [data]);
+
+    // Separate effect for handling selection highlighting
+    useEffect(() => {
+      if (!svgRef.current || !data) return;
+
+      const svg = d3.select(svgRef.current);
+      const nodes = svg.selectAll('circle.node');
+
+      // Only proceed if nodes exist
+      if (nodes.empty()) return;
+
+      // Reset all nodes to default stroke
+      nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+
+      // Highlight selected file
+      if (selectedFile) {
+        nodes
+          .filter(function (d) {
+            return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
+          })
+          .attr('stroke', '#e74c3c')
+          .attr('stroke-width', 3);
+      }
+    }, [selectedFile, data]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
@@ -377,6 +397,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Add directory type
       legendGroup
         .append('circle')
+        .attr('class', 'legend-item')
         .attr('cx', 10)
         .attr('cy', 10)
         .attr('r', 6)
@@ -396,6 +417,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         if (colors[ext]) {
           legendGroup
             .append('circle')
+            .attr('class', 'legend-item')
             .attr('cx', 10 + Math.floor(index / 10) * 100)
             .attr('cy', 10 + (index % 10) * 20)
             .attr('r', 6)
@@ -416,6 +438,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Add "Other" type
       legendGroup
         .append('circle')
+        .attr('class', 'legend-item')
         .attr('cx', 10 + Math.floor(index / 10) * 100)
         .attr('cy', 10 + (index % 10) * 20)
         .attr('r', 6)
