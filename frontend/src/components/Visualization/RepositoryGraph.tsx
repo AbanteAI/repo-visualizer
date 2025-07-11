@@ -209,10 +209,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create nodes
       const node = g
         .append('g')
+        .attr('class', 'nodes')
         .selectAll('circle')
         .data(nodes)
         .enter()
         .append('circle')
+        .attr('class', 'node')
         .attr('r', d => getNodeRadius(d))
         .attr('fill', d => getNodeColor(d, extensionColors))
         .attr('stroke', '#fff')
@@ -295,7 +297,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       if (!svgRef.current || !data) return;
 
       const svg = d3.select(svgRef.current);
-      const nodes = svg.selectAll('circle');
+      const nodes = svg.selectAll('circle.node');
 
       // Only proceed if nodes exist
       if (nodes.empty()) return;
@@ -306,7 +308,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Highlight selected file
       if (selectedFile) {
         nodes
-          .filter((d: Node) => d.id === selectedFile)
+          .filter(function (d) {
+            return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
+          })
           .attr('stroke', '#e74c3c')
           .attr('stroke-width', 3);
       }
@@ -392,6 +396,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Add directory type
       legendGroup
         .append('circle')
+        .attr('class', 'legend-item')
         .attr('cx', 10)
         .attr('cy', 10)
         .attr('r', 6)
@@ -411,6 +416,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         if (colors[ext]) {
           legendGroup
             .append('circle')
+            .attr('class', 'legend-item')
             .attr('cx', 10 + Math.floor(index / 10) * 100)
             .attr('cy', 10 + (index % 10) * 20)
             .attr('r', 6)
@@ -431,6 +437,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Add "Other" type
       legendGroup
         .append('circle')
+        .attr('class', 'legend-item')
         .attr('cx', 10 + Math.floor(index / 10) * 100)
         .attr('cy', 10 + (index % 10) * 20)
         .attr('r', 6)
