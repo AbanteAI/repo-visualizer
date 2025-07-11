@@ -344,7 +344,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         svg.on('.zoom', null);
         svg.on('click', null);
       };
-    }, [data, onSelectFile, selectedFile, expandedFiles]);
+    }, [data, expandedFiles]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
