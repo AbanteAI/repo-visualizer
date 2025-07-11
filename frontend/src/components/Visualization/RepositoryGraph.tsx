@@ -8,6 +8,7 @@ interface RepositoryGraphProps {
   selectedFile: string | null;
   referenceWeight: number;
   filesystemWeight: number;
+  semanticWeight: number;
 }
 
 export interface RepositoryGraphHandle {
@@ -37,7 +38,10 @@ interface Link extends d3.SimulationLinkDatum<Node> {
 }
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
-  ({ data, onSelectFile, selectedFile, referenceWeight, filesystemWeight }, ref) => {
+  (
+    { data, onSelectFile, selectedFile, referenceWeight, filesystemWeight, semanticWeight },
+    ref
+  ) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
@@ -182,6 +186,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             // Apply weights based on connection type
             if (rel.type === 'filesystem_proximity') {
               weight = filesystemWeight / 100;
+            } else if (rel.type === 'semantic_similarity') {
+              weight = semanticWeight / 100;
             } else if (rel.type === 'import' || rel.type === 'call' || rel.type === 'contains') {
               weight = referenceWeight / 100;
             } else {
@@ -219,6 +225,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               if (d.type === 'filesystem_proximity') {
                 // Filesystem connections should be closer
                 return baseDistance * (1 - weight * 0.5) * (1 / strength);
+              } else if (d.type === 'semantic_similarity') {
+                // Semantic connections should be moderately close
+                return baseDistance * (1 - weight * 0.4) * (1 / strength);
               } else if (d.type === 'contains') {
                 // Containment relationships should be very close
                 return baseDistance * 0.3 * (1 - weight * 0.3);
@@ -396,6 +405,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           // Apply weights based on connection type
           if (rel.type === 'filesystem_proximity') {
             weight = filesystemWeight / 100;
+          } else if (rel.type === 'semantic_similarity') {
+            weight = semanticWeight / 100;
           } else if (rel.type === 'import' || rel.type === 'call' || rel.type === 'contains') {
             weight = referenceWeight / 100;
           } else {
@@ -424,6 +435,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
           if (d.type === 'filesystem_proximity') {
             return baseDistance * (1 - weight * 0.5) * (1 / strength);
+          } else if (d.type === 'semantic_similarity') {
+            return baseDistance * (1 - weight * 0.4) * (1 / strength);
           } else if (d.type === 'contains') {
             return baseDistance * 0.3 * (1 - weight * 0.3);
           } else {
@@ -451,7 +464,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Restart simulation with smooth animation
       simulation.alpha(0.3).restart();
-    }, [referenceWeight, filesystemWeight, data]);
+    }, [referenceWeight, filesystemWeight, semanticWeight, data]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
@@ -497,6 +510,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             return 1;
           case 'filesystem_proximity':
             return 1.5;
+          case 'semantic_similarity':
+            return 2;
           default:
             return 1.5;
         }
@@ -511,6 +526,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       switch (link.type) {
         case 'filesystem_proximity':
           return '#e74c3c'; // Red for filesystem connections
+        case 'semantic_similarity':
+          return '#27ae60'; // Green for semantic connections
         case 'import':
         case 'call':
           return '#3498db'; // Blue for reference connections
