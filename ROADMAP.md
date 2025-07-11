@@ -27,7 +27,7 @@ This roadmap outlines our planned development trajectory for the Repo Visualizer
 - [ ] Generate complexity metrics for visualization
 
 ### Advanced Visualization
-- [ ] Add ability to expand file nodes to show internal components
+- [x] Add ability to expand file nodes to show internal components
 - [ ] Implement customizable node attributes (size, color based on various metrics)
 - [ ] Add timeline scrubber for git history playback
 - [ ] Implement zooming levels (repository > directory > file > component)
