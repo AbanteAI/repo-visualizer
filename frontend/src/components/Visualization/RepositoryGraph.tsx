@@ -6,6 +6,8 @@ interface RepositoryGraphProps {
   data: RepositoryData;
   onSelectFile: (fileId: string) => void;
   selectedFile: string | null;
+  referenceWeight: number;
+  filesystemWeight: number;
 }
 
 export interface RepositoryGraphHandle {
@@ -30,10 +32,12 @@ interface Link extends d3.SimulationLinkDatum<Node> {
   source: string | Node;
   target: string | Node;
   type: string;
+  weight?: number;
+  originalStrength?: number;
 }
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
-  ({ data, onSelectFile, selectedFile }, ref) => {
+  ({ data, onSelectFile, selectedFile, referenceWeight, filesystemWeight }, ref) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
@@ -168,12 +172,30 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         }
       });
 
-      // Extract links from relationships
-      const links: Link[] = data.relationships.map(rel => ({
-        source: rel.source,
-        target: rel.target,
-        type: rel.type,
-      }));
+      // Extract links from relationships with weights applied
+      const links: Link[] = data.relationships
+        .map(rel => {
+          let weight = 0;
+
+          // Apply weights based on connection type
+          if (rel.type === 'filesystem_proximity') {
+            weight = filesystemWeight / 100;
+          } else if (rel.type === 'import' || rel.type === 'call' || rel.type === 'contains') {
+            weight = referenceWeight / 100;
+          } else {
+            // Other relationship types get reference weight
+            weight = referenceWeight / 100;
+          }
+
+          return {
+            source: rel.source,
+            target: rel.target,
+            type: rel.type,
+            weight: weight,
+            originalStrength: rel.strength || 1,
+          };
+        })
+        .filter(link => link.weight > 0); // Only include links with non-zero weight
 
       // Create a force simulation
       const simulation = d3
@@ -183,7 +205,31 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d3
             .forceLink<Node, Link>(links)
             .id(d => d.id)
-            .distance(100)
+            .distance(d => {
+              // Adjust distance based on connection type and weight
+              const baseDistance = 100;
+              const weight = d.weight || 0;
+              const strength = d.originalStrength || 1;
+
+              if (d.type === 'filesystem_proximity') {
+                // Filesystem connections should be closer
+                return baseDistance * (1 - weight * 0.5) * (1 / strength);
+              } else if (d.type === 'contains') {
+                // Containment relationships should be very close
+                return baseDistance * 0.3 * (1 - weight * 0.3);
+              } else {
+                // Reference connections
+                return baseDistance * (1 - weight * 0.3);
+              }
+            })
+            .strength(d => {
+              // Adjust strength based on weight
+              const baseStrength = 1;
+              const weight = d.weight || 0;
+              const strength = d.originalStrength || 1;
+
+              return baseStrength * weight * strength;
+            })
         )
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width / 2, height / 2))
@@ -202,8 +248,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .data(links)
         .enter()
         .append('line')
-        .attr('stroke', '#95a5a6')
-        .attr('stroke-opacity', 0.4)
+        .attr('stroke', d => getLinkColor(d))
+        .attr('stroke-opacity', d => 0.2 + (d.weight || 0) * 0.6)
         .attr('stroke-width', d => getLinkWidth(d));
 
       // Create nodes
@@ -295,7 +341,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           simulationRef.current.stop();
         }
       };
-    }, [data, onSelectFile, selectedFile]);
+    }, [data, onSelectFile, selectedFile, referenceWeight, filesystemWeight]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
@@ -332,14 +378,36 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     };
 
     const getLinkWidth = (link: Link) => {
+      const baseWidth = (() => {
+        switch (link.type) {
+          case 'import':
+          case 'call':
+            return 2;
+          case 'contains':
+            return 1;
+          case 'filesystem_proximity':
+            return 1.5;
+          default:
+            return 1.5;
+        }
+      })();
+
+      // Scale width by weight
+      const weight = link.weight || 0;
+      return baseWidth * (0.5 + weight * 0.5);
+    };
+
+    const getLinkColor = (link: Link) => {
       switch (link.type) {
+        case 'filesystem_proximity':
+          return '#e74c3c'; // Red for filesystem connections
         case 'import':
         case 'call':
-          return 2;
+          return '#3498db'; // Blue for reference connections
         case 'contains':
-          return 1;
+          return '#95a5a6'; // Gray for containment
         default:
-          return 1.5;
+          return '#95a5a6';
       }
     };
 

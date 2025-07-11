@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { RepositoryData } from './types/schema';
 import FileUpload from './components/FileUpload';
-import RepositoryGraph from './components/Visualization/RepositoryGraph';
+import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import Controls from './components/Controls';
 import FileDetails from './components/FileDetails';
 
@@ -12,6 +12,9 @@ const App: React.FC = () => {
   const [repositoryData, setRepositoryData] = useState<RepositoryData | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [referenceWeight, setReferenceWeight] = useState(70);
+  const [filesystemWeight, setFilesystemWeight] = useState(30);
+  const graphRef = useRef<RepositoryGraphHandle>(null);
 
   const handleDataLoaded = (data: RepositoryData) => {
     setRepositoryData(data);
@@ -44,6 +47,26 @@ const App: React.FC = () => {
     setIsFullscreen(!isFullscreen);
   };
 
+  const handleZoomIn = () => {
+    graphRef.current?.zoomIn();
+  };
+
+  const handleZoomOut = () => {
+    graphRef.current?.zoomOut();
+  };
+
+  const handleReset = () => {
+    graphRef.current?.resetView();
+  };
+
+  const handleReferenceWeightChange = (weight: number) => {
+    setReferenceWeight(weight);
+  };
+
+  const handleFilesystemWeightChange = (weight: number) => {
+    setFilesystemWeight(weight);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -71,17 +94,24 @@ const App: React.FC = () => {
               className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
             >
               <RepositoryGraph
+                ref={graphRef}
                 data={repositoryData}
                 onSelectFile={handleFileSelect}
                 selectedFile={selectedFile}
+                referenceWeight={referenceWeight}
+                filesystemWeight={filesystemWeight}
               />
 
               <Controls
-                onZoomIn={() => console.log('Zoom in')}
-                onZoomOut={() => console.log('Zoom out')}
-                onReset={() => console.log('Reset')}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onReset={handleReset}
                 onFullscreen={toggleFullscreen}
                 isFullscreen={isFullscreen}
+                referenceWeight={referenceWeight}
+                filesystemWeight={filesystemWeight}
+                onReferenceWeightChange={handleReferenceWeightChange}
+                onFilesystemWeightChange={handleFilesystemWeightChange}
               />
 
               {selectedFile && (
