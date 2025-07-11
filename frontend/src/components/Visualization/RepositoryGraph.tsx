@@ -224,8 +224,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d3.select(this).attr('stroke-width', 3);
         })
         .on('mouseout', function (event, d) {
-          // Reset to default hover state - selection highlighting is handled separately
-          d3.select(this).attr('stroke-width', 1.5);
+          // Reset to default hover state, but preserve selection highlighting
+          const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
+          d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
         })
         .on('click', (event, d) => {
           event.stopPropagation();
@@ -252,7 +253,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Click on background to clear selection
       svg.on('click', () => {
-        onSelectFile('');
+        onSelectFile(null);
       });
 
       // Create zoom behavior
