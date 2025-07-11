@@ -222,11 +222,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d3.select(this).attr('stroke-width', 3);
         })
         .on('mouseout', function (event, d) {
-          // Check if this node is currently selected
-          const isSelected = d.id === selectedFile;
-          d3.select(this)
-            .attr('stroke-width', isSelected ? 3 : 1.5)
-            .attr('stroke', isSelected ? '#e74c3c' : '#fff');
+          // Reset to default hover state - selection highlighting is handled separately
+          d3.select(this).attr('stroke-width', 1.5);
         })
         .on('click', (event, d) => {
           event.stopPropagation();
