@@ -1319,6 +1319,9 @@ class RepositoryAnalyzer:
 
     def _extract_relationships(self) -> None:
         """Extract relationships between files and components."""
+        # Add filesystem-based relationships
+        self._add_filesystem_relationships()
+
         # Add components as "nodes" to be visualized
         files = self.data["files"]
         component_nodes = []
@@ -1366,6 +1369,72 @@ class RepositoryAnalyzer:
                 unique_relationships.append(rel)
 
         self.data["relationships"] = unique_relationships
+
+    def _add_filesystem_relationships(self) -> None:
+        """Add relationships between files based on filesystem proximity."""
+        # Get all files (not directories or components)
+        files = [f for f in self.data["files"] if f["type"] == "file"]
+
+        # Group files by directory
+        directory_files = {}
+        for file in files:
+            file_path = file.get("path", file["id"])
+            dir_path = os.path.dirname(file_path)
+            if dir_path not in directory_files:
+                directory_files[dir_path] = []
+            directory_files[dir_path].append(file)
+
+        # Add relationships between files in the same directory
+        for _dir_path, dir_files in directory_files.items():
+            for i, file1 in enumerate(dir_files):
+                for file2 in dir_files[i + 1 :]:
+                    self.relationships.append(
+                        {
+                            "source": file1["id"],
+                            "target": file2["id"],
+                            "type": "filesystem_proximity",
+                            "strength": 1.0,
+                        }
+                    )
+
+        # Add relationships between files in sibling directories
+        for dir_path1, files1 in directory_files.items():
+            for dir_path2, files2 in directory_files.items():
+                if dir_path1 >= dir_path2:  # Avoid duplicates
+                    continue
+
+                # Check if directories are siblings or cousins
+                dir1_parts = dir_path1.split("/") if dir_path1 else []
+                dir2_parts = dir_path2.split("/") if dir_path2 else []
+
+                # Calculate common prefix length
+                common_prefix_len = 0
+                for i in range(min(len(dir1_parts), len(dir2_parts))):
+                    if dir1_parts[i] == dir2_parts[i]:
+                        common_prefix_len += 1
+                    else:
+                        break
+
+                # Calculate filesystem distance
+                dir1_depth = len(dir1_parts) - common_prefix_len
+                dir2_depth = len(dir2_parts) - common_prefix_len
+                distance = dir1_depth + dir2_depth
+
+                # Only add relationships for relatively close directories
+                if distance <= 2:  # Sibling directories or one level apart
+                    strength = 1.0 / (distance + 1)  # Closer = stronger
+
+                    # Add relationships between files in these directories
+                    for file1 in files1:
+                        for file2 in files2:
+                            self.relationships.append(
+                                {
+                                    "source": file1["id"],
+                                    "target": file2["id"],
+                                    "type": "filesystem_proximity",
+                                    "strength": strength,
+                                }
+                            )
 
     def _analyze_history(self) -> None:
         """Analyze git history."""

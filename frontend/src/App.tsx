@@ -12,6 +12,8 @@ const App: React.FC = () => {
   const [repositoryData, setRepositoryData] = useState<RepositoryData | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [referenceWeight, setReferenceWeight] = useState(70);
+  const [filesystemWeight, setFilesystemWeight] = useState(30);
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   const handleDataLoaded = (data: RepositoryData) => {
@@ -45,6 +47,26 @@ const App: React.FC = () => {
     setIsFullscreen(!isFullscreen);
   };
 
+  const handleZoomIn = () => {
+    graphRef.current?.zoomIn();
+  };
+
+  const handleZoomOut = () => {
+    graphRef.current?.zoomOut();
+  };
+
+  const handleReset = () => {
+    graphRef.current?.resetView();
+  };
+
+  const handleReferenceWeightChange = (weight: number) => {
+    setReferenceWeight(weight);
+  };
+
+  const handleFilesystemWeightChange = (weight: number) => {
+    setFilesystemWeight(weight);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -76,14 +98,20 @@ const App: React.FC = () => {
                 data={repositoryData}
                 onSelectFile={handleFileSelect}
                 selectedFile={selectedFile}
+                referenceWeight={referenceWeight}
+                filesystemWeight={filesystemWeight}
               />
 
               <Controls
-                onZoomIn={() => graphRef.current?.zoomIn()}
-                onZoomOut={() => graphRef.current?.zoomOut()}
-                onReset={() => graphRef.current?.resetView()}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onReset={handleReset}
                 onFullscreen={toggleFullscreen}
                 isFullscreen={isFullscreen}
+                referenceWeight={referenceWeight}
+                filesystemWeight={filesystemWeight}
+                onReferenceWeightChange={handleReferenceWeightChange}
+                onFilesystemWeightChange={handleFilesystemWeightChange}
               />
 
               {selectedFile && (
