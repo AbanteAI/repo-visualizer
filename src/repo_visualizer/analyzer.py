@@ -1378,7 +1378,8 @@ class RepositoryAnalyzer:
         # Group files by directory
         directory_files = {}
         for file in files:
-            dir_path = os.path.dirname(file["path"])
+            file_path = file.get("path", file["id"])
+            dir_path = os.path.dirname(file_path)
             if dir_path not in directory_files:
                 directory_files[dir_path] = []
             directory_files[dir_path].append(file)
