@@ -222,21 +222,17 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d3.select(this).attr('stroke-width', 3);
         })
         .on('mouseout', function (event, d) {
-          d3.select(this).attr('stroke-width', d.id === selectedFile ? 3 : 1.5);
+          // Check if this node is currently selected
+          const isSelected = d.id === selectedFile;
+          d3.select(this)
+            .attr('stroke-width', isSelected ? 3 : 1.5)
+            .attr('stroke', isSelected ? '#e74c3c' : '#fff');
         })
         .on('click', (event, d) => {
           event.stopPropagation();
           onSelectFile(d.id);
         })
         .call(dragBehavior(simulation));
-
-      // Highlight selected file
-      if (selectedFile) {
-        node
-          .filter(d => d.id === selectedFile)
-          .attr('stroke-width', 3)
-          .attr('stroke', '#e74c3c');
-      }
 
       // Add node labels
       const label = g
@@ -295,7 +291,26 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           simulationRef.current.stop();
         }
       };
-    }, [data, onSelectFile, selectedFile]);
+    }, [data, onSelectFile]);
+
+    // Separate effect for handling selection highlighting
+    useEffect(() => {
+      if (!svgRef.current) return;
+
+      const svg = d3.select(svgRef.current);
+      const nodes = svg.selectAll('circle');
+
+      // Reset all nodes to default stroke
+      nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+
+      // Highlight selected file
+      if (selectedFile) {
+        nodes
+          .filter((d: any) => d.id === selectedFile)
+          .attr('stroke', '#e74c3c')
+          .attr('stroke-width', 3);
+      }
+    }, [selectedFile]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
