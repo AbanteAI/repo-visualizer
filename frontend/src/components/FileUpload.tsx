@@ -28,7 +28,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
       for (const file of knownFiles) {
         try {
           // Use GET request since HEAD is not supported by Vite dev server
-          const response = await fetch(`/data/${file}`);
+          const response = await fetch(`/${file}`);
           if (response.ok) {
             availableFiles.push(file);
           }
@@ -75,7 +75,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
         fileContent = await readFileContent(selectedFile);
       } else if (selectedServerFile) {
         // Load from server file
-        const response = await fetch(`/data/${selectedServerFile}`);
+        const response = await fetch(`/${selectedServerFile}`);
         if (!response.ok) {
           throw new Error(`Failed to fetch server file: ${response.statusText}`);
         }
