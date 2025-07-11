@@ -1384,7 +1384,7 @@ class RepositoryAnalyzer:
             directory_files[dir_path].append(file)
 
         # Add relationships between files in the same directory
-        for dir_path, dir_files in directory_files.items():
+        for _dir_path, dir_files in directory_files.items():
             for i, file1 in enumerate(dir_files):
                 for file2 in dir_files[i + 1 :]:
                     self.relationships.append(
