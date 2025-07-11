@@ -1,4 +1,11 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
+import React, {
+  useEffect,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+  useState,
+  useCallback,
+} from 'react';
 import * as d3 from 'd3';
 import { RepositoryData } from '../../types/schema';
 
@@ -41,6 +48,36 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+
+    // Stabilize the onSelectFile function to prevent unnecessary re-renders
+    const stableOnSelectFile = useCallback(
+      (fileId: string | null) => {
+        onSelectFile(fileId);
+      },
+      [onSelectFile]
+    );
+
+    // Function to toggle node expansion
+    const toggleNodeExpansion = useCallback((fileId: string) => {
+      setExpandedFiles(prev => {
+        const next = new Set(prev);
+        if (next.has(fileId)) {
+          next.delete(fileId);
+        } else {
+          next.add(fileId);
+        }
+        return next;
+      });
+    }, []);
+
+    // Helper function to check if a file has components
+    const hasComponents = useCallback(
+      (fileId: string): boolean => {
+        const file = data.files.find(f => f.id === fileId);
+        return file ? file.components && file.components.length > 0 : false;
+      },
+      [data.files]
+    );
 
     // Extension colors mapping
     const extensionColors: Record<string, string> = {
@@ -247,7 +284,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .on('click', (event, d) => {
           event.stopPropagation();
-          onSelectFile(d.id);
+          stableOnSelectFile(d.id);
         });
 
       // Add expand/collapse indicators for files with components
@@ -271,25 +308,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           toggleNodeExpansion(d.id);
         });
 
-      // Helper function to check if a file has components
-      function hasComponents(fileId: string): boolean {
-        const file = data.files.find(f => f.id === fileId);
-        return file ? file.components && file.components.length > 0 : false;
-      }
-
-      // Function to toggle node expansion
-      function toggleNodeExpansion(fileId: string) {
-        setExpandedFiles(prev => {
-          const next = new Set(prev);
-          if (next.has(fileId)) {
-            next.delete(fileId);
-          } else {
-            next.add(fileId);
-          }
-          return next;
-        });
-      }
-
       // Add node labels
       const label = nodeGroups
         .append('text')
@@ -305,7 +323,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Click on background to clear selection
       svg.on('click', () => {
-        onSelectFile(null);
+        stableOnSelectFile(null);
       });
 
       // Create zoom behavior
@@ -344,7 +362,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         svg.on('.zoom', null);
         svg.on('click', null);
       };
-    }, [data, expandedFiles]);
+    }, [data, expandedFiles, stableOnSelectFile, toggleNodeExpansion, hasComponents]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
