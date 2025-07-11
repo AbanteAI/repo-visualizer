@@ -500,7 +500,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           if (d.type === 'filesystem_proximity') {
             return baseDistance * (1 - weight * 0.5) * (1 / strength);
           } else if (d.type === 'contains') {
-            return baseDistance * 0.3 * (1 - weight * 0.3);
+            return 50; // Much shorter distance for parent-child relationships
           } else {
             return baseDistance * (1 - weight * 0.3);
           }
@@ -509,6 +509,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           const baseStrength = 1;
           const weight = d.weight || 0;
           const strength = d.originalStrength || 1;
+
+          if (d.type === 'contains') {
+            // Strong attraction for parent-child relationships
+            return 2; // Stronger force for containment
+          }
 
           return baseStrength * weight * strength;
         });
@@ -572,9 +577,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         switch (link.type) {
           case 'import':
           case 'call':
+          case 'calls':
             return 2;
           case 'contains':
-            return 1;
+            return 3; // Thicker lines for containment to make hierarchy clear
           case 'filesystem_proximity':
             return 1.5;
           default:
@@ -582,22 +588,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         }
       })();
 
-      // Scale width by weight
+      // Scale width by weight for non-containment links
+      if (link.type === 'contains') {
+        return baseWidth; // Fixed width for containment to keep hierarchy clear
+      }
+
       const weight = link.weight || 0;
       return baseWidth * (0.5 + weight * 0.5);
-    };
-
-    const getLinkWidth = (link: Link) => {
-      switch (link.type) {
-        case 'import':
-        case 'call':
-        case 'calls':
-          return 2;
-        case 'contains':
-          return 3; // Thicker lines for containment to make hierarchy clear
-        default:
-          return 1.5;
-      }
     };
 
     const getLinkColor = (link: Link) => {
