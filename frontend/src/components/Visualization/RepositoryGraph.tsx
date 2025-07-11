@@ -381,6 +381,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       if (!linkSelection) return;
 
+      // Calculate current centroid before changes
+      const nodes = simulation.nodes();
+      const centroidBefore = {
+        x: d3.mean(nodes, d => d.x || 0) || 0,
+        y: d3.mean(nodes, d => d.y || 0) || 0,
+      };
+
       // Recreate links with new weights
       const updatedLinks = data.relationships
         .map(rel => {
@@ -437,6 +444,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('stroke', (d: Link) => getLinkColor(d))
         .attr('stroke-opacity', (d: Link) => 0.2 + (d.weight || 0) * 0.6)
         .attr('stroke-width', (d: Link) => getLinkWidth(d));
+
+      // Update center force to maintain current centroid
+      const centerForce = simulation.force('center') as d3.ForceCenter<Node>;
+      centerForce.x(centroidBefore.x).y(centroidBefore.y);
 
       // Restart simulation with smooth animation
       simulation.alpha(0.3).restart();
