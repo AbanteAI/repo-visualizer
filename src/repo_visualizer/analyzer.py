@@ -1458,14 +1458,16 @@ class RepositoryAnalyzer:
         """Add relationships between files based on semantic similarity using embeddings."""
         if not OPENAI_AVAILABLE or not NUMPY_AVAILABLE:
             print(
-                "Warning: OpenAI and NumPy are required for semantic similarity. Skipping semantic analysis."
+                "Warning: OpenAI and NumPy are required for semantic similarity. "
+                "Skipping semantic analysis."
             )
             return
 
         # Check if API key is available
         if not os.getenv("OPENAI_API_KEY"):
             print(
-                "Warning: OPENAI_API_KEY not set. Skipping semantic similarity analysis."
+                "Warning: OPENAI_API_KEY not set. "
+                "Skipping semantic similarity analysis."
             )
             return
 
@@ -1518,18 +1520,21 @@ class RepositoryAnalyzer:
                         file_embeddings[file["id"]] = embedding
             except Exception as e:
                 print(
-                    f"Warning: Could not process file {file['id']} for semantic similarity: {e}"
+                    f"Warning: Could not process file {file['id']} "
+                    f"for semantic similarity: {e}"
                 )
                 continue
 
         if len(file_embeddings) < 2:
             print(
-                "Warning: Not enough files with valid embeddings for semantic similarity."
+                "Warning: Not enough files with valid embeddings "
+                "for semantic similarity."
             )
             return
 
         print(
-            f"Generated embeddings for {len(file_embeddings)} files. Computing similarities..."
+            f"Generated embeddings for {len(file_embeddings)} files. "
+            f"Computing similarities..."
         )
 
         # Compute pairwise similarities
@@ -1554,13 +1559,15 @@ class RepositoryAnalyzer:
                         )
                 except Exception as e:
                     print(
-                        f"Warning: Could not compute similarity between {file_id1} and {file_id2}: {e}"
+                        f"Warning: Could not compute similarity between "
+                        f"{file_id1} and {file_id2}: {e}"
                     )
                     continue
 
-        print(
-            f"Found {len([r for r in self.relationships if r['type'] == 'semantic_similarity'])} semantic similarity relationships."
+        semantic_count = len(
+            [r for r in self.relationships if r["type"] == "semantic_similarity"]
         )
+        print(f"Found {semantic_count} semantic similarity relationships.")
 
     def _extract_file_text_content(self, file: Dict[str, Any]) -> Optional[str]:
         """Extract meaningful text content from a file for semantic analysis."""

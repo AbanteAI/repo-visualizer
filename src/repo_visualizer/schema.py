@@ -61,7 +61,7 @@ class Relationship(TypedDict, total=False):
 
     source: str  # ID of source file/component
     target: str  # ID of target file/component
-    type: str  # 'import', 'call', 'inheritance', 'filesystem_proximity', 'semantic_similarity', etc.
+    type: str  # 'import', 'call', 'inheritance', 'filesystem_proximity', etc.
     strength: float
     metadata: Dict[str, Any]
 
