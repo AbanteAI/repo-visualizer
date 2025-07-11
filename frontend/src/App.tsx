@@ -12,7 +12,7 @@ const App: React.FC = () => {
   const [repositoryData, setRepositoryData] = useState<RepositoryData | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const graphRef = useRef<RepositoryGraphHandle>(null);
+  const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   const handleDataLoaded = (data: RepositoryData) => {
     setRepositoryData(data);
