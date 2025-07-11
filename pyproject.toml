@@ -32,6 +32,10 @@ dev = [
     "ruff>=0.1.0",
     "pyright>=1.1.350",
 ]
+semantic = [
+    "openai>=1.0.0",
+    "numpy>=1.20.0",
+]
 
 [project.scripts]
 repo-visualizer = "src.repo_visualizer.cli:main"
@@ -63,3 +67,4 @@ reportMissingTypeStubs = false
 reportUnknownMemberType = false
 reportTypedDictNotRequiredAccess = false
 reportGeneralTypeIssues = "none"
+reportMissingImports = "none"
