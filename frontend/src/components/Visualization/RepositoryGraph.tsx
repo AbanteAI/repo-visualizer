@@ -119,12 +119,25 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           const newWidth = containerRef.current.clientWidth;
           const newHeight = containerRef.current.clientHeight;
 
+          // Debug logging
+          console.log('Container dimensions:', {
+            width: newWidth,
+            height: newHeight,
+            scrollHeight: containerRef.current.scrollHeight,
+            offsetHeight: containerRef.current.offsetHeight,
+            getBoundingClientRect: containerRef.current.getBoundingClientRect(),
+          });
+
           // Only update if dimensions actually changed significantly (avoid micro-changes)
           setDimensions(prev => {
             const widthChanged = Math.abs(prev.width - newWidth) > 2;
             const heightChanged = Math.abs(prev.height - newHeight) > 2;
 
             if (widthChanged || heightChanged) {
+              console.log('Updating dimensions from', prev, 'to', {
+                width: newWidth,
+                height: newHeight,
+              });
               return { width: newWidth, height: newHeight };
             }
             return prev;
