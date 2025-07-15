@@ -530,6 +530,13 @@ class RepositoryAnalyzer:
                     file_path, rel_path, ext
                 )
 
+                # Extract git history data for this file
+                git_metrics = self._extract_file_git_metrics(rel_path)
+                if git_metrics:
+                    if not metrics:
+                        metrics = {}
+                    metrics.update(git_metrics)
+
                 # Create file entry
                 file_entry: File = {
                     "id": rel_path,
@@ -725,9 +732,13 @@ class RepositoryAnalyzer:
 
         metrics["commentLines"] = comment_lines
 
+        # Count top-level identifiers (classes, functions, variables)
+        top_level_count = 0
+
         # Extract classes using regex
         class_pattern = r"class\s+(\w+)(?:\(.*\))?:"
         class_matches = re.finditer(class_pattern, content)
+        class_count = 0
 
         for class_match in class_matches:
             class_name = class_match.group(1)
@@ -755,6 +766,8 @@ class RepositoryAnalyzer:
                 "lineEnd": class_end,
                 "components": [],
             }
+
+            class_count += 1
 
             # Extract methods within class
             method_pattern = r"    def\s+(\w+)\s*\("
@@ -796,6 +809,7 @@ class RepositoryAnalyzer:
         # Extract top-level functions
         function_pattern = r"^def\s+(\w+)\s*\("
         function_matches = re.finditer(function_pattern, content, re.MULTILINE)
+        function_count = 0
 
         for func_match in function_matches:
             func_name = func_match.group(1)
@@ -825,6 +839,38 @@ class RepositoryAnalyzer:
             }
 
             components.append(func_component)
+            function_count += 1
+
+        # Count top-level variables (simplified heuristic)
+        variable_pattern = r"^(\w+)\s*="
+        variable_matches = re.finditer(variable_pattern, content, re.MULTILINE)
+        variable_count = 0
+
+        for var_match in variable_matches:
+            var_name = var_match.group(1)
+            # Skip if it's inside a function or class (basic check)
+            line_start = content[: var_match.start()].count("\n") + 1
+            lines = content.split("\n")
+            if line_start > 0 and line_start <= len(lines):
+                line = lines[line_start - 1]
+                if not line.startswith(" ") and not line.startswith("\t"):
+                    # Skip common non-variable assignments
+                    if var_name not in [
+                        "if",
+                        "for",
+                        "while",
+                        "try",
+                        "except",
+                        "finally",
+                        "with",
+                        "import",
+                        "from",
+                    ]:
+                        variable_count += 1
+
+        # Total top-level identifiers
+        top_level_count = class_count + function_count + variable_count
+        metrics["topLevelIdentifiers"] = top_level_count
 
         return components, metrics
 
@@ -856,11 +902,15 @@ class RepositoryAnalyzer:
 
         metrics["commentLines"] = comment_lines
 
+        # Count top-level identifiers (classes, functions, variables)
+        top_level_count = 0
+
         # Extract classes using regex (simplified)
         class_pattern = (
             r"class\s+(\w+)(?:\s+extends\s+\w+)?(?:\s+implements\s+\w+)?\s*\{"
         )
         class_matches = re.finditer(class_pattern, content)
+        class_count = 0
 
         for class_match in class_matches:
             class_name = class_match.group(1)
@@ -891,6 +941,7 @@ class RepositoryAnalyzer:
             }
 
             components.append(class_component)
+            class_count += 1
 
         # Extract functions (simplified)
         function_patterns = [
@@ -898,6 +949,7 @@ class RepositoryAnalyzer:
             r"const\s+(\w+)\s*=\s*function",  # function expressions
             r"const\s+(\w+)\s*=\s*\(",  # arrow functions
         ]
+        function_count = 0
 
         for pattern in function_patterns:
             func_matches = re.finditer(pattern, content)
@@ -930,6 +982,37 @@ class RepositoryAnalyzer:
                 }
 
                 components.append(func_component)
+                function_count += 1
+
+        # Count top-level variables/constants (simplified heuristic)
+        variable_patterns = [
+            r"^const\s+(\w+)\s*=",  # const declarations
+            r"^let\s+(\w+)\s*=",  # let declarations
+            r"^var\s+(\w+)\s*=",  # var declarations
+        ]
+        variable_count = 0
+
+        for pattern in variable_patterns:
+            var_matches = re.finditer(pattern, content, re.MULTILINE)
+            for var_match in var_matches:
+                var_name = var_match.group(1)
+                # Skip if it's a function (already counted)
+                if not any(
+                    func_pattern in content[var_match.start() : var_match.end() + 50]
+                    for func_pattern in ["function", "=>"]
+                ):
+                    variable_count += 1
+
+        # Count export statements (additional top-level identifiers)
+        export_pattern = (
+            r"^export\s+(?:default\s+)?(?:class|function|const|let|var)\s+(\w+)"
+        )
+        export_matches = re.finditer(export_pattern, content, re.MULTILINE)
+        export_count = len(list(export_matches))
+
+        # Total top-level identifiers
+        top_level_count = class_count + function_count + variable_count + export_count
+        metrics["topLevelIdentifiers"] = top_level_count
 
         return components, metrics
 
@@ -1607,6 +1690,70 @@ class RepositoryAnalyzer:
             )
 
         return timeline_points
+
+    def _extract_file_git_metrics(self, file_path: str) -> Dict[str, Any]:
+        """
+        Extract git history metrics for a specific file.
+
+        Args:
+            file_path: Relative file path
+
+        Returns:
+            Dictionary containing git metrics
+        """
+        metrics = {}
+
+        try:
+            # Get commit count for this file
+            result = subprocess.run(
+                ["git", "log", "--oneline", "--", file_path],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode == 0:
+                commit_lines = [
+                    line.strip() for line in result.stdout.split("\n") if line.strip()
+                ]
+                metrics["commitCount"] = len(commit_lines)
+            else:
+                metrics["commitCount"] = 0
+
+            # Get most recent commit date for this file
+            result = subprocess.run(
+                ["git", "log", "-1", "--format=%ad", "--date=iso", "--", file_path],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                date_str = result.stdout.strip()
+                try:
+                    # Parse the date and calculate days ago
+                    dt = datetime.fromisoformat(
+                        date_str.replace(" ", "T").replace(" +", "+")
+                    )
+                    days_ago = (datetime.now() - dt.replace(tzinfo=None)).days
+                    metrics["lastCommitDaysAgo"] = days_ago
+                    metrics["lastCommitDate"] = dt.isoformat()
+                except Exception:
+                    metrics["lastCommitDaysAgo"] = 0
+                    metrics["lastCommitDate"] = datetime.now().isoformat()
+            else:
+                metrics["lastCommitDaysAgo"] = 0
+                metrics["lastCommitDate"] = datetime.now().isoformat()
+
+        except Exception as e:
+            print(f"Error extracting git metrics for {file_path}: {e}")
+            metrics["commitCount"] = 0
+            metrics["lastCommitDaysAgo"] = 0
+            metrics["lastCommitDate"] = datetime.now().isoformat()
+
+        return metrics
 
     def save_to_file(self, output_path: str) -> None:
         """

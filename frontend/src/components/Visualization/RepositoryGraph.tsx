@@ -8,6 +8,11 @@ interface RepositoryGraphProps {
   selectedFile: string | null;
   referenceWeight: number;
   filesystemWeight: number;
+  fileSizeWeight: number;
+  commitCountWeight: number;
+  recencyWeight: number;
+  identifiersWeight: number;
+  referencesWeight: number;
 }
 
 export interface RepositoryGraphHandle {
@@ -37,7 +42,21 @@ interface Link extends d3.SimulationLinkDatum<Node> {
 }
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
-  ({ data, onSelectFile, selectedFile, referenceWeight, filesystemWeight }, ref) => {
+  (
+    {
+      data,
+      onSelectFile,
+      selectedFile,
+      referenceWeight,
+      filesystemWeight,
+      fileSizeWeight,
+      commitCountWeight,
+      recencyWeight,
+      identifiersWeight,
+      referencesWeight,
+    },
+    ref
+  ) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
@@ -453,6 +472,33 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       simulation.alpha(0.3).restart();
     }, [referenceWeight, filesystemWeight, data]);
 
+    // Node sizing update effect - runs when sizing weights change
+    useEffect(() => {
+      if (!simulationRef.current || !data) return;
+
+      const simulation = simulationRef.current;
+      const nodeSelection = (simulation as any).__nodeSelection;
+
+      if (!nodeSelection) return;
+
+      // Update node radiuses
+      nodeSelection.attr('r', (d: Node) => getNodeRadius(d));
+
+      // Update collision force with new radiuses
+      const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
+      collisionForce.radius((d: Node) => getNodeRadius(d) + 5);
+
+      // Restart simulation with gentle animation
+      simulation.alpha(0.2).restart();
+    }, [
+      fileSizeWeight,
+      commitCountWeight,
+      recencyWeight,
+      identifiersWeight,
+      referencesWeight,
+      data,
+    ]);
+
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
       return d3
@@ -479,12 +525,71 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         return 10; // Fixed size for directories
       }
 
-      // Scale file size to a reasonable radius
       const minRadius = 5;
-      const maxRadius = 15;
-      const baseRadius = node.size ? Math.sqrt(node.size) / 15 : minRadius;
+      const maxRadius = 25;
 
-      return Math.max(minRadius, Math.min(maxRadius, baseRadius));
+      // Calculate normalized factors (0-1)
+      const factors = {
+        fileSize: 0,
+        commitCount: 0,
+        recency: 0,
+        identifiers: 0,
+        references: 0,
+      };
+
+      // File size factor
+      if (node.size && node.size > 0) {
+        // Log scale for file size, normalized roughly to 0-1
+        factors.fileSize = Math.min(1, Math.log10(node.size) / 6); // Assume max ~1MB files
+      }
+
+      // Get file data for additional metrics
+      const fileData = data.files.find(f => f.id === node.id);
+      if (fileData?.metrics) {
+        // Commit count factor
+        if (fileData.metrics.commitCount !== undefined) {
+          factors.commitCount = Math.min(1, fileData.metrics.commitCount / 50); // Normalize to ~50 commits max
+        }
+
+        // Recency factor (invert days ago - more recent = larger)
+        if (fileData.metrics.lastCommitDaysAgo !== undefined) {
+          const daysAgo = fileData.metrics.lastCommitDaysAgo;
+          factors.recency = Math.max(0, 1 - daysAgo / 365); // Normalize to 1 year
+        }
+
+        // Top-level identifiers factor
+        if (fileData.metrics.topLevelIdentifiers !== undefined) {
+          factors.identifiers = Math.min(1, fileData.metrics.topLevelIdentifiers / 20); // Normalize to ~20 identifiers max
+        }
+      }
+
+      // References factor (count incoming references)
+      const incomingRefs = data.relationships.filter(
+        rel => rel.target === node.id && rel.type !== 'contains'
+      ).length;
+      factors.references = Math.min(1, incomingRefs / 10); // Normalize to ~10 references max
+
+      // Apply weights (convert from 0-100 to 0-1)
+      const weightedSum =
+        (factors.fileSize * fileSizeWeight) / 100 +
+        (factors.commitCount * commitCountWeight) / 100 +
+        (factors.recency * recencyWeight) / 100 +
+        (factors.identifiers * identifiersWeight) / 100 +
+        (factors.references * referencesWeight) / 100;
+
+      // Ensure we have some minimum size even if all weights are 0
+      const totalWeight =
+        (fileSizeWeight +
+          commitCountWeight +
+          recencyWeight +
+          identifiersWeight +
+          referencesWeight) /
+        100;
+      const normalizedSum = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
+
+      // Scale to radius range
+      const radius = minRadius + normalizedSum * (maxRadius - minRadius);
+      return Math.max(minRadius, Math.min(maxRadius, radius));
     };
 
     const getLinkWidth = (link: Link) => {

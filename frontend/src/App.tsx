@@ -14,6 +14,14 @@ const App: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [referenceWeight, setReferenceWeight] = useState(70);
   const [filesystemWeight, setFilesystemWeight] = useState(30);
+
+  // Node sizing weights
+  const [fileSizeWeight, setFileSizeWeight] = useState(100);
+  const [commitCountWeight, setCommitCountWeight] = useState(0);
+  const [recencyWeight, setRecencyWeight] = useState(0);
+  const [identifiersWeight, setIdentifiersWeight] = useState(0);
+  const [referencesWeight, setReferencesWeight] = useState(0);
+
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   const handleDataLoaded = (data: RepositoryData) => {
@@ -67,6 +75,27 @@ const App: React.FC = () => {
     setFilesystemWeight(weight);
   };
 
+  // Node sizing weight handlers
+  const handleFileSizeWeightChange = (weight: number) => {
+    setFileSizeWeight(weight);
+  };
+
+  const handleCommitCountWeightChange = (weight: number) => {
+    setCommitCountWeight(weight);
+  };
+
+  const handleRecencyWeightChange = (weight: number) => {
+    setRecencyWeight(weight);
+  };
+
+  const handleIdentifiersWeightChange = (weight: number) => {
+    setIdentifiersWeight(weight);
+  };
+
+  const handleReferencesWeightChange = (weight: number) => {
+    setReferencesWeight(weight);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -100,6 +129,11 @@ const App: React.FC = () => {
                 selectedFile={selectedFile}
                 referenceWeight={referenceWeight}
                 filesystemWeight={filesystemWeight}
+                fileSizeWeight={fileSizeWeight}
+                commitCountWeight={commitCountWeight}
+                recencyWeight={recencyWeight}
+                identifiersWeight={identifiersWeight}
+                referencesWeight={referencesWeight}
               />
 
               <Controls
@@ -112,6 +146,16 @@ const App: React.FC = () => {
                 filesystemWeight={filesystemWeight}
                 onReferenceWeightChange={handleReferenceWeightChange}
                 onFilesystemWeightChange={handleFilesystemWeightChange}
+                fileSizeWeight={fileSizeWeight}
+                commitCountWeight={commitCountWeight}
+                recencyWeight={recencyWeight}
+                identifiersWeight={identifiersWeight}
+                referencesWeight={referencesWeight}
+                onFileSizeWeightChange={handleFileSizeWeightChange}
+                onCommitCountWeightChange={handleCommitCountWeightChange}
+                onRecencyWeightChange={handleRecencyWeightChange}
+                onIdentifiersWeightChange={handleIdentifiersWeightChange}
+                onReferencesWeightChange={handleReferencesWeightChange}
               />
 
               {selectedFile && (
