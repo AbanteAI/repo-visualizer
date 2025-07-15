@@ -14,6 +14,7 @@ const App: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [referenceWeight, setReferenceWeight] = useState(70);
   const [filesystemWeight, setFilesystemWeight] = useState(30);
+  const [semanticWeight, setSemanticWeight] = useState(30);
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   const handleDataLoaded = (data: RepositoryData) => {
@@ -67,6 +68,10 @@ const App: React.FC = () => {
     setFilesystemWeight(weight);
   };
 
+  const handleSemanticWeightChange = (weight: number) => {
+    setSemanticWeight(weight);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -100,6 +105,7 @@ const App: React.FC = () => {
                 selectedFile={selectedFile}
                 referenceWeight={referenceWeight}
                 filesystemWeight={filesystemWeight}
+                semanticWeight={semanticWeight}
               />
 
               <Controls
@@ -110,8 +116,10 @@ const App: React.FC = () => {
                 isFullscreen={isFullscreen}
                 referenceWeight={referenceWeight}
                 filesystemWeight={filesystemWeight}
+                semanticWeight={semanticWeight}
                 onReferenceWeightChange={handleReferenceWeightChange}
                 onFilesystemWeightChange={handleFilesystemWeightChange}
+                onSemanticWeightChange={handleSemanticWeightChange}
               />
 
               {selectedFile && (
