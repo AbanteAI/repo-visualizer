@@ -665,6 +665,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         maxRadius = 12; // Components are smaller than files
       }
 
+      // Get file data for additional metrics
+      // For components, use the parent file's metrics
+      let fileData = data.files.find(f => f.id === node.id);
+      if (!fileData && isComponent) {
+        // Component IDs are like "file.py:ClassName" - extract the file part
+        const fileId = node.id.split(':')[0];
+        fileData = data.files.find(f => f.id === fileId);
+      }
+
       // Calculate normalized factors (0-1)
       const factors = {
         fileSize: 0,
@@ -694,15 +703,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         // Square root scale for better distribution across typical file sizes
         // This gives more range to smaller files while still scaling large ones
         factors.fileSize = Math.min(1, Math.sqrt(sizeToUse) / 500); // Normalize for ~250KB max
-      }
-
-      // Get file data for additional metrics
-      // For components, use the parent file's metrics
-      let fileData = data.files.find(f => f.id === node.id);
-      if (!fileData && isComponent) {
-        // Component IDs are like "file.py:ClassName" - extract the file part
-        const fileId = node.id.split(':')[0];
-        fileData = data.files.find(f => f.id === fileId);
       }
 
       if (fileData?.metrics) {
