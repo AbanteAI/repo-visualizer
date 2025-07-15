@@ -675,10 +675,25 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       };
 
       // File size factor
-      if (node.size && node.size > 0) {
+      let sizeToUse = node.size;
+      // Components don't have file size, but we can use their line count as a proxy
+      if (isComponent && sizeToUse === 0) {
+        // Check if this component has line information
+        const component = fileData?.components?.find(c => c.id === node.id);
+        if (component && component.lineStart && component.lineEnd) {
+          const lineCount = component.lineEnd - component.lineStart + 1;
+          // Convert line count to approximate byte size (assume ~50 characters per line)
+          sizeToUse = lineCount * 50;
+        } else if (fileData) {
+          // Fallback to using a fraction of parent file size
+          sizeToUse = fileData.size * 0.1; // Components are ~10% of parent file
+        }
+      }
+
+      if (sizeToUse && sizeToUse > 0) {
         // Square root scale for better distribution across typical file sizes
         // This gives more range to smaller files while still scaling large ones
-        factors.fileSize = Math.min(1, Math.sqrt(node.size) / 500); // Normalize for ~250KB max
+        factors.fileSize = Math.min(1, Math.sqrt(sizeToUse) / 500); // Normalize for ~250KB max
       }
 
       // Get file data for additional metrics
