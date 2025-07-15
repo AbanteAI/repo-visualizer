@@ -112,13 +112,29 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
     // Effect to handle container size changes using ResizeObserver
     useEffect(() => {
+      let resizeTimeout: NodeJS.Timeout;
+
       const handleResize = () => {
         if (containerRef.current) {
-          setDimensions({
-            width: containerRef.current.clientWidth,
-            height: containerRef.current.clientHeight,
+          const newWidth = containerRef.current.clientWidth;
+          const newHeight = containerRef.current.clientHeight;
+
+          // Only update if dimensions actually changed significantly (avoid micro-changes)
+          setDimensions(prev => {
+            const widthChanged = Math.abs(prev.width - newWidth) > 2;
+            const heightChanged = Math.abs(prev.height - newHeight) > 2;
+
+            if (widthChanged || heightChanged) {
+              return { width: newWidth, height: newHeight };
+            }
+            return prev;
           });
         }
+      };
+
+      const debouncedResize = () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(handleResize, 100);
       };
 
       // Set initial dimensions
@@ -126,21 +142,21 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Use ResizeObserver for better detection of container size changes
       if (containerRef.current && window.ResizeObserver) {
-        const resizeObserver = new ResizeObserver(() => {
-          // Debounce to avoid too many updates during resize
-          requestAnimationFrame(handleResize);
-        });
-
+        const resizeObserver = new ResizeObserver(debouncedResize);
         resizeObserver.observe(containerRef.current);
 
         // Cleanup
         return () => {
+          clearTimeout(resizeTimeout);
           resizeObserver.disconnect();
         };
       } else {
         // Fallback to window resize listener
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        window.addEventListener('resize', debouncedResize);
+        return () => {
+          clearTimeout(resizeTimeout);
+          window.removeEventListener('resize', debouncedResize);
+        };
       }
     }, []);
 
@@ -159,8 +175,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const width = dimensions.width;
       const height = dimensions.height;
 
-      // Update SVG dimensions
-      svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
+      // Update SVG dimensions - ensure it doesn't expand beyond container
+      svg
+        .attr('width', width)
+        .attr('height', height)
+        .attr('viewBox', [0, 0, width, height])
+        .style('max-width', '100%')
+        .style('max-height', '100%');
 
       // Update center force to new dimensions
       const centerForce = simulation.force('center') as d3.ForceCenter<Node>;
@@ -168,8 +189,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         centerForce.x(width / 2).y(height / 2);
       }
 
-      // Gently restart simulation to adjust to new dimensions
-      simulation.alpha(0.2).restart();
+      // Gently restart simulation to adjust to new dimensions (reduce alpha to minimize movement)
+      simulation.alpha(0.05).restart();
     }, [dimensions]);
 
     // Initial setup effect - runs when data changes
@@ -699,8 +720,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     };
 
     return (
-      <div ref={containerRef} className="w-full h-full relative">
-        <svg ref={svgRef} className="w-full h-full bg-white"></svg>
+      <div ref={containerRef} className="w-full h-full relative overflow-hidden">
+        <svg ref={svgRef} className="w-full h-full bg-white" style={{ display: 'block' }}></svg>
       </div>
     );
   }
