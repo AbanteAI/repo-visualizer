@@ -119,25 +119,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           const newWidth = containerRef.current.clientWidth;
           const newHeight = containerRef.current.clientHeight;
 
-          // Debug logging
-          console.log('Container dimensions:', {
-            width: newWidth,
-            height: newHeight,
-            scrollHeight: containerRef.current.scrollHeight,
-            offsetHeight: containerRef.current.offsetHeight,
-            getBoundingClientRect: containerRef.current.getBoundingClientRect(),
-          });
-
           // Only update if dimensions actually changed significantly (avoid micro-changes)
           setDimensions(prev => {
             const widthChanged = Math.abs(prev.width - newWidth) > 2;
             const heightChanged = Math.abs(prev.height - newHeight) > 2;
 
             if (widthChanged || heightChanged) {
-              console.log('Updating dimensions from', prev, 'to', {
-                width: newWidth,
-                height: newHeight,
-              });
               return { width: newWidth, height: newHeight };
             }
             return prev;
@@ -459,7 +446,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           simulationRef.current.stop();
         }
       };
-    }, [data]);
+    }, [data, dimensions]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
@@ -733,7 +720,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     };
 
     return (
-      <div ref={containerRef} className="w-full h-full relative overflow-hidden">
+      <div
+        ref={containerRef}
+        className="w-full relative overflow-hidden"
+        style={{ flex: 1, minHeight: '400px' }}
+      >
         <svg ref={svgRef} className="w-full h-full bg-white" style={{ display: 'block' }}></svg>
       </div>
     );
