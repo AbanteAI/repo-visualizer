@@ -1010,7 +1010,6 @@ class RepositoryAnalyzer:
         for pattern in variable_patterns:
             var_matches = re.finditer(pattern, content, re.MULTILINE)
             for var_match in var_matches:
-                var_name = var_match.group(1)
                 # Skip if it's a function (already counted)
                 if not any(
                     func_pattern in content[var_match.start() : var_match.end() + 50]
