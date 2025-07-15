@@ -80,7 +80,7 @@ const App: React.FC = () => {
         document.exitFullscreen();
       }
     }
-    setIsFullscreen(!isFullscreen);
+    setIsFullscreen(prev => !prev);
   };
 
   const handleZoomIn = () => {
@@ -116,64 +116,75 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex flex-col">
+      <main className="flex-1 flex flex-col">
         {isAutoLoading ? (
-          <div className="bg-white shadow sm:rounded-lg p-6 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading repository data...</p>
+          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+            <div className="bg-white shadow sm:rounded-lg p-6 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading repository data...</p>
+            </div>
           </div>
         ) : !repositoryData ? (
-          <div className="bg-white shadow sm:rounded-lg p-6">
-            {autoLoadFailed && (
-              <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded">
-                Could not auto-load repo_data.json. Please select a file manually.
-              </div>
-            )}
-            <FileUpload onDataLoaded={handleDataLoaded} onLoadExample={handleLoadExample} />
+          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+            <div className="bg-white shadow sm:rounded-lg p-6">
+              {autoLoadFailed && (
+                <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded">
+                  Could not auto-load repo_data.json. Please select a file manually.
+                </div>
+              )}
+              <FileUpload onDataLoaded={handleDataLoaded} onLoadExample={handleLoadExample} />
+            </div>
           </div>
         ) : (
           <>
-            <div className="bg-white shadow sm:rounded-lg mb-6 p-4 text-center flex-shrink-0">
-              <h2 className="text-lg font-semibold">
-                {repositoryData.metadata.repoName}
-                {repositoryData.metadata.description && ` - ${repositoryData.metadata.description}`}
-              </h2>
+            <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8 flex-shrink-0">
+              <div className="bg-white shadow sm:rounded-lg p-4 text-center">
+                <h2 className="text-lg font-semibold">
+                  {repositoryData.metadata.repoName}
+                  {repositoryData.metadata.description &&
+                    ` - ${repositoryData.metadata.description}`}
+                </h2>
+              </div>
             </div>
 
-            <div
-              className={`bg-white shadow sm:rounded-lg relative flex-1 flex flex-col ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
-            >
-              <RepositoryGraph
-                ref={graphRef}
-                data={repositoryData}
-                onSelectFile={handleFileSelect}
-                selectedFile={selectedFile}
-                referenceWeight={referenceWeight}
-                filesystemWeight={filesystemWeight}
-                semanticWeight={semanticWeight}
-              />
+            <div className={`flex-1 relative ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
+              <div className="w-full h-full flex flex-col">
+                <div className="flex-1">
+                  <RepositoryGraph
+                    ref={graphRef}
+                    data={repositoryData}
+                    onSelectFile={handleFileSelect}
+                    selectedFile={selectedFile}
+                    referenceWeight={referenceWeight}
+                    filesystemWeight={filesystemWeight}
+                    semanticWeight={semanticWeight}
+                  />
+                </div>
 
-              <Controls
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
-                onReset={handleReset}
-                onFullscreen={toggleFullscreen}
-                isFullscreen={isFullscreen}
-                referenceWeight={referenceWeight}
-                filesystemWeight={filesystemWeight}
-                semanticWeight={semanticWeight}
-                onReferenceWeightChange={handleReferenceWeightChange}
-                onFilesystemWeightChange={handleFilesystemWeightChange}
-                onSemanticWeightChange={handleSemanticWeightChange}
-              />
+                <div className="flex-shrink-0 bg-white border-t">
+                  <Controls
+                    onZoomIn={handleZoomIn}
+                    onZoomOut={handleZoomOut}
+                    onReset={handleReset}
+                    onFullscreen={toggleFullscreen}
+                    isFullscreen={isFullscreen}
+                    referenceWeight={referenceWeight}
+                    filesystemWeight={filesystemWeight}
+                    semanticWeight={semanticWeight}
+                    onReferenceWeightChange={handleReferenceWeightChange}
+                    onFilesystemWeightChange={handleFilesystemWeightChange}
+                    onSemanticWeightChange={handleSemanticWeightChange}
+                  />
+                </div>
 
-              {selectedFile && (
-                <FileDetails
-                  fileId={selectedFile}
-                  data={repositoryData}
-                  onClose={handleCloseFileDetails}
-                />
-              )}
+                {selectedFile && (
+                  <FileDetails
+                    fileId={selectedFile}
+                    data={repositoryData}
+                    onClose={handleCloseFileDetails}
+                  />
+                )}
+              </div>
             </div>
           </>
         )}

@@ -384,7 +384,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           simulationRef.current.stop();
         }
       };
-    }, [data, dimensions]);
+    }, [data]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
