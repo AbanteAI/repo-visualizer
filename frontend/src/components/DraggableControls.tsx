@@ -123,11 +123,12 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
   return (
     <div
       ref={controlsRef}
-      className="absolute z-10 bg-white rounded-lg shadow-lg border transition-all duration-200 draggable-controls"
+      className="absolute z-50 bg-white rounded-lg shadow-lg border transition-all duration-200 draggable-controls"
       style={{
         left: position.x,
         top: position.y,
         minWidth: '280px',
+        pointerEvents: 'auto',
       }}
     >
       {/* Header - Only this area is draggable */}

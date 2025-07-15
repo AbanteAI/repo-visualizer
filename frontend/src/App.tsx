@@ -144,24 +144,26 @@ const App: React.FC = () => {
             <div
               className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
             >
-              <RepositoryGraph
-                ref={graphRef}
-                data={repositoryData}
-                onSelectFile={handleFileSelect}
-                selectedFile={selectedFile}
-                referenceWeight={referenceWeight}
-                filesystemWeight={filesystemWeight}
-                semanticWeight={semanticWeight}
-              />
+              <div className="relative">
+                <RepositoryGraph
+                  ref={graphRef}
+                  data={repositoryData}
+                  onSelectFile={handleFileSelect}
+                  selectedFile={selectedFile}
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                />
 
-              <DraggableControls
-                referenceWeight={referenceWeight}
-                filesystemWeight={filesystemWeight}
-                semanticWeight={semanticWeight}
-                onReferenceWeightChange={handleReferenceWeightChange}
-                onFilesystemWeightChange={handleFilesystemWeightChange}
-                onSemanticWeightChange={handleSemanticWeightChange}
-              />
+                <DraggableControls
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                  onReferenceWeightChange={handleReferenceWeightChange}
+                  onFilesystemWeightChange={handleFilesystemWeightChange}
+                  onSemanticWeightChange={handleSemanticWeightChange}
+                />
+              </div>
 
               <Controls
                 onZoomIn={handleZoomIn}
