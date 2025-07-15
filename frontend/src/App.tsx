@@ -17,14 +17,14 @@ const App: React.FC = () => {
   const [semanticWeight, setSemanticWeight] = useState(30);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
-  
+
   // Node sizing weights
   const [fileSizeWeight, setFileSizeWeight] = useState(100);
   const [commitCountWeight, setCommitCountWeight] = useState(0);
   const [recencyWeight, setRecencyWeight] = useState(0);
   const [identifiersWeight, setIdentifiersWeight] = useState(0);
   const [referencesWeight, setReferencesWeight] = useState(0);
-  
+
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   // Auto-load repo_data.json on component mount
