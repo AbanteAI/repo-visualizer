@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { RepositoryData } from './types/schema';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
@@ -16,14 +16,49 @@ const App: React.FC = () => {
   const [referenceWeight, setReferenceWeight] = useState(70);
   const [filesystemWeight, setFilesystemWeight] = useState(30);
   const [semanticWeight, setSemanticWeight] = useState(30);
+  const [isAutoLoading, setIsAutoLoading] = useState(true);
+  const [autoLoadFailed, setAutoLoadFailed] = useState(false);
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
+
+  // Auto-load repo_data.json on component mount
+  useEffect(() => {
+    const autoLoadRepoData = async () => {
+      try {
+        const response = await fetch('/repo_data.json');
+        if (response.ok) {
+          const fileContent = await response.text();
+          const jsonData = JSON.parse(fileContent);
+
+          // Basic validation
+          if (
+            jsonData.metadata &&
+            Array.isArray(jsonData.files) &&
+            Array.isArray(jsonData.relationships)
+          ) {
+            setRepositoryData(jsonData);
+            setSelectedFile(null);
+            setIsAutoLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not auto-load repo_data.json:', err);
+      }
+
+      // Auto-load failed, show file upload interface
+      setAutoLoadFailed(true);
+      setIsAutoLoading(false);
+    };
+
+    autoLoadRepoData();
+  }, []);
 
   const handleDataLoaded = (data: RepositoryData) => {
     setRepositoryData(data);
     setSelectedFile(null);
   };
 
-  const handleFileSelect = (fileId: string) => {
+  const handleFileSelect = (fileId: string | null) => {
     setSelectedFile(fileId);
   };
 
@@ -83,8 +118,18 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        {!repositoryData ? (
+        {isAutoLoading ? (
+          <div className="bg-white shadow sm:rounded-lg p-6 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading repository data...</p>
+          </div>
+        ) : !repositoryData ? (
           <div className="bg-white shadow sm:rounded-lg p-6">
+            {autoLoadFailed && (
+              <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded">
+                Could not auto-load repo_data.json. Please select a file manually.
+              </div>
+            )}
             <FileUpload onDataLoaded={handleDataLoaded} onLoadExample={handleLoadExample} />
           </div>
         ) : (

@@ -1,10 +1,17 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import React, {
+  useEffect,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+  useState,
+  useCallback,
+} from 'react';
 import * as d3 from 'd3';
-import { RepositoryData, File } from '../../types/schema';
+import { RepositoryData } from '../../types/schema';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
-  onSelectFile: (fileId: string) => void;
+  onSelectFile: (fileId: string | null) => void;
   selectedFile: string | null;
   referenceWeight: number;
   filesystemWeight: number;
@@ -25,6 +32,8 @@ interface Node extends d3.SimulationNodeDatum {
   extension?: string | null;
   size: number;
   depth: number;
+  expanded?: boolean;
+  parentId?: string;
   x?: number;
   y?: number;
 }
@@ -46,6 +55,31 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+
+    // Function to toggle node expansion
+    const toggleNodeExpansion = useCallback((fileId: string) => {
+      setExpandedFiles(prev => {
+        const next = new Set(prev);
+        if (next.has(fileId)) {
+          console.log('Collapsing file:', fileId);
+          next.delete(fileId);
+        } else {
+          console.log('Expanding file:', fileId);
+          next.add(fileId);
+        }
+        return next;
+      });
+    }, []);
+
+    // Helper function to check if a file has components
+    const hasComponents = useCallback(
+      (fileId: string): boolean => {
+        const file = data.files.find(f => f.id === fileId);
+        return file ? file.components && file.components.length > 0 : false;
+      },
+      [data.files]
+    );
 
     // Extension colors mapping
     const extensionColors: Record<string, string> = {
@@ -130,56 +164,64 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Extract nodes from files and their components
       const nodes: Node[] = [];
 
-      // Add file nodes
+      // Add file and directory nodes
       data.files.forEach(file => {
-        nodes.push({
-          id: file.id,
-          name: file.name,
-          path: file.path,
-          type: file.type,
-          extension: file.extension,
-          size: file.size,
-          depth: file.depth,
-        });
-
-        // Add component nodes
-        if (file.components) {
-          file.components.forEach(component => {
-            nodes.push({
-              id: component.id,
-              name: component.name,
-              path: file.path,
-              type: component.type,
-              extension: file.extension,
-              size: 0, // Components don't have file size
-              depth: file.depth + 1,
-            });
-
-            // Add nested component nodes recursively
-            const addNestedComponents = (comp: any, currentDepth: number) => {
-              if (comp.components) {
-                comp.components.forEach((nestedComp: any) => {
-                  nodes.push({
-                    id: nestedComp.id,
-                    name: nestedComp.name,
-                    path: file.path,
-                    type: nestedComp.type,
-                    extension: file.extension,
-                    size: 0,
-                    depth: currentDepth + 1,
-                  });
-                  addNestedComponents(nestedComp, currentDepth + 1);
-                });
-              }
-            };
-            addNestedComponents(component, file.depth + 1);
+        // Only add file-level nodes (not components as separate nodes)
+        if (file.type === 'file' || file.type === 'directory') {
+          nodes.push({
+            id: file.id,
+            name: file.name,
+            path: file.path,
+            type: file.type,
+            extension: file.extension,
+            size: file.size,
+            depth: file.depth,
+            expanded: expandedFiles.has(file.id),
           });
+
+          // Add component nodes only if file is expanded
+          if (expandedFiles.has(file.id) && file.components) {
+            file.components.forEach(component => {
+              nodes.push({
+                id: component.id,
+                name: component.name,
+                path: file.path,
+                type: component.type,
+                extension: file.extension,
+                size: 0, // Components don't have file size
+                depth: file.depth + 1,
+                parentId: file.id,
+              });
+
+              // Add nested component nodes recursively
+              const addNestedComponents = (comp: any, currentDepth: number, parentId: string) => {
+                if (comp.components) {
+                  comp.components.forEach((nestedComp: any) => {
+                    nodes.push({
+                      id: nestedComp.id,
+                      name: nestedComp.name,
+                      path: file.path,
+                      type: nestedComp.type,
+                      extension: file.extension,
+                      size: 0,
+                      depth: currentDepth + 1,
+                      parentId: parentId,
+                    });
+                    addNestedComponents(nestedComp, currentDepth + 1, parentId);
+                  });
+                }
+              };
+              addNestedComponents(component, file.depth + 1, file.id);
+            });
+          }
         }
       });
 
-      // Create initial links with current weights
+      // Create initial links with current weights, but only for visible nodes
+      const nodeIds = new Set(nodes.map(n => n.id));
       const createLinks = () => {
-        return data.relationships
+        const baseLinks = data.relationships
+          .filter(rel => nodeIds.has(rel.source) && nodeIds.has(rel.target))
           .map(rel => {
             let weight = 0;
 
@@ -204,6 +246,22 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             };
           })
           .filter(link => link.weight > 0); // Only include links with non-zero weight
+
+        // Add dynamic "contains" relationships for expanded nodes
+        const dynamicLinks: Link[] = [];
+        nodes.forEach(node => {
+          if (node.parentId && nodeIds.has(node.parentId)) {
+            dynamicLinks.push({
+              source: node.parentId,
+              target: node.id,
+              type: 'contains',
+              weight: referenceWeight / 100,
+              originalStrength: 1,
+            });
+          }
+        });
+
+        return [...baseLinks, ...dynamicLinks];
       };
 
       const links = createLinks();
@@ -229,8 +287,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                 // Semantic connections should be moderately close
                 return baseDistance * (1 - weight * 0.4) * (1 / strength);
               } else if (d.type === 'contains') {
-                // Containment relationships should be very close
-                return baseDistance * 0.3 * (1 - weight * 0.3);
+                // Containment relationships should be very close for clear hierarchy
+                return 50; // Much shorter distance for parent-child relationships
               } else {
                 // Reference connections
                 return baseDistance * (1 - weight * 0.3);
@@ -241,6 +299,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               const baseStrength = 1;
               const weight = d.weight || 0;
               const strength = d.originalStrength || 1;
+
+              if (d.type === 'contains') {
+                // Strong attraction for parent-child relationships
+                return 2; // Stronger force for containment
+              }
 
               return baseStrength * weight * strength;
             })
@@ -263,23 +326,28 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .enter()
         .append('line')
         .attr('stroke', d => getLinkColor(d))
-        .attr('stroke-opacity', d => 0.2 + (d.weight || 0) * 0.6)
+        .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', d => getLinkWidth(d));
 
-      // Create nodes
-      const node = g
+      // Create node groups (to hold both circles and expand/collapse indicators)
+      const nodeGroups = g
         .append('g')
         .attr('class', 'nodes')
-        .selectAll('circle')
+        .selectAll('g')
         .data(nodes)
         .enter()
+        .append('g')
+        .style('cursor', 'pointer')
+        .call(dragBehavior(simulation));
+
+      // Create circles for nodes
+      const node = nodeGroups
         .append('circle')
         .attr('class', 'node')
         .attr('r', d => getNodeRadius(d))
         .attr('fill', d => getNodeColor(d, extensionColors))
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
-        .style('cursor', 'pointer')
         .on('mouseover', function (event, d) {
           d3.select(this).attr('stroke-width', 3);
         })
@@ -291,15 +359,32 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .on('click', (event, d) => {
           event.stopPropagation();
           onSelectFile(d.id);
-        })
-        .call(dragBehavior(simulation));
+        });
+
+      // Add expand/collapse indicators for files with components
+      const expandIcons = nodeGroups
+        .filter(d => d.type === 'file' && hasComponents(d.id))
+        .append('text')
+        .attr('x', 0)
+        .attr('y', -12)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '12px')
+        .attr('font-weight', 'bold')
+        .attr('fill', '#333')
+        .text(d => (d.expanded ? '−' : '+'))
+        .style('pointer-events', 'none');
+
+      // Add click handler for expand/collapse
+      nodeGroups
+        .filter(d => d.type === 'file' && hasComponents(d.id))
+        .on('dblclick', (event, d) => {
+          event.stopPropagation();
+          console.log('Double-clicked file:', d.id, 'Current expanded files:', expandedFiles);
+          toggleNodeExpansion(d.id);
+        });
 
       // Add node labels
-      const label = g
-        .append('g')
-        .selectAll('text')
-        .data(nodes)
-        .enter()
+      const label = nodeGroups
         .append('text')
         .attr('dx', d => getNodeRadius(d) + 5)
         .attr('dy', 4)
@@ -309,7 +394,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('fill', '#333');
 
       // Add hover titles to nodes
-      node.append('title').text(d => d.path);
+      nodeGroups.append('title').text(d => d.path);
 
       // Click on background to clear selection
       svg.on('click', () => {
@@ -337,9 +422,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('x2', d => (d.target as Node).x || 0)
           .attr('y2', d => (d.target as Node).y || 0);
 
-        node.attr('cx', d => d.x || 0).attr('cy', d => d.y || 0);
-
-        label.attr('x', d => d.x || 0).attr('y', d => d.y || 0);
+        nodeGroups.attr('transform', d => `translate(${d.x || 0}, ${d.y || 0})`);
       });
 
       // Create legend
@@ -354,8 +437,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         if (simulationRef.current) {
           simulationRef.current.stop();
         }
+        // Clean up event listeners
+        svg.on('.zoom', null);
+        svg.on('click', null);
       };
-    }, [data]);
+    }, [data, expandedFiles, toggleNodeExpansion, hasComponents]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
@@ -379,7 +465,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('stroke', '#e74c3c')
           .attr('stroke-width', 3);
       }
-    }, [selectedFile, data]);
+    }, [selectedFile, data, expandedFiles]);
 
     // Weight update effect - runs when weights change
     useEffect(() => {
@@ -397,8 +483,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         y: d3.mean(nodes, d => d.y || 0) || 0,
       };
 
-      // Recreate links with new weights
-      const updatedLinks = data.relationships
+      // Get current visible node IDs
+      const currentNodeIds = new Set(nodes.map(n => n.id));
+
+      // Recreate links with new weights, but only for visible nodes
+      const baseUpdatedLinks = data.relationships
+        .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
         .map(rel => {
           let weight = 0;
 
@@ -424,6 +514,22 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .filter(link => link.weight > 0);
 
+      // Add dynamic "contains" relationships for expanded nodes
+      const dynamicUpdatedLinks: Link[] = [];
+      nodes.forEach(node => {
+        if (node.parentId && currentNodeIds.has(node.parentId)) {
+          dynamicUpdatedLinks.push({
+            source: node.parentId,
+            target: node.id,
+            type: 'contains',
+            weight: referenceWeight / 100,
+            originalStrength: 1,
+          });
+        }
+      });
+
+      const updatedLinks = [...baseUpdatedLinks, ...dynamicUpdatedLinks];
+
       // Update the force simulation with new link data
       const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
       linkForce
@@ -438,7 +544,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           } else if (d.type === 'semantic_similarity') {
             return baseDistance * (1 - weight * 0.4) * (1 / strength);
           } else if (d.type === 'contains') {
-            return baseDistance * 0.3 * (1 - weight * 0.3);
+            return 50; // Much shorter distance for parent-child relationships
           } else {
             return baseDistance * (1 - weight * 0.3);
           }
@@ -448,6 +554,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           const weight = d.weight || 0;
           const strength = d.originalStrength || 1;
 
+          if (d.type === 'contains') {
+            // Strong attraction for parent-child relationships
+            return 2; // Stronger force for containment
+          }
+
           return baseStrength * weight * strength;
         });
 
@@ -455,7 +566,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       linkSelection
         .data(updatedLinks)
         .attr('stroke', (d: Link) => getLinkColor(d))
-        .attr('stroke-opacity', (d: Link) => 0.2 + (d.weight || 0) * 0.6)
+        .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', (d: Link) => getLinkWidth(d));
 
       // Update center force to maintain current centroid
@@ -469,7 +580,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
       return d3
-        .drag<SVGCircleElement, Node>()
+        .drag<SVGGElement, Node>()
         .on('start', (event, d) => {
           if (!event.active) simulation.alphaTarget(0.3).restart();
           d.fx = d.x;
@@ -492,6 +603,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         return 10; // Fixed size for directories
       }
 
+      // Components are smaller than files
+      if (node.type === 'class' || node.type === 'function' || node.type === 'method') {
+        return 6;
+      }
+
       // Scale file size to a reasonable radius
       const minRadius = 5;
       const maxRadius = 15;
@@ -505,9 +621,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         switch (link.type) {
           case 'import':
           case 'call':
+          case 'calls':
             return 2;
           case 'contains':
-            return 1;
+            return 3; // Thicker lines for containment to make hierarchy clear
           case 'filesystem_proximity':
             return 1.5;
           case 'semantic_similarity':
@@ -517,7 +634,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         }
       })();
 
-      // Scale width by weight
+      // Scale width by weight for non-containment links
+      if (link.type === 'contains') {
+        return baseWidth; // Fixed width for containment to keep hierarchy clear
+      }
+
       const weight = link.weight || 0;
       return baseWidth * (0.5 + weight * 0.5);
     };
@@ -532,7 +653,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         case 'call':
           return '#3498db'; // Blue for reference connections
         case 'contains':
-          return '#95a5a6'; // Gray for containment
+          return '#2c3e50'; // Dark blue-gray for containment - more visible
         default:
           return '#95a5a6';
       }
@@ -542,6 +663,17 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Directories have a different color
       if (node.type === 'directory') {
         return '#7f8c8d';
+      }
+
+      // Components have different colors based on type
+      if (node.type === 'class') {
+        return '#e67e22';
+      }
+      if (node.type === 'function') {
+        return '#3498db';
+      }
+      if (node.type === 'method') {
+        return '#9b59b6';
       }
 
       // Files are colored by extension
@@ -626,6 +758,33 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .text('Other')
         .style('font-size', '12px')
         .style('fill', '#333');
+
+      // Add component types
+      index++;
+      const componentTypes = [
+        { type: 'class', color: '#e67e22' },
+        { type: 'function', color: '#3498db' },
+        { type: 'method', color: '#9b59b6' },
+      ];
+
+      componentTypes.forEach(({ type, color }) => {
+        legendGroup
+          .append('circle')
+          .attr('cx', 10 + Math.floor(index / 10) * 100)
+          .attr('cy', 10 + (index % 10) * 20)
+          .attr('r', 6)
+          .attr('fill', color);
+
+        legendGroup
+          .append('text')
+          .attr('x', 20 + Math.floor(index / 10) * 100)
+          .attr('y', 14 + (index % 10) * 20)
+          .text(type)
+          .style('font-size', '12px')
+          .style('fill', '#333');
+
+        index++;
+      });
     };
 
     return (
