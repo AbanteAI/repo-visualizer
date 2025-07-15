@@ -46,6 +46,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
 
     // Extension colors mapping
     const extensionColors: Record<string, string> = {
@@ -109,17 +110,45 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       },
     }));
 
+    // Effect to handle window resize
+    useEffect(() => {
+      const handleResize = () => {
+        if (containerRef.current) {
+          setDimensions({
+            width: containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight,
+          });
+        }
+      };
+
+      // Set initial dimensions
+      handleResize();
+
+      // Add resize listener
+      window.addEventListener('resize', handleResize);
+
+      // Cleanup
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     // Initial setup effect - runs when data changes
     useEffect(() => {
-      if (!svgRef.current || !containerRef.current || !data) return;
+      if (
+        !svgRef.current ||
+        !containerRef.current ||
+        !data ||
+        dimensions.width === 0 ||
+        dimensions.height === 0
+      )
+        return;
 
       // Clear any existing visualization
       const svg = d3.select(svgRef.current);
       svg.selectAll('*').remove();
 
       // Set up dimensions
-      const width = containerRef.current.clientWidth;
-      const height = 600; // Fixed height, could be made responsive
+      const width = dimensions.width;
+      const height = dimensions.height;
 
       // Update SVG dimensions
       svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
@@ -355,7 +384,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           simulationRef.current.stop();
         }
       };
-    }, [data]);
+    }, [data, dimensions]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
@@ -629,7 +658,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     };
 
     return (
-      <div ref={containerRef} className="w-full h-[600px] relative">
+      <div ref={containerRef} className="w-full h-full relative">
         <svg ref={svgRef} className="w-full h-full bg-white"></svg>
       </div>
     );

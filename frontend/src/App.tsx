@@ -108,15 +108,15 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
+    <div className="h-screen bg-gray-50 flex flex-col">
+      <header className="bg-white shadow-sm flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <h1 className="text-2xl font-bold text-gray-900">Repo Visualizer</h1>
           <p className="text-sm text-gray-500">Visualize your repository structure interactively</p>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+      <main className="flex-1 max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex flex-col">
         {isAutoLoading ? (
           <div className="bg-white shadow sm:rounded-lg p-6 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -133,7 +133,7 @@ const App: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="bg-white shadow sm:rounded-lg mb-6 p-4 text-center">
+            <div className="bg-white shadow sm:rounded-lg mb-6 p-4 text-center flex-shrink-0">
               <h2 className="text-lg font-semibold">
                 {repositoryData.metadata.repoName}
                 {repositoryData.metadata.description && ` - ${repositoryData.metadata.description}`}
@@ -141,7 +141,7 @@ const App: React.FC = () => {
             </div>
 
             <div
-              className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
+              className={`bg-white shadow sm:rounded-lg relative flex-1 flex flex-col ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
             >
               <RepositoryGraph
                 ref={graphRef}
