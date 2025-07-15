@@ -57,10 +57,22 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!controlsRef.current) return;
 
-    const rect = controlsRef.current.getBoundingClientRect();
+    const controlRect = controlsRef.current.getBoundingClientRect();
+    const parentRect = controlsRef.current.parentElement?.getBoundingClientRect();
+    if (!parentRect) return;
+
+    // Calculate offset relative to parent container
+    const controlRelativeX = controlRect.left - parentRect.left;
+    const controlRelativeY = controlRect.top - parentRect.top;
+
+    // Calculate mouse position relative to parent container
+    const mouseRelativeX = e.clientX - parentRect.left;
+    const mouseRelativeY = e.clientY - parentRect.top;
+
+    // Calculate drag offset (where within the control the mouse is)
     setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: mouseRelativeX - controlRelativeX,
+      y: mouseRelativeY - controlRelativeY,
     });
     setIsDragging(true);
     e.preventDefault();
