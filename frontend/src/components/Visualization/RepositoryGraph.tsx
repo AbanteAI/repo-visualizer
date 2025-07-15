@@ -358,6 +358,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Store references for weight updates
       (simulation as any).__linkSelection = link;
       (simulation as any).__nodeSelection = node;
+      (simulation as any).__labelSelection = label;
 
       // Clean up on unmount
       return () => {
@@ -478,18 +479,24 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       const simulation = simulationRef.current;
       const nodeSelection = (simulation as any).__nodeSelection;
+      const labelSelection = (simulation as any).__labelSelection;
 
       if (!nodeSelection) return;
 
       // Update node radiuses
       nodeSelection.attr('r', (d: Node) => getNodeRadius(d));
 
+      // Update label positions to match new node sizes
+      if (labelSelection) {
+        labelSelection.attr('dx', (d: Node) => getNodeRadius(d) + 5);
+      }
+
       // Update collision force with new radiuses
       const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
       collisionForce.radius((d: Node) => getNodeRadius(d) + 5);
 
       // Restart simulation with gentle animation
-      simulation.alpha(0.2).restart();
+      simulation.alpha(0.1).restart();
     }, [
       fileSizeWeight,
       commitCountWeight,

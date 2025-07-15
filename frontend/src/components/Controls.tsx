@@ -115,7 +115,7 @@ const Controls: React.FC<ControlsProps> = ({
       {/* Node Sizing Controls */}
       <div className="border-t pt-4">
         <h3 className="text-sm font-medium text-gray-700 mb-3 text-center">Node Sizing Factors</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-3">
           <div className="flex flex-col items-center gap-2">
             <label className="text-xs font-medium text-gray-700">File Size</label>
             <div className="flex items-center gap-2">
@@ -126,7 +126,7 @@ const Controls: React.FC<ControlsProps> = ({
                 max="100"
                 value={fileSizeWeight}
                 onChange={e => onFileSizeWeightChange(Number(e.target.value))}
-                className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               />
               <span className="text-xs text-gray-500">100</span>
             </div>
@@ -143,7 +143,7 @@ const Controls: React.FC<ControlsProps> = ({
                 max="100"
                 value={commitCountWeight}
                 onChange={e => onCommitCountWeightChange(Number(e.target.value))}
-                className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               />
               <span className="text-xs text-gray-500">100</span>
             </div>
@@ -160,7 +160,7 @@ const Controls: React.FC<ControlsProps> = ({
                 max="100"
                 value={recencyWeight}
                 onChange={e => onRecencyWeightChange(Number(e.target.value))}
-                className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               />
               <span className="text-xs text-gray-500">100</span>
             </div>
@@ -177,7 +177,7 @@ const Controls: React.FC<ControlsProps> = ({
                 max="100"
                 value={identifiersWeight}
                 onChange={e => onIdentifiersWeightChange(Number(e.target.value))}
-                className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               />
               <span className="text-xs text-gray-500">100</span>
             </div>
@@ -185,7 +185,7 @@ const Controls: React.FC<ControlsProps> = ({
           </div>
 
           <div className="flex flex-col items-center gap-2">
-            <label className="text-xs font-medium text-gray-700">References</label>
+            <label className="text-xs font-medium text-gray-700">Incoming Refs</label>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">0</span>
               <input
@@ -194,7 +194,7 @@ const Controls: React.FC<ControlsProps> = ({
                 max="100"
                 value={referencesWeight}
                 onChange={e => onReferencesWeightChange(Number(e.target.value))}
-                className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               />
               <span className="text-xs text-gray-500">100</span>
             </div>
