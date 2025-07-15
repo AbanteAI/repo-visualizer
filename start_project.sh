@@ -20,11 +20,11 @@ else
 fi
 
 # Ensure the package is installed
-echo "Ensuring package is installed..."
-if ! $PIP_CMD install -e . > /dev/null 2>&1; then
-    echo "Warning: Failed to install package. Trying with --user flag..."
-    if ! $PIP_CMD install --user -e . > /dev/null 2>&1; then
-        echo "Error: Failed to install package. Please run '.mentat/setup.sh' first."
+echo "Ensuring package with dev dependencies is installed..."
+if ! $PIP_CMD install -e ".[dev]" > /dev/null 2>&1; then
+    echo "Warning: Failed to install package with dev dependencies. Trying with --user flag..."
+    if ! $PIP_CMD install --user -e ".[dev]" > /dev/null 2>&1; then
+        echo "Error: Failed to install package with dev dependencies. Please run '.mentat/setup.sh' first."
         exit 1
     fi
 fi

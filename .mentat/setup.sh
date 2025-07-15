@@ -79,32 +79,18 @@ $PIP_CMD install --upgrade pip 2>/dev/null || echo "Skipping pip upgrade due to 
 
 # Install dependencies with different options depending on environment
 if [ "$USE_VENV" = true ]; then
-    echo "Installing dependencies in virtual environment..."
-    $PIP_CMD install -r dev-requirements.txt || {
-        echo "Warning: Failed to install dev-requirements.txt"
-    }
-    
-    echo "Installing package in development mode..."
-    $PIP_CMD install -e . || {
-        echo "Warning: Failed to install package in development mode"
+    echo "Installing package with dev dependencies in virtual environment..."
+    $PIP_CMD install -e ".[dev]" || {
+        echo "Warning: Failed to install package with dev dependencies"
     }
 else
-    echo "Installing dependencies globally (with --user flag)..."
+    echo "Installing package with dev dependencies globally (with --user flag)..."
     # Use --user flag to avoid permission issues when installing globally
-    $PIP_CMD install --user -r dev-requirements.txt || {
-        # Try without --user flag as a fallback
-        echo "Trying to install dependencies without --user flag..."
-        $PIP_CMD install -r dev-requirements.txt || {
-            echo "Warning: Failed to install dev-requirements.txt"
-        }
-    }
-    
-    echo "Installing package in development mode..."
-    $PIP_CMD install --user -e . || {
+    $PIP_CMD install --user -e ".[dev]" || {
         # Try without --user flag as a fallback
         echo "Trying to install package without --user flag..."
-        $PIP_CMD install -e . || {
-            echo "Warning: Failed to install package in development mode"
+        $PIP_CMD install -e ".[dev]" || {
+            echo "Warning: Failed to install package with dev dependencies"
         }
     }
 fi
