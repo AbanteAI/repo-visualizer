@@ -539,8 +539,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // File size factor
       if (node.size && node.size > 0) {
-        // Log scale for file size, normalized roughly to 0-1
-        factors.fileSize = Math.min(1, Math.log10(node.size) / 6); // Assume max ~1MB files
+        // Square root scale for better distribution across typical file sizes
+        // This gives more range to smaller files while still scaling large ones
+        factors.fileSize = Math.min(1, Math.sqrt(node.size) / 500); // Normalize for ~250KB max
       }
 
       // Get file data for additional metrics

@@ -1162,7 +1162,7 @@ class RepositoryAnalyzer:
                                         {
                                             "source": component["id"],
                                             "target": other_comp["id"],
-                                            "type": "calls",
+                                            "type": "call",
                                         }
                                     )
         except Exception as e:
