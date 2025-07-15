@@ -53,14 +53,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
-    // Stabilize the onSelectFile function to prevent unnecessary re-renders
-    const stableOnSelectFile = useCallback(
-      (fileId: string | null) => {
-        onSelectFile(fileId);
-      },
-      [onSelectFile]
-    );
-
     // Function to toggle node expansion
     const toggleNodeExpansion = useCallback((fileId: string) => {
       setExpandedFiles(prev => {
@@ -339,7 +331,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .on('click', (event, d) => {
           event.stopPropagation();
-          stableOnSelectFile(d.id);
+          onSelectFile(d.id);
         });
 
       // Add expand/collapse indicators for files with components
@@ -378,7 +370,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Click on background to clear selection
       svg.on('click', () => {
-        stableOnSelectFile(null);
+        onSelectFile(null);
       });
 
       // Create zoom behavior
@@ -421,7 +413,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         svg.on('.zoom', null);
         svg.on('click', null);
       };
-    }, [data, expandedFiles, stableOnSelectFile, toggleNodeExpansion, hasComponents]);
+    }, [data, expandedFiles, toggleNodeExpansion, hasComponents]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
