@@ -144,7 +144,7 @@ const App: React.FC = () => {
             <div
               className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
             >
-              <div className="relative">
+              <div className="relative h-[600px]">
                 <RepositoryGraph
                   ref={graphRef}
                   data={repositoryData}

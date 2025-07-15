@@ -26,16 +26,30 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
 
   // Initialize position to upper right corner
   useEffect(() => {
-    if (!isInitialized && controlsRef.current) {
-      const parent = controlsRef.current.parentElement;
-      if (parent) {
-        const parentWidth = parent.offsetWidth;
-        const controlsWidth = controlsRef.current.offsetWidth;
-        setPosition({
-          x: parentWidth - controlsWidth - 20,
-          y: 20,
-        });
-        setIsInitialized(true);
+    const initializePosition = () => {
+      if (controlsRef.current) {
+        const parent = controlsRef.current.parentElement;
+        if (parent) {
+          const parentWidth = parent.offsetWidth;
+          const controlsWidth = controlsRef.current.offsetWidth || 280; // fallback to minWidth
+
+          // Position in upper right corner of the canvas
+          setPosition({
+            x: Math.max(0, parentWidth - controlsWidth - 20),
+            y: 20,
+          });
+          setIsInitialized(true);
+        }
+      }
+    };
+
+    if (!isInitialized) {
+      // Try immediately
+      initializePosition();
+
+      // If that didn't work, try again after a small delay
+      if (!isInitialized) {
+        setTimeout(initializePosition, 100);
       }
     }
   }, [isInitialized]);
@@ -125,10 +139,13 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       ref={controlsRef}
       className="absolute z-50 bg-white rounded-lg shadow-lg border transition-all duration-200 draggable-controls"
       style={{
-        left: position.x,
-        top: position.y,
+        position: 'absolute',
+        left: isInitialized ? position.x : 'calc(100% - 300px)',
+        top: isInitialized ? position.y : '20px',
         minWidth: '280px',
         pointerEvents: 'auto',
+        transform: 'translate3d(0, 0, 0)', // Force hardware acceleration
+        zIndex: 1000, // Ensure it's on top
       }}
     >
       {/* Header - Only this area is draggable */}
