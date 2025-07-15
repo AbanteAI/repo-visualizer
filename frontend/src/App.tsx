@@ -147,44 +147,44 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className={`flex-1 relative ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
-              <div className="w-full h-full flex flex-col">
-                <div className="flex-1">
-                  <RepositoryGraph
-                    ref={graphRef}
-                    data={repositoryData}
-                    onSelectFile={handleFileSelect}
-                    selectedFile={selectedFile}
-                    referenceWeight={referenceWeight}
-                    filesystemWeight={filesystemWeight}
-                    semanticWeight={semanticWeight}
-                  />
-                </div>
-
-                <div className="flex-shrink-0 bg-white border-t">
-                  <Controls
-                    onZoomIn={handleZoomIn}
-                    onZoomOut={handleZoomOut}
-                    onReset={handleReset}
-                    onFullscreen={toggleFullscreen}
-                    isFullscreen={isFullscreen}
-                    referenceWeight={referenceWeight}
-                    filesystemWeight={filesystemWeight}
-                    semanticWeight={semanticWeight}
-                    onReferenceWeightChange={handleReferenceWeightChange}
-                    onFilesystemWeightChange={handleFilesystemWeightChange}
-                    onSemanticWeightChange={handleSemanticWeightChange}
-                  />
-                </div>
-
-                {selectedFile && (
-                  <FileDetails
-                    fileId={selectedFile}
-                    data={repositoryData}
-                    onClose={handleCloseFileDetails}
-                  />
-                )}
+            <div
+              className={`flex-1 flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}
+            >
+              <div className="flex-1 min-h-0">
+                <RepositoryGraph
+                  ref={graphRef}
+                  data={repositoryData}
+                  onSelectFile={handleFileSelect}
+                  selectedFile={selectedFile}
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                />
               </div>
+
+              <div className="flex-shrink-0 bg-white border-t">
+                <Controls
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onReset={handleReset}
+                  onFullscreen={toggleFullscreen}
+                  isFullscreen={isFullscreen}
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                  onReferenceWeightChange={handleReferenceWeightChange}
+                  onFilesystemWeightChange={handleFilesystemWeightChange}
+                  onSemanticWeightChange={handleSemanticWeightChange}
+                />
+              </div>
+
+              {selectedFile && (
+                <FileDetails
+                  fileId={selectedFile}
+                  data={repositoryData}
+                  onClose={handleCloseFileDetails}
+                />
+              )}
             </div>
           </>
         )}

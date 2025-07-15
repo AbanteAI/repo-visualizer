@@ -110,7 +110,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       },
     }));
 
-    // Effect to handle window resize
+    // Effect to handle container size changes using ResizeObserver
     useEffect(() => {
       const handleResize = () => {
         if (containerRef.current) {
@@ -124,12 +124,53 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Set initial dimensions
       handleResize();
 
-      // Add resize listener
-      window.addEventListener('resize', handleResize);
+      // Use ResizeObserver for better detection of container size changes
+      if (containerRef.current && window.ResizeObserver) {
+        const resizeObserver = new ResizeObserver(() => {
+          // Debounce to avoid too many updates during resize
+          requestAnimationFrame(handleResize);
+        });
 
-      // Cleanup
-      return () => window.removeEventListener('resize', handleResize);
+        resizeObserver.observe(containerRef.current);
+
+        // Cleanup
+        return () => {
+          resizeObserver.disconnect();
+        };
+      } else {
+        // Fallback to window resize listener
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+      }
     }, []);
+
+    // Effect to handle dimension changes - only update simulation if it exists
+    useEffect(() => {
+      if (
+        !svgRef.current ||
+        !simulationRef.current ||
+        dimensions.width === 0 ||
+        dimensions.height === 0
+      )
+        return;
+
+      const svg = d3.select(svgRef.current);
+      const simulation = simulationRef.current;
+      const width = dimensions.width;
+      const height = dimensions.height;
+
+      // Update SVG dimensions
+      svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
+
+      // Update center force to new dimensions
+      const centerForce = simulation.force('center') as d3.ForceCenter<Node>;
+      if (centerForce) {
+        centerForce.x(width / 2).y(height / 2);
+      }
+
+      // Gently restart simulation to adjust to new dimensions
+      simulation.alpha(0.2).restart();
+    }, [dimensions]);
 
     // Initial setup effect - runs when data changes
     useEffect(() => {
