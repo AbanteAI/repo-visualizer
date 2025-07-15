@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 interface DraggableControlsProps {
   referenceWeight: number;
@@ -52,28 +52,62 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
     e.preventDefault();
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging || !controlsRef.current) return;
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging || !controlsRef.current) return;
 
-    const parentRect = controlsRef.current.parentElement?.getBoundingClientRect();
-    if (!parentRect) return;
+      const parentRect = controlsRef.current.parentElement?.getBoundingClientRect();
+      if (!parentRect) return;
 
-    const newX = e.clientX - parentRect.left - dragOffset.x;
-    const newY = e.clientY - parentRect.top - dragOffset.y;
+      const newX = e.clientX - parentRect.left - dragOffset.x;
+      const newY = e.clientY - parentRect.top - dragOffset.y;
 
-    // Keep within bounds
-    const maxX = parentRect.width - controlsRef.current.offsetWidth;
-    const maxY = parentRect.height - controlsRef.current.offsetHeight;
+      // Keep within bounds
+      const maxX = parentRect.width - controlsRef.current.offsetWidth;
+      const maxY = parentRect.height - controlsRef.current.offsetHeight;
 
-    setPosition({
-      x: Math.max(0, Math.min(maxX, newX)),
-      y: Math.max(0, Math.min(maxY, newY)),
-    });
-  };
+      setPosition({
+        x: Math.max(0, Math.min(maxX, newX)),
+        y: Math.max(0, Math.min(maxY, newY)),
+      });
+    },
+    [isDragging, dragOffset]
+  );
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-  };
+  }, []);
+
+  // Clamp position when container resizes
+  const clampPosition = useCallback(() => {
+    if (!controlsRef.current || !isInitialized) return;
+
+    const parent = controlsRef.current.parentElement;
+    if (!parent) return;
+
+    const parentWidth = parent.offsetWidth;
+    const parentHeight = parent.offsetHeight;
+    const controlsWidth = controlsRef.current.offsetWidth;
+    const controlsHeight = controlsRef.current.offsetHeight;
+
+    const maxX = parentWidth - controlsWidth;
+    const maxY = parentHeight - controlsHeight;
+
+    setPosition(prev => ({
+      x: Math.max(0, Math.min(maxX, prev.x)),
+      y: Math.max(0, Math.min(maxY, prev.y)),
+    }));
+  }, [isInitialized]);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      clampPosition();
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [clampPosition]);
 
   useEffect(() => {
     if (isDragging) {
@@ -89,18 +123,20 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
   return (
     <div
       ref={controlsRef}
-      className={`absolute z-10 bg-white rounded-lg shadow-lg border transition-all duration-200 ${
-        isDragging ? 'cursor-grabbing' : 'cursor-grab'
-      }`}
+      className="absolute z-10 bg-white rounded-lg shadow-lg border transition-all duration-200 draggable-controls"
       style={{
         left: position.x,
         top: position.y,
         minWidth: '280px',
       }}
-      onMouseDown={handleMouseDown}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b bg-gray-50 rounded-t-lg">
+      {/* Header - Only this area is draggable */}
+      <div
+        className={`flex items-center justify-between p-3 border-b bg-gray-50 rounded-t-lg ${
+          isDragging ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+        onMouseDown={handleMouseDown}
+      >
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-red-500 rounded-full"></div>
           <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
@@ -113,6 +149,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
             setIsExpanded(!isExpanded);
           }}
           className="p-1 rounded hover:bg-gray-200 transition-colors"
+          aria-label={isExpanded ? 'Collapse controls' : 'Expand controls'}
         >
           <svg
             className={`w-4 h-4 text-gray-600 transition-transform ${
@@ -156,6 +193,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
                 style={{
                   background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${referenceWeight}%, #e5e7eb ${referenceWeight}%, #e5e7eb 100%)`,
                 }}
+                aria-label="Reference connections weight"
               />
             </div>
           </div>
@@ -182,6 +220,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
                 style={{
                   background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${filesystemWeight}%, #e5e7eb ${filesystemWeight}%, #e5e7eb 100%)`,
                 }}
+                aria-label="Filesystem connections weight"
               />
             </div>
           </div>
@@ -208,6 +247,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
                 style={{
                   background: `linear-gradient(to right, #22c55e 0%, #22c55e ${semanticWeight}%, #e5e7eb ${semanticWeight}%, #e5e7eb 100%)`,
                 }}
+                aria-label="Semantic connections weight"
               />
             </div>
           </div>
