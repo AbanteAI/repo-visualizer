@@ -142,7 +142,7 @@ To set up a development environment:
 ```bash
 git clone https://github.com/AbanteAI/repo-visualizer.git
 cd repo-visualizer
-source .mentat/setup.sh  # Sets up a virtual environment and installs dependencies
+bash .mentat/setup.sh  # Sets up a virtual environment and installs dependencies
 ```
 
 ### Running Tests
