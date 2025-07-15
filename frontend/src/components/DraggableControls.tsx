@@ -137,7 +137,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
   return (
     <div
       ref={controlsRef}
-      className="absolute z-50 bg-white rounded-lg shadow-xl border-2 border-gray-200 transition-all duration-200 draggable-controls"
+      className="absolute rounded-lg shadow-xl transition-all duration-200 draggable-controls"
       style={{
         position: 'absolute',
         left: isInitialized ? position.x : 'calc(100% - 300px)',
@@ -147,22 +147,36 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
         transform: 'translate3d(0, 0, 0)', // Force hardware acceleration
         zIndex: 1000, // Ensure it's on top
         userSelect: 'none', // Prevent text selection
+        backgroundColor: 'white',
+        border: '2px solid #e5e7eb',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
       }}
     >
       {/* Header - Only this area is draggable */}
       <div
-        className={`flex items-center justify-between p-3 border-b bg-blue-50 rounded-t-lg border-2 border-blue-200 ${
-          isDragging ? 'cursor-grabbing bg-blue-100' : 'cursor-grab hover:bg-blue-100'
+        className={`flex items-center justify-between p-3 border-b rounded-t-lg border-2 ${
+          isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
         onMouseDown={handleMouseDown}
-        style={{ userSelect: 'none' }}
+        style={{
+          userSelect: 'none',
+          backgroundColor: isDragging ? '#dbeafe' : '#eff6ff',
+          borderColor: '#93c5fd',
+          borderBottom: '1px solid #d1d5db',
+        }}
       >
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-red-500 rounded-full"></div>
           <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
           <span className="text-sm font-medium text-gray-700 ml-2">Connection Weights</span>
-          <div className="ml-2 text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">
+          <div
+            className="ml-2 text-xs px-2 py-1 rounded"
+            style={{
+              color: '#6b7280',
+              backgroundColor: '#dbeafe',
+            }}
+          >
             ⇄ Drag to move
           </div>
         </div>
