@@ -58,8 +58,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       setExpandedFiles(prev => {
         const next = new Set(prev);
         if (next.has(fileId)) {
+          console.log('Collapsing file:', fileId);
           next.delete(fileId);
         } else {
+          console.log('Expanding file:', fileId);
           next.add(fileId);
         }
         return next;
@@ -214,7 +216,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create initial links with current weights, but only for visible nodes
       const nodeIds = new Set(nodes.map(n => n.id));
       const createLinks = () => {
-        return data.relationships
+        const baseLinks = data.relationships
           .filter(rel => nodeIds.has(rel.source) && nodeIds.has(rel.target))
           .map(rel => {
             let weight = 0;
@@ -238,6 +240,22 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             };
           })
           .filter(link => link.weight > 0); // Only include links with non-zero weight
+
+        // Add dynamic "contains" relationships for expanded nodes
+        const dynamicLinks: Link[] = [];
+        nodes.forEach(node => {
+          if (node.parentId && nodeIds.has(node.parentId)) {
+            dynamicLinks.push({
+              source: node.parentId,
+              target: node.id,
+              type: 'contains',
+              weight: referenceWeight / 100,
+              originalStrength: 1,
+            });
+          }
+        });
+
+        return [...baseLinks, ...dynamicLinks];
       };
 
       const links = createLinks();
@@ -352,6 +370,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .filter(d => d.type === 'file' && hasComponents(d.id))
         .on('dblclick', (event, d) => {
           event.stopPropagation();
+          console.log('Double-clicked file:', d.id, 'Current expanded files:', expandedFiles);
           toggleNodeExpansion(d.id);
         });
 
@@ -459,7 +478,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const currentNodeIds = new Set(nodes.map(n => n.id));
 
       // Recreate links with new weights, but only for visible nodes
-      const updatedLinks = data.relationships
+      const baseUpdatedLinks = data.relationships
         .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
         .map(rel => {
           let weight = 0;
@@ -483,6 +502,22 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           };
         })
         .filter(link => link.weight > 0);
+
+      // Add dynamic "contains" relationships for expanded nodes
+      const dynamicUpdatedLinks: Link[] = [];
+      nodes.forEach(node => {
+        if (node.parentId && currentNodeIds.has(node.parentId)) {
+          dynamicUpdatedLinks.push({
+            source: node.parentId,
+            target: node.id,
+            type: 'contains',
+            weight: referenceWeight / 100,
+            originalStrength: 1,
+          });
+        }
+      });
+
+      const updatedLinks = [...baseUpdatedLinks, ...dynamicUpdatedLinks];
 
       // Update the force simulation with new link data
       const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
@@ -518,7 +553,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       linkSelection
         .data(updatedLinks)
         .attr('stroke', (d: Link) => getLinkColor(d))
-        .attr('stroke-opacity', (d: Link) => 0.2 + (d.weight || 0) * 0.6)
+        .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', (d: Link) => getLinkWidth(d));
 
       // Update center force to maintain current centroid
