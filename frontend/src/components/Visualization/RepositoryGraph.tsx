@@ -654,13 +654,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         return 10; // Fixed size for directories
       }
 
-      // Components are smaller than files
-      if (node.type === 'class' || node.type === 'function' || node.type === 'method') {
-        return 6;
-      }
+      // Set different size ranges for components vs files
+      let minRadius = 5;
+      let maxRadius = 25;
 
-      const minRadius = 5;
-      const maxRadius = 25;
+      const isComponent =
+        node.type === 'class' || node.type === 'function' || node.type === 'method';
+      if (isComponent) {
+        minRadius = 3;
+        maxRadius = 12; // Components are smaller than files
+      }
 
       // Calculate normalized factors (0-1)
       const factors = {
@@ -679,7 +682,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
 
       // Get file data for additional metrics
-      const fileData = data.files.find(f => f.id === node.id);
+      // For components, use the parent file's metrics
+      let fileData = data.files.find(f => f.id === node.id);
+      if (!fileData && isComponent) {
+        // Component IDs are like "file.py:ClassName" - extract the file part
+        const fileId = node.id.split(':')[0];
+        fileData = data.files.find(f => f.id === fileId);
+      }
+
       if (fileData?.metrics) {
         // Commit count factor
         if (fileData.metrics.commitCount !== undefined) {
