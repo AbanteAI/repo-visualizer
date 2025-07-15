@@ -105,6 +105,28 @@ The JSON includes:
 - Relationships between files and components
 - Git history data
 
+### Starting the Visualization Server
+
+To run the complete visualization interface locally:
+
+```bash
+# Quick start - runs the analyzer and starts the visualization server
+./start_project.sh
+```
+
+This will:
+1. Generate repository data for the current repository
+2. Copy the data to the frontend directory
+3. Start the development server with proper host binding
+
+**Access the application at:**
+- Local: http://localhost:5173/
+- Network: (URL shown in terminal output)
+
+**Usage:**
+- Click "Choose File" and select `repo_data.json` to visualize the current repository
+- Or click "Load Example Data" to see a demo visualization
+
 ## Development
 
 To set up a development environment:

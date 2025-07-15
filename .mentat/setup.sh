@@ -111,18 +111,26 @@ fi
 
 # Install frontend dependencies
 echo "Installing frontend dependencies..."
-cd frontend
-if command -v npm &> /dev/null; then
-    npm install || {
-        echo "Warning: Failed to install frontend dependencies"
-        cd ..
-        exit 1
-    }
-    echo "Frontend dependencies installed successfully"
+if [ -d "frontend" ]; then
+    cd frontend
+    if command -v npm &> /dev/null; then
+        if [ ! -d "node_modules" ]; then
+            npm install || {
+                echo "Warning: Failed to install frontend dependencies"
+                cd ..
+                exit 1
+            }
+            echo "Frontend dependencies installed successfully"
+        else
+            echo "Frontend dependencies already installed"
+        fi
+    else
+        echo "Warning: npm not found, skipping frontend setup"
+    fi
+    cd ..
 else
-    echo "Warning: npm not found, skipping frontend setup"
+    echo "Warning: frontend directory not found, skipping frontend setup"
 fi
-cd ..
 
 # Print completion message
 echo "Setup complete! Some steps may have been skipped due to environment restrictions."
