@@ -137,7 +137,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
   return (
     <div
       ref={controlsRef}
-      className="absolute z-50 bg-white rounded-lg shadow-lg border transition-all duration-200 draggable-controls"
+      className="absolute z-50 bg-white rounded-lg shadow-xl border-2 border-gray-200 transition-all duration-200 draggable-controls"
       style={{
         position: 'absolute',
         left: isInitialized ? position.x : 'calc(100% - 300px)',
@@ -146,20 +146,25 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
         pointerEvents: 'auto',
         transform: 'translate3d(0, 0, 0)', // Force hardware acceleration
         zIndex: 1000, // Ensure it's on top
+        userSelect: 'none', // Prevent text selection
       }}
     >
       {/* Header - Only this area is draggable */}
       <div
-        className={`flex items-center justify-between p-3 border-b bg-gray-50 rounded-t-lg ${
-          isDragging ? 'cursor-grabbing' : 'cursor-grab'
+        className={`flex items-center justify-between p-3 border-b bg-blue-50 rounded-t-lg border-2 border-blue-200 ${
+          isDragging ? 'cursor-grabbing bg-blue-100' : 'cursor-grab hover:bg-blue-100'
         }`}
         onMouseDown={handleMouseDown}
+        style={{ userSelect: 'none' }}
       >
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-red-500 rounded-full"></div>
           <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
           <span className="text-sm font-medium text-gray-700 ml-2">Connection Weights</span>
+          <div className="ml-2 text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">
+            ⇄ Drag to move
+          </div>
         </div>
         <button
           onClick={e => {
@@ -275,13 +280,19 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       {/* Collapsed State Indicator */}
       {!isExpanded && (
         <div className="p-3 text-center">
-          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            <span>{referenceWeight}%</span>
-            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-            <span>{filesystemWeight}%</span>
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span>{semanticWeight}%</span>
+          <div className="flex items-center justify-center gap-3 text-sm text-gray-600">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <span>{referenceWeight}%</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <span>{filesystemWeight}%</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span>{semanticWeight}%</span>
+            </div>
           </div>
         </div>
       )}
