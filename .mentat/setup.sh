@@ -109,8 +109,26 @@ else
     }
 fi
 
+# Install frontend dependencies
+echo "Installing frontend dependencies..."
+cd frontend
+if command -v npm &> /dev/null; then
+    npm install || {
+        echo "Warning: Failed to install frontend dependencies"
+        cd ..
+        exit 1
+    }
+    echo "Frontend dependencies installed successfully"
+else
+    echo "Warning: npm not found, skipping frontend setup"
+fi
+cd ..
+
 # Print completion message
 echo "Setup complete! Some steps may have been skipped due to environment restrictions."
 if [ "$USE_VENV" = true ]; then
     echo "You can activate the virtual environment with: source .venv/bin/activate"
 fi
+echo ""
+echo "To start the project, run:"
+echo "  ./start_project.sh"
