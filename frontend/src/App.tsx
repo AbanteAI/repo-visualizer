@@ -4,6 +4,7 @@ import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import Controls from './components/Controls';
 import FileDetails from './components/FileDetails';
+import DraggableControls from './components/DraggableControls';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -108,18 +109,21 @@ const App: React.FC = () => {
                 semanticWeight={semanticWeight}
               />
 
-              <Controls
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
-                onReset={handleReset}
-                onFullscreen={toggleFullscreen}
-                isFullscreen={isFullscreen}
+              <DraggableControls
                 referenceWeight={referenceWeight}
                 filesystemWeight={filesystemWeight}
                 semanticWeight={semanticWeight}
                 onReferenceWeightChange={handleReferenceWeightChange}
                 onFilesystemWeightChange={handleFilesystemWeightChange}
                 onSemanticWeightChange={handleSemanticWeightChange}
+              />
+
+              <Controls
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onReset={handleReset}
+                onFullscreen={toggleFullscreen}
+                isFullscreen={isFullscreen}
               />
 
               {selectedFile && (
