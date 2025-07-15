@@ -463,8 +463,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         y: d3.mean(nodes, d => d.y || 0) || 0,
       };
 
-      // Recreate links with new weights
+      // Get current visible node IDs
+      const currentNodeIds = new Set(nodes.map(n => n.id));
+
+      // Recreate links with new weights, but only for visible nodes
       const updatedLinks = data.relationships
+        .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
         .map(rel => {
           let weight = 0;
 
