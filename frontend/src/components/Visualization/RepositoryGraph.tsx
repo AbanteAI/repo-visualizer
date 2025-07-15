@@ -532,11 +532,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         svg.on('.zoom', null);
         svg.on('click', null);
       };
-<<<<<<< HEAD
-    }, [data, dimensions]);
-=======
-    }, [data, expandedFiles, toggleNodeExpansion, hasComponents]);
->>>>>>> origin/main
+    }, [data, dimensions, expandedFiles, toggleNodeExpansion, hasComponents]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
