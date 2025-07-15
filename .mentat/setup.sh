@@ -117,7 +117,6 @@ if [ -d "frontend" ]; then
         if [ ! -d "node_modules" ]; then
             npm install || {
                 echo "Warning: Failed to install frontend dependencies"
-                cd ..
                 exit 1
             }
             echo "Frontend dependencies installed successfully"

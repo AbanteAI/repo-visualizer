@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -21,7 +21,13 @@ fi
 
 # Ensure the package is installed
 echo "Ensuring package is installed..."
-$PIP_CMD install -e . > /dev/null 2>&1
+if ! $PIP_CMD install -e . > /dev/null 2>&1; then
+    echo "Warning: Failed to install package. Trying with --user flag..."
+    if ! $PIP_CMD install --user -e . > /dev/null 2>&1; then
+        echo "Error: Failed to install package. Please run '.mentat/setup.sh' first."
+        exit 1
+    fi
+fi
 
 # Generate repository data
 echo "Generating repository data..."
@@ -35,6 +41,14 @@ if [ ! -d "frontend" ]; then
 fi
 cp repo_data.json frontend/
 
+# Ensure frontend dependencies are installed
+echo "Ensuring frontend dependencies are installed..."
+cd frontend
+if [ ! -d "node_modules" ]; then
+    echo "Installing frontend dependencies..."
+    npm install
+fi
+
 # Start frontend development server
 echo "Starting frontend development server..."
 echo ""
@@ -45,5 +59,4 @@ echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-cd frontend
 npm run dev -- --host 0.0.0.0
