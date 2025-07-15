@@ -15,6 +15,21 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pathspec
 
+# Optional dependency for semantic similarity
+try:
+    import openai
+
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+try:
+    import numpy as np
+
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+
 from .schema import (
     Component,
     File,
@@ -1405,6 +1420,9 @@ class RepositoryAnalyzer:
         # Add filesystem-based relationships
         self._add_filesystem_relationships()
 
+        # Add semantic similarity relationships if available
+        self._add_semantic_similarity_relationships()
+
         # Add components as "nodes" to be visualized
         files = self.data["files"]
         component_nodes = []
@@ -1518,6 +1536,293 @@ class RepositoryAnalyzer:
                                     "strength": strength,
                                 }
                             )
+
+    def _add_semantic_similarity_relationships(self) -> None:
+        """Add relationships between files based on semantic similarity."""
+        if not OPENAI_AVAILABLE or not NUMPY_AVAILABLE:
+            print(
+                "Warning: OpenAI and NumPy are required for semantic similarity. "
+                "Skipping semantic analysis."
+            )
+            return
+
+        # Check if API key is available
+        if not os.getenv("OPENAI_API_KEY"):
+            print(
+                "Warning: OPENAI_API_KEY not set. "
+                "Skipping semantic similarity analysis."
+            )
+            return
+
+        # Get all files (not directories or components)
+        files = [f for f in self.data["files"] if f["type"] == "file"]
+
+        # Filter for code files that we can analyze
+        code_files = []
+        for file in files:
+            extension = file.get("extension", "") or ""
+            extension = extension.lower()
+            if extension in [
+                "py",
+                "js",
+                "ts",
+                "jsx",
+                "tsx",
+                "java",
+                "cpp",
+                "c",
+                "h",
+                "rb",
+                "go",
+                "rs",
+                "php",
+                "kt",
+                "swift",
+            ]:
+                code_files.append(file)
+
+        if len(code_files) < 2:
+            print(
+                "Warning: Need at least 2 code files for semantic similarity analysis."
+            )
+            return
+
+        print(f"Analyzing semantic similarity for {len(code_files)} files...")
+
+        # Extract text content and generate embeddings
+        file_embeddings = {}
+
+        for file in code_files:
+            try:
+                text_content = self._extract_file_text_content(file)
+                if (
+                    text_content and len(text_content.strip()) > 50
+                ):  # Only process files with meaningful content
+                    embedding = self._generate_embedding(text_content)
+                    if embedding is not None:
+                        file_embeddings[file["id"]] = embedding
+            except Exception as e:
+                print(
+                    f"Warning: Could not process file {file['id']} "
+                    f"for semantic similarity: {e}"
+                )
+                continue
+
+        if len(file_embeddings) < 2:
+            print(
+                "Warning: Not enough files with valid embeddings "
+                "for semantic similarity."
+            )
+            return
+
+        print(
+            f"Generated embeddings for {len(file_embeddings)} files. "
+            f"Computing similarities..."
+        )
+
+        # Compute pairwise similarities
+        file_ids = list(file_embeddings.keys())
+        similarity_threshold = 0.7  # Only include files with high similarity
+
+        for i, file_id1 in enumerate(file_ids):
+            for file_id2 in file_ids[i + 1 :]:
+                try:
+                    similarity = self._cosine_similarity(
+                        file_embeddings[file_id1], file_embeddings[file_id2]
+                    )
+
+                    if similarity >= similarity_threshold:
+                        self.relationships.append(
+                            {
+                                "source": file_id1,
+                                "target": file_id2,
+                                "type": "semantic_similarity",
+                                "strength": float(similarity),
+                            }
+                        )
+                except Exception as e:
+                    print(
+                        f"Warning: Could not compute similarity between "
+                        f"{file_id1} and {file_id2}: {e}"
+                    )
+                    continue
+
+        semantic_count = len(
+            [r for r in self.relationships if r["type"] == "semantic_similarity"]
+        )
+        print(f"Found {semantic_count} semantic similarity relationships.")
+
+    def _extract_file_text_content(self, file: Dict[str, Any]) -> Optional[str]:
+        """Extract meaningful text content from a file for semantic analysis."""
+        file_path = os.path.join(self.repo_path, file["path"])
+
+        if not os.path.isfile(file_path):
+            return None
+
+        try:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+
+            # Extract meaningful content based on file type
+            extension = file.get("extension", "") or ""
+            extension = extension.lower()
+
+            if extension == "py":
+                return self._extract_python_semantic_content(content)
+            elif extension in ["js", "ts", "jsx", "tsx"]:
+                return self._extract_javascript_semantic_content(content)
+            else:
+                # For other code files, extract comments and identifiers
+                return self._extract_generic_semantic_content(content)
+
+        except Exception as e:
+            print(f"Warning: Could not read file {file['path']}: {e}")
+            return None
+
+    def _extract_python_semantic_content(self, content: str) -> str:
+        """Extract semantic content from Python files."""
+        parts = []
+
+        # Extract docstrings
+        docstring_matches = re.finditer(r'"""(.*?)"""', content, re.DOTALL)
+        for match in docstring_matches:
+            parts.append(match.group(1).strip())
+
+        # Extract comments
+        comment_matches = re.finditer(r"#\s*(.+)", content)
+        for match in comment_matches:
+            parts.append(match.group(1).strip())
+
+        # Extract function and class names with their context
+        function_matches = re.finditer(r"def\s+(\w+)\s*\([^)]*\):", content)
+        for match in function_matches:
+            parts.append(f"function {match.group(1)}")
+
+        class_matches = re.finditer(r"class\s+(\w+)(?:\([^)]*\))?:", content)
+        for match in class_matches:
+            parts.append(f"class {match.group(1)}")
+
+        # Extract import statements to understand dependencies
+        import_matches = re.finditer(r"(?:from\s+(\S+)\s+)?import\s+([^\n]+)", content)
+        for match in import_matches:
+            if match.group(1):
+                parts.append(f"imports from {match.group(1)}")
+            parts.append(f"imports {match.group(2).strip()}")
+
+        return " ".join(parts)
+
+    def _extract_javascript_semantic_content(self, content: str) -> str:
+        """Extract semantic content from JavaScript/TypeScript files."""
+        parts = []
+
+        # Extract comments
+        comment_matches = re.finditer(r"//\s*(.+)", content)
+        for match in comment_matches:
+            parts.append(match.group(1).strip())
+
+        # Extract block comments
+        block_comment_matches = re.finditer(r"/\*(.*?)\*/", content, re.DOTALL)
+        for match in block_comment_matches:
+            parts.append(match.group(1).strip())
+
+        # Extract function names
+        function_matches = re.finditer(
+            r"(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:function|\([^)]*\)\s*=>))",
+            content,
+        )
+        for match in function_matches:
+            func_name = match.group(1) or match.group(2)
+            if func_name:
+                parts.append(f"function {func_name}")
+
+        # Extract class names
+        class_matches = re.finditer(r"class\s+(\w+)", content)
+        for match in class_matches:
+            parts.append(f"class {match.group(1)}")
+
+        # Extract imports
+        import_matches = re.finditer(
+            r'import\s+[^;]+from\s+[\'"]([^\'"]+)[\'"]', content
+        )
+        for match in import_matches:
+            parts.append(f"imports from {match.group(1)}")
+
+        return " ".join(parts)
+
+    def _extract_generic_semantic_content(self, content: str) -> str:
+        """Extract semantic content from generic code files."""
+        parts = []
+
+        # Extract various comment patterns
+        comment_patterns = [
+            r"//\s*(.+)",  # C++ style comments
+            r"#\s*(.+)",  # Shell/Python style comments
+            r"/\*(.*?)\*/",  # Block comments
+        ]
+
+        for pattern in comment_patterns:
+            matches = re.finditer(
+                pattern, content, re.DOTALL if r"\*" in pattern else 0
+            )
+            for match in matches:
+                parts.append(match.group(1).strip())
+
+        # Extract function-like patterns
+        function_patterns = [
+            r"(?:function|def|fn)\s+(\w+)",  # function definitions
+            r"class\s+(\w+)",  # class definitions
+            r"struct\s+(\w+)",  # struct definitions
+        ]
+
+        for pattern in function_patterns:
+            matches = re.finditer(pattern, content, re.IGNORECASE)
+            for match in matches:
+                parts.append(f"defines {match.group(1)}")
+
+        return " ".join(parts)
+
+    def _generate_embedding(self, text: str) -> Optional[List[float]]:
+        """Generate embedding for text using OpenAI API."""
+        if not text or len(text.strip()) == 0:
+            return None
+
+        try:
+            # Truncate text to avoid API limits (roughly 8000 tokens)
+            if len(text) > 30000:
+                text = text[:30000] + "..."
+
+            client = openai.OpenAI()
+            response = client.embeddings.create(
+                model="text-embedding-3-small", input=text
+            )
+
+            return response.data[0].embedding
+
+        except Exception as e:
+            print(f"Warning: Could not generate embedding: {e}")
+            return None
+
+    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """Compute cosine similarity between two vectors."""
+        if not vec1 or not vec2 or len(vec1) != len(vec2):
+            return 0.0
+
+        try:
+            vec1_np = np.array(vec1)
+            vec2_np = np.array(vec2)
+
+            dot_product = np.dot(vec1_np, vec2_np)
+            norm1 = np.linalg.norm(vec1_np)
+            norm2 = np.linalg.norm(vec2_np)
+
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+
+            return dot_product / (norm1 * norm2)
+
+        except Exception as e:
+            print(f"Warning: Could not compute cosine similarity: {e}")
+            return 0.0
 
     def _analyze_history(self) -> None:
         """Analyze git history."""
