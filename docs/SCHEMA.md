@@ -94,6 +94,10 @@ Array of all files and directories in the repository:
     "linesOfCode": "number",
     "commentLines": "number", 
     "emptyLines": "number",
+    "commitCount": "number",
+    "lastCommitDaysAgo": "number",
+    "lastCommitDate": "string",
+    "topLevelIdentifiers": "number",
     "custom": {}
   }
 }
@@ -105,6 +109,10 @@ Array of all files and directories in the repository:
 | linesOfCode | Total lines of code | No |
 | commentLines | Number of comment lines | No |
 | emptyLines | Number of empty lines | No |
+| commitCount | Number of commits that changed this file | No |
+| lastCommitDaysAgo | Days since the last commit to this file | No |
+| lastCommitDate | Date of the last commit to this file (ISO format) | No |
+| topLevelIdentifiers | Number of top-level identifiers (classes, functions, variables) | No |
 | custom | Object for custom metrics | No |
 
 #### File Components

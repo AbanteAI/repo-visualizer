@@ -20,6 +20,14 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState<SearchMode>('exact');
   const [searchResults, setSearchResults] = useState<Map<string, number>>(new Map());
+
+  // Node sizing weights
+  const [fileSizeWeight, setFileSizeWeight] = useState(100);
+  const [commitCountWeight, setCommitCountWeight] = useState(0);
+  const [recencyWeight, setRecencyWeight] = useState(0);
+  const [identifiersWeight, setIdentifiersWeight] = useState(0);
+  const [referencesWeight, setReferencesWeight] = useState(0);
+
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   // Auto-load repo_data.json on component mount
@@ -123,6 +131,27 @@ const App: React.FC = () => {
     setSearchResults(new Map());
   };
 
+  // Node sizing weight handlers
+  const handleFileSizeWeightChange = (weight: number) => {
+    setFileSizeWeight(weight);
+  };
+
+  const handleCommitCountWeightChange = (weight: number) => {
+    setCommitCountWeight(weight);
+  };
+
+  const handleRecencyWeightChange = (weight: number) => {
+    setRecencyWeight(weight);
+  };
+
+  const handleIdentifiersWeightChange = (weight: number) => {
+    setIdentifiersWeight(weight);
+  };
+
+  const handleReferencesWeightChange = (weight: number) => {
+    setReferencesWeight(weight);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -171,6 +200,11 @@ const App: React.FC = () => {
                 searchMode={searchMode}
                 searchResults={searchResults}
                 onSearchResultsChange={setSearchResults}
+                fileSizeWeight={fileSizeWeight}
+                commitCountWeight={commitCountWeight}
+                recencyWeight={recencyWeight}
+                identifiersWeight={identifiersWeight}
+                referencesWeight={referencesWeight}
               />
 
               <Controls
@@ -190,6 +224,16 @@ const App: React.FC = () => {
                 onSearchQueryChange={handleSearchQueryChange}
                 onSearchModeChange={handleSearchModeChange}
                 onClearSearch={handleClearSearch}
+                fileSizeWeight={fileSizeWeight}
+                commitCountWeight={commitCountWeight}
+                recencyWeight={recencyWeight}
+                identifiersWeight={identifiersWeight}
+                referencesWeight={referencesWeight}
+                onFileSizeWeightChange={handleFileSizeWeightChange}
+                onCommitCountWeightChange={handleCommitCountWeightChange}
+                onRecencyWeightChange={handleRecencyWeightChange}
+                onIdentifiersWeightChange={handleIdentifiersWeightChange}
+                onReferencesWeightChange={handleReferencesWeightChange}
               />
 
               {selectedFile && (

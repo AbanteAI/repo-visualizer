@@ -1,4 +1,4 @@
-import * as lunr from 'lunr';
+import lunr from 'lunr';
 import Fuse from 'fuse.js';
 import { RepositoryData, File, Component } from '../types/schema';
 
