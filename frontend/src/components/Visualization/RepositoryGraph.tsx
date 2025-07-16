@@ -147,8 +147,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     useEffect(() => {
       if (!svgRef.current || !containerRef.current || !data) return;
 
-      // Clear any existing visualization
+      // Save current transform to preserve zoom/pan position during timeline playback
       const svg = d3.select(svgRef.current);
+      const currentTransform = svg.node() ? d3.zoomTransform(svg.node()!) : d3.zoomIdentity;
+
+      // Clear any existing visualization
       svg.selectAll('*').remove();
 
       // Set up dimensions
@@ -413,6 +416,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       zoomRef.current = zoom;
 
       svg.call(zoom);
+
+      // Restore the saved transform to preserve zoom/pan position during timeline playback
+      if (
+        currentTransform &&
+        (currentTransform.k !== 1 || currentTransform.x !== 0 || currentTransform.y !== 0)
+      ) {
+        svg.call(zoom.transform, currentTransform);
+      }
 
       // Update positions on each tick
       simulation.on('tick', () => {

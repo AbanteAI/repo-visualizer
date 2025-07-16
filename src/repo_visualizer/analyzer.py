@@ -2003,14 +2003,39 @@ class RepositoryAnalyzer:
                     # File was deleted, so it doesn't exist
                     file_states[file_path] = False
         
-        # Filter current files to only include those that existed at this commit
+        # Create file objects for files that existed at this commit
         existing_files = []
-        for file in self.data["files"]:
-            file_path = file["path"]
-            
-            # Only include files that have been explicitly added and not deleted
-            if file_path in file_states and file_states[file_path]:
-                existing_files.append(file)
+        
+        # Create a map of current files by path for quick lookup
+        current_files_by_path = {f["path"]: f for f in self.data["files"]}
+        
+        # Go through all file paths that have state information
+        for file_path, exists in file_states.items():
+            if exists:  # File existed at this commit
+                if file_path in current_files_by_path:
+                    # File exists in current state, use existing file object
+                    existing_files.append(current_files_by_path[file_path])
+                else:
+                    # File existed in history but not in current state
+                    # Create a minimal file object for it
+                    import os
+                    file_name = os.path.basename(file_path)
+                    extension = os.path.splitext(file_name)[1].lstrip(".")
+                    depth = len(file_path.split("/")) - 1 if "/" in file_path else 0
+                    
+                    # Determine if it's a directory (heuristic: no extension and known to be a directory)
+                    file_type = "directory" if not extension and file_path in [".github", ".mentat", "src", "tests", "docs", "frontend"] else "file"
+                    
+                    existing_files.append({
+                        "id": file_path,
+                        "path": file_path,
+                        "name": file_name,
+                        "extension": extension if extension else None,
+                        "size": 0,  # Unknown size for historical files
+                        "type": file_type,
+                        "depth": depth,
+                        "components": []
+                    })
         
         return existing_files
 
