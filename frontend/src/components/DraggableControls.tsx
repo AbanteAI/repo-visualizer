@@ -88,9 +88,9 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       const newX = dragStart.elementX + deltaX;
       const newY = dragStart.elementY + deltaY;
 
-      // Keep within bounds
-      const maxX = parent.offsetWidth - controlsRef.current.offsetWidth;
-      const maxY = parent.offsetHeight - controlsRef.current.offsetHeight;
+      // Keep within bounds - use window dimensions for better movement freedom
+      const maxX = Math.max(0, parent.offsetWidth - controlsRef.current.offsetWidth);
+      const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40); // 40px buffer from bottom
 
       setPosition({
         x: Math.max(0, Math.min(maxX, newX)),
@@ -110,8 +110,8 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       if (controlsRef.current && isInitialized) {
         const parent = controlsRef.current.parentElement;
         if (parent) {
-          const maxX = parent.offsetWidth - controlsRef.current.offsetWidth;
-          const maxY = parent.offsetHeight - controlsRef.current.offsetHeight;
+          const maxX = Math.max(0, parent.offsetWidth - controlsRef.current.offsetWidth);
+          const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40);
 
           setPosition(prev => ({
             x: Math.max(0, Math.min(maxX, prev.x)),
@@ -143,9 +143,9 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       onMouseDown={handleMouseDown}
       style={{
         position: 'absolute',
-        left: isInitialized ? position.x : 'calc(100% - 340px)',
+        left: isInitialized ? position.x : 'calc(100% - 300px)',
         top: isInitialized ? position.y : '20px',
-        minWidth: '320px',
+        width: '280px',
         pointerEvents: 'auto',
         transform: 'translate3d(0, 0, 0)',
         zIndex: 1000,
@@ -155,23 +155,23 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
         borderRadius: '16px',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
         cursor: isDragging ? 'grabbing' : 'grab',
-        padding: '24px',
+        padding: '20px',
       }}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-5">
         <div className="w-3 h-3 bg-red-500 rounded-full"></div>
         <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-        <span className="text-sm font-medium text-gray-700">Connection Weights</span>
+        <span className="text-base font-semibold text-gray-800">Connection Weights</span>
       </div>
 
       {/* Controls */}
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Reference Connections */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Reference</label>
+            <label className="text-sm font-medium text-gray-600">Reference</label>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
               <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
@@ -196,9 +196,9 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
         </div>
 
         {/* Filesystem Connections */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Filesystem</label>
+            <label className="text-sm font-medium text-gray-600">Filesystem</label>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-red-500 rounded-full"></div>
               <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
@@ -223,9 +223,9 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
         </div>
 
         {/* Semantic Connections */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Semantic</label>
+            <label className="text-sm font-medium text-gray-600">Semantic</label>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
               <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
