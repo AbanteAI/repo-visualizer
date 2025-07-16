@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { RepositoryData } from './types/schema';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
-import Controls from './components/Controls';
+import Controls, { SearchMode } from './components/Controls';
 import FileDetails from './components/FileDetails';
 
 // Import the example data for demonstration purposes
@@ -17,6 +17,9 @@ const App: React.FC = () => {
   const [semanticWeight, setSemanticWeight] = useState(30);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<SearchMode>('exact');
+  const [searchResults, setSearchResults] = useState<Map<string, number>>(new Map());
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   // Auto-load repo_data.json on component mount
@@ -107,6 +110,19 @@ const App: React.FC = () => {
     setSemanticWeight(weight);
   };
 
+  const handleSearchQueryChange = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  const handleSearchModeChange = (mode: SearchMode) => {
+    setSearchMode(mode);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults(new Map());
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -151,6 +167,10 @@ const App: React.FC = () => {
                 referenceWeight={referenceWeight}
                 filesystemWeight={filesystemWeight}
                 semanticWeight={semanticWeight}
+                searchQuery={searchQuery}
+                searchMode={searchMode}
+                searchResults={searchResults}
+                onSearchResultsChange={setSearchResults}
               />
 
               <Controls
@@ -165,6 +185,11 @@ const App: React.FC = () => {
                 onReferenceWeightChange={handleReferenceWeightChange}
                 onFilesystemWeightChange={handleFilesystemWeightChange}
                 onSemanticWeightChange={handleSemanticWeightChange}
+                searchQuery={searchQuery}
+                searchMode={searchMode}
+                onSearchQueryChange={handleSearchQueryChange}
+                onSearchModeChange={handleSearchModeChange}
+                onClearSearch={handleClearSearch}
               />
 
               {selectedFile && (

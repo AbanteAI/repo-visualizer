@@ -57,6 +57,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
+    // Create search index when data changes
+    const searchIndex = useMemo(() => createSearchIndex(data), [data]);
+
     // Function to toggle node expansion
     const toggleNodeExpansion = useCallback((fileId: string) => {
       setExpandedFiles(prev => {
@@ -80,6 +83,33 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       },
       [data.files]
     );
+
+    // Perform search when query or mode changes
+    useEffect(() => {
+      const performSearch = async () => {
+        if (!searchQuery.trim()) {
+          onSearchResultsChange(new Map());
+          return;
+        }
+
+        try {
+          let results: Map<string, number>;
+
+          if (searchMode === 'exact') {
+            results = performExactSearch(searchQuery, searchIndex);
+          } else {
+            results = await performSemanticSearch(searchQuery, searchIndex);
+          }
+
+          onSearchResultsChange(results);
+        } catch (error) {
+          console.error('Search error:', error);
+          onSearchResultsChange(new Map());
+        }
+      };
+
+      performSearch();
+    }, [searchQuery, searchMode, searchIndex, onSearchResultsChange]);
 
     // Extension colors mapping
     const extensionColors: Record<string, string> = {
@@ -441,7 +471,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         svg.on('.zoom', null);
         svg.on('click', null);
       };
-    }, [data, expandedFiles, toggleNodeExpansion, hasComponents]);
+    }, [data, expandedFiles, toggleNodeExpansion, hasComponents, searchResults]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
@@ -465,7 +495,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('stroke', '#e74c3c')
           .attr('stroke-width', 3);
       }
-    }, [selectedFile, data, expandedFiles]);
+    }, [selectedFile, data, expandedFiles, searchResults]);
 
     // Weight update effect - runs when weights change
     useEffect(() => {
@@ -599,21 +629,29 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
     // Helper functions
     const getNodeRadius = (node: Node) => {
+      // Calculate base radius
+      let baseRadius: number;
+
       if (node.type === 'directory') {
-        return 10; // Fixed size for directories
+        baseRadius = 10; // Fixed size for directories
+      } else if (node.type === 'class' || node.type === 'function' || node.type === 'method') {
+        baseRadius = 6; // Components are smaller than files
+      } else {
+        // Scale file size to a reasonable radius
+        const minRadius = 5;
+        const maxRadius = 15;
+        baseRadius = node.size ? Math.sqrt(node.size) / 15 : minRadius;
+        baseRadius = Math.max(minRadius, Math.min(maxRadius, baseRadius));
       }
 
-      // Components are smaller than files
-      if (node.type === 'class' || node.type === 'function' || node.type === 'method') {
-        return 6;
+      // Apply search result scaling if there are search results
+      if (searchResults.size > 0) {
+        const searchScore = searchResults.get(node.id) || 0;
+        const sizeMultiplier = getNodeSizeMultiplier(searchScore);
+        baseRadius *= sizeMultiplier;
       }
 
-      // Scale file size to a reasonable radius
-      const minRadius = 5;
-      const maxRadius = 15;
-      const baseRadius = node.size ? Math.sqrt(node.size) / 15 : minRadius;
-
-      return Math.max(minRadius, Math.min(maxRadius, baseRadius));
+      return baseRadius;
     };
 
     const getLinkWidth = (link: Link) => {

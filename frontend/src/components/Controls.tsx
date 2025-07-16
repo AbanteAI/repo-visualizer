@@ -1,5 +1,7 @@
 import React from 'react';
 
+export type SearchMode = 'exact' | 'semantic';
+
 interface ControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -12,6 +14,11 @@ interface ControlsProps {
   onReferenceWeightChange: (weight: number) => void;
   onFilesystemWeightChange: (weight: number) => void;
   onSemanticWeightChange: (weight: number) => void;
+  searchQuery: string;
+  searchMode: SearchMode;
+  onSearchQueryChange: (query: string) => void;
+  onSearchModeChange: (mode: SearchMode) => void;
+  onClearSearch: () => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({
@@ -26,9 +33,66 @@ const Controls: React.FC<ControlsProps> = ({
   onReferenceWeightChange,
   onFilesystemWeightChange,
   onSemanticWeightChange,
+  searchQuery,
+  searchMode,
+  onSearchQueryChange,
+  onSearchModeChange,
+  onClearSearch,
 }) => {
   return (
     <div className="flex flex-col gap-4 p-4">
+      {/* Search Controls */}
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-center gap-2">
+          <div className="flex flex-col gap-1">
+            <input
+              type="text"
+              placeholder="Search files, components, and content..."
+              value={searchQuery}
+              onChange={e => onSearchQueryChange(e.target.value)}
+              className="w-80 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <div className="flex gap-2 items-center">
+              <label className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="searchMode"
+                  value="exact"
+                  checked={searchMode === 'exact'}
+                  onChange={() => onSearchModeChange('exact')}
+                  className="text-blue-600"
+                />
+                <span className="text-xs text-gray-600">Exact/Boolean</span>
+              </label>
+              <label className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="searchMode"
+                  value="semantic"
+                  checked={searchMode === 'semantic'}
+                  onChange={() => onSearchModeChange('semantic')}
+                  className="text-blue-600"
+                />
+                <span className="text-xs text-gray-600">Semantic</span>
+              </label>
+              {searchQuery && (
+                <button
+                  onClick={onClearSearch}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="text-xs text-gray-500 text-center">
+          {searchMode === 'exact'
+            ? 'Use quotes for exact phrases, AND/OR for boolean logic'
+            : 'Semantic search finds conceptually similar content'}
+        </div>
+      </div>
+
       {/* Zoom Controls */}
       <div className="flex justify-center gap-2">
         <button
