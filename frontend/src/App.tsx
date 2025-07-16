@@ -171,40 +171,46 @@ const App: React.FC = () => {
             </div>
 
             {repositoryData && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleZoomIn}
-                  className="bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
-                >
-                  Zoom In
-                </button>
-                <button
-                  onClick={handleZoomOut}
-                  className="bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
-                >
-                  Zoom Out
-                </button>
-                <button
-                  onClick={handleReset}
-                  className="bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
-                >
-                  Reset View
-                </button>
-                <button
-                  onClick={toggleFullscreen}
-                  className="bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
-                >
-                  {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                </button>
-
-                <div className="border-l border-gray-300 pl-2 ml-2">
-                  <MenuDropdown
-                    showConnectionWeights={showConnectionWeights}
-                    showNodeSizing={showNodeSizing}
-                    onOpenConnectionWeights={handleOpenConnectionWeights}
-                    onOpenNodeSizing={handleOpenNodeSizing}
-                  />
+              <div className="flex items-center gap-4">
+                {/* Navigation Controls */}
+                <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
+                  <button
+                    onClick={handleZoomIn}
+                    className="flex items-center justify-center w-10 h-10 rounded-md bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
+                    title="Zoom In"
+                  >
+                    <span className="text-lg font-bold">+</span>
+                  </button>
+                  <button
+                    onClick={handleZoomOut}
+                    className="flex items-center justify-center w-10 h-10 rounded-md bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
+                    title="Zoom Out"
+                  >
+                    <span className="text-lg font-bold">−</span>
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="flex items-center justify-center w-10 h-10 rounded-md bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
+                    title="Reset View"
+                  >
+                    <span className="text-base font-bold">⌂</span>
+                  </button>
+                  <button
+                    onClick={toggleFullscreen}
+                    className="flex items-center justify-center w-10 h-10 rounded-md bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
+                    title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                  >
+                    <span className="text-base font-bold">{isFullscreen ? '⇱' : '⛶'}</span>
+                  </button>
                 </div>
+
+                {/* Menu Controls */}
+                <MenuDropdown
+                  showConnectionWeights={showConnectionWeights}
+                  showNodeSizing={showNodeSizing}
+                  onOpenConnectionWeights={handleOpenConnectionWeights}
+                  onOpenNodeSizing={handleOpenNodeSizing}
+                />
               </div>
             )}
           </div>

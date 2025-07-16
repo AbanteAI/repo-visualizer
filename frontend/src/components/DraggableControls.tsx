@@ -161,30 +161,25 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
         padding: '20px',
       }}
     >
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-        <span className="text-base font-semibold text-gray-800">Connection Weights</span>
-      </div>
-
       {/* Close button positioned absolutely in top right */}
       <button
         onClick={onClose}
-        className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-gray-400 hover:text-gray-600 transition-all duration-200 shadow-sm hover:shadow-md"
+        className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-white hover:bg-red-50 border border-gray-200 text-gray-400 hover:text-red-500 transition-all duration-200 shadow-sm hover:shadow-md"
         style={{ cursor: 'pointer' }}
         aria-label="Close"
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
+        <span className="text-lg font-bold">×</span>
       </button>
+
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6 pr-12">
+        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+        <h3 className="text-xl font-bold text-gray-900 border-b-2 border-blue-500 pb-1">
+          Connection Weights
+        </h3>
+      </div>
 
       {/* Controls */}
       <div className="space-y-5">
