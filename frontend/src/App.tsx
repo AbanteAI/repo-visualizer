@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { RepositoryData, TimelinePoint } from './types/schema';
+import { RepositoryData } from './types/schema';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import Controls from './components/Controls';
@@ -238,7 +238,7 @@ const App: React.FC = () => {
             >
               <RepositoryGraph
                 ref={graphRef}
-                data={getCurrentData()}
+                data={getCurrentData() || repositoryData}
                 onSelectFile={handleFileSelect}
                 selectedFile={selectedFile}
                 referenceWeight={referenceWeight}
@@ -271,7 +271,7 @@ const App: React.FC = () => {
               {selectedFile && (
                 <FileDetails
                   fileId={selectedFile}
-                  data={getCurrentData()}
+                  data={getCurrentData() || repositoryData}
                   onClose={handleCloseFileDetails}
                 />
               )}

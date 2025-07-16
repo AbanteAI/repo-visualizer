@@ -1761,19 +1761,18 @@ class RepositoryAnalyzer:
         Extract commit history from the git repository.
 
         Returns:
-            List of commit data
+            List of commit data (ordered from oldest to newest)
         """
         try:
-            # Get commit logs
+            # Get commit logs from all branches and sort chronologically
             result = subprocess.run(
                 [
                     "git",
                     "log",
+                    "--all",  # Get commits from all branches
                     "--pretty=format:%H|||%an <%ae>|||%ad|||%s",
                     "--date=iso",
-                    "--name-status",
-                    "-n",
-                    "100",  # Limit to 100 commits for performance
+                    # Remove commit limit to get all commits
                 ],
                 cwd=self.repo_path,
                 capture_output=True,
@@ -1786,16 +1785,18 @@ class RepositoryAnalyzer:
 
             # Parse commit log
             commits = []
-            commit_blocks = result.stdout.split("\n\n")
+            commit_lines = result.stdout.strip().split("\n")
 
-            for block in commit_blocks:
-                lines = block.strip().split("\n")
-                if not lines:
+            for line in commit_lines:
+                if not line.strip():
                     continue
 
                 # Parse header
                 try:
-                    header = lines[0].split("|||")
+                    header = line.split("|||")
+                    if len(header) < 4:
+                        continue
+                        
                     commit_hash = header[0]
                     author = header[1]
                     date_str = header[2]
@@ -1807,52 +1808,8 @@ class RepositoryAnalyzer:
                     )
                     date = dt.isoformat()
 
-                    # Parse file changes
-                    file_changes = []
-                    for i in range(1, len(lines)):
-                        if not lines[i].strip():
-                            continue
-
-                        change_parts = lines[i].split("\t")
-                        if len(change_parts) < 2:
-                            continue
-
-                        change_type = change_parts[0]
-                        file_path = change_parts[-1].replace("\\", "/")
-
-                        # Skip files outside the repo
-                        if ".." in file_path:
-                            continue
-
-                        # Map change type
-                        if change_type == "A":
-                            change_type_mapped = "add"
-                        elif change_type in ("M", "R"):
-                            change_type_mapped = "modify"
-                        elif change_type == "D":
-                            change_type_mapped = "delete"
-                        else:
-                            continue
-
-                        # Get additions and deletions (simplified)
-                        additions = 0
-                        deletions = 0
-                        if change_type_mapped == "add":
-                            additions = 10  # Placeholder value
-                        elif change_type_mapped == "modify":
-                            additions = 5  # Placeholder value
-                            deletions = 3  # Placeholder value
-                        elif change_type_mapped == "delete":
-                            deletions = 10  # Placeholder value
-
-                        file_changes.append(
-                            {
-                                "fileId": file_path,
-                                "type": change_type_mapped,
-                                "additions": additions,
-                                "deletions": deletions,
-                            }
-                        )
+                    # Get file changes for this specific commit
+                    file_changes = self._get_file_changes_for_commit(commit_hash)
 
                     commits.append(
                         {
@@ -1861,15 +1818,103 @@ class RepositoryAnalyzer:
                             "date": date,
                             "message": message,
                             "fileChanges": file_changes,
+                            "timestamp": dt,  # Keep datetime for sorting
                         }
                     )
                 except Exception as e:
                     print(f"Error parsing commit: {e}")
                     continue
 
+            # Sort commits by timestamp (oldest first)
+            commits.sort(key=lambda c: c["timestamp"])
+            
+            # Remove the timestamp field as it's not needed in the final output
+            for commit in commits:
+                del commit["timestamp"]
+            
             return commits
         except Exception as e:
             print(f"Error extracting commits: {e}")
+            return []
+
+    def _get_file_changes_for_commit(self, commit_hash: str) -> List[Dict[str, Any]]:
+        """
+        Get file changes for a specific commit.
+        
+        Args:
+            commit_hash: The commit hash to get changes for
+            
+        Returns:
+            List of file changes for this commit
+        """
+        try:
+            # Get file changes for this specific commit
+            result = subprocess.run(
+                [
+                    "git",
+                    "diff-tree",
+                    "--no-commit-id",
+                    "--name-status",
+                    commit_hash,
+                ],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                return []
+
+            file_changes = []
+            for line in result.stdout.strip().split("\n"):
+                if not line.strip():
+                    continue
+
+                change_parts = line.split("\t")
+                if len(change_parts) < 2:
+                    continue
+
+                change_type = change_parts[0]
+                file_path = change_parts[-1].replace("\\", "/")
+
+                # Skip files outside the repo
+                if ".." in file_path:
+                    continue
+
+                # Map change type
+                if change_type == "A":
+                    change_type_mapped = "add"
+                elif change_type in ("M", "R"):
+                    change_type_mapped = "modify"
+                elif change_type == "D":
+                    change_type_mapped = "delete"
+                else:
+                    continue
+
+                # Get additions and deletions (simplified)
+                additions = 0
+                deletions = 0
+                if change_type_mapped == "add":
+                    additions = 10  # Placeholder value
+                elif change_type_mapped == "modify":
+                    additions = 5  # Placeholder value
+                    deletions = 3  # Placeholder value
+                elif change_type_mapped == "delete":
+                    deletions = 10  # Placeholder value
+
+                file_changes.append(
+                    {
+                        "fileId": file_path,
+                        "type": change_type_mapped,
+                        "additions": additions,
+                        "deletions": deletions,
+                    }
+                )
+
+            return file_changes
+        except Exception as e:
+            print(f"Error getting file changes for commit {commit_hash}: {e}")
             return []
 
     def _create_timeline_points(
@@ -1937,16 +1982,16 @@ class RepositoryAnalyzer:
         
         Args:
             commit: The commit to get files for
-            commits_up_to_here: All commits up to and including this one (in chronological order)
+            commits_up_to_here: All commits up to and including this one (in chronological order, oldest first)
         
         Returns:
             List of file objects that existed at this commit
         """
-        # Track file states by path
+        # Track file states by path - start with all files not existing
         file_states = {}
         
-        # Go through all commits up to this point to track file changes
-        for c in reversed(commits_up_to_here):  # Go from oldest to newest
+        # Go through all commits up to this point to track file changes (oldest to newest)
+        for c in commits_up_to_here:
             for file_change in c["fileChanges"]:
                 file_path = file_change["fileId"]
                 change_type = file_change["type"]
@@ -1963,13 +2008,8 @@ class RepositoryAnalyzer:
         for file in self.data["files"]:
             file_path = file["path"]
             
-            # If we have explicit state information, use it
-            if file_path in file_states:
-                if file_states[file_path]:
-                    existing_files.append(file)
-            else:
-                # If no explicit state, assume the file existed
-                # (this handles files that were present from the beginning)
+            # Only include files that have been explicitly added and not deleted
+            if file_path in file_states and file_states[file_path]:
                 existing_files.append(file)
         
         return existing_files
