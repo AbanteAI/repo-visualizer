@@ -81,7 +81,13 @@ describe('App', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset fetch mock with safe defaults
     (global.fetch as any).mockClear();
+    (global.fetch as any).mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve(''),
+    });
   });
 
   it('renders header correctly', () => {

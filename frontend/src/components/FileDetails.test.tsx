@@ -38,15 +38,15 @@ describe('FileDetails', () => {
             id: 'test-class',
             name: 'TestClass',
             type: 'class',
-            line_start: 10,
-            line_end: 30,
+            lineStart: 10,
+            lineEnd: 30,
             components: [
               {
                 id: 'test-method',
                 name: 'test_method',
                 type: 'method',
-                line_start: 15,
-                line_end: 20,
+                lineStart: 15,
+                lineEnd: 20,
               },
             ],
           },
@@ -54,8 +54,8 @@ describe('FileDetails', () => {
             id: 'test-function',
             name: 'test_function',
             type: 'function',
-            line_start: 35,
-            line_end: 45,
+            lineStart: 35,
+            lineEnd: 45,
           },
         ],
       },
@@ -124,9 +124,9 @@ describe('FileDetails', () => {
     expect(screen.getByText('utils')).toBeInTheDocument();
     expect(screen.getByText('src/utils')).toBeInTheDocument();
     expect(screen.getByText('directory')).toBeInTheDocument();
-    expect(screen.getByText('0 bytes')).toBeInTheDocument();
 
-    // Directory should not have extension
+    // Directory should not have size or extension displayed
+    expect(screen.queryByText('Size:')).not.toBeInTheDocument();
     expect(screen.queryByText('Extension:')).not.toBeInTheDocument();
   });
 
@@ -269,23 +269,23 @@ describe('FileDetails', () => {
               id: 'outer-class',
               name: 'OuterClass',
               type: 'class',
-              line_start: 1,
-              line_end: 50,
+              lineStart: 1,
+              lineEnd: 50,
               components: [
                 {
                   id: 'inner-method',
                   name: 'inner_method',
                   type: 'method',
-                  line_start: 10,
-                  line_end: 15,
+                  lineStart: 10,
+                  lineEnd: 15,
                   components: [],
                 },
                 {
                   id: 'another-method',
                   name: 'another_method',
                   type: 'method',
-                  line_start: 20,
-                  line_end: 25,
+                  lineStart: 20,
+                  lineEnd: 25,
                   components: [],
                 },
               ],
