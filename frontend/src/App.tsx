@@ -108,7 +108,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col">
+    <div className="h-screen bg-gray-50 flex flex-col" style={{ height: '100vh' }}>
       <header className="bg-white shadow-sm flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <h1 className="text-2xl font-bold text-gray-900">Repo Visualizer</h1>
@@ -116,7 +116,7 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col" style={{ flex: 1 }}>
         {isAutoLoading ? (
           <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
             <div className="bg-white shadow sm:rounded-lg p-6 text-center">

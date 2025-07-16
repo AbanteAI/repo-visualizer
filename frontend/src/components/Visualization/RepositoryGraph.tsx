@@ -151,7 +151,43 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const handleResize = () => {
         if (containerRef.current) {
           const newWidth = containerRef.current.clientWidth;
-          const newHeight = containerRef.current.clientHeight;
+
+          // Calculate available height dynamically
+          const viewportHeight = window.innerHeight;
+          const header = document.querySelector('header');
+          const repoInfo = document.querySelector('.max-w-7xl'); // repo info section
+          const controls = document.querySelector('.border-t'); // controls section
+
+          const headerHeight = header ? header.offsetHeight : 0;
+          const repoInfoHeight = repoInfo ? repoInfo.offsetHeight : 0;
+          const controlsHeight = controls ? controls.offsetHeight : 0;
+
+          // Calculate available height for the graph
+          const availableHeight =
+            viewportHeight - headerHeight - repoInfoHeight - controlsHeight - 16; // 16px for padding
+          const newHeight = Math.max(availableHeight, 400); // minimum 400px
+
+          // Debug: log dimensions and zoom level
+          console.log('Resize detected:', {
+            width: newWidth,
+            height: newHeight,
+            calculatedHeight: availableHeight,
+            zoom: window.devicePixelRatio,
+            viewport: {
+              width: window.innerWidth,
+              height: window.innerHeight,
+            },
+            fixedElements: {
+              header: headerHeight,
+              repoInfo: repoInfoHeight,
+              controls: controlsHeight,
+            },
+            container: {
+              boundingRect: containerRef.current.getBoundingClientRect(),
+              offsetHeight: containerRef.current.offsetHeight,
+              scrollHeight: containerRef.current.scrollHeight,
+            },
+          });
 
           // Only update if dimensions actually changed significantly (avoid micro-changes)
           setDimensions(prev => {
@@ -159,6 +195,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             const heightChanged = Math.abs(prev.height - newHeight) > 2;
 
             if (widthChanged || heightChanged) {
+              console.log('Updating dimensions from', prev, 'to', {
+                width: newWidth,
+                height: newHeight,
+              });
               return { width: newWidth, height: newHeight };
             }
             return prev;
@@ -881,7 +921,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     return (
       <div
         ref={containerRef}
-        className="w-full relative overflow-hidden"
+        className="w-full h-full relative overflow-hidden"
         style={{ flex: 1, minHeight: '400px' }}
       >
         <svg ref={svgRef} className="w-full h-full bg-white" style={{ display: 'block' }}></svg>
