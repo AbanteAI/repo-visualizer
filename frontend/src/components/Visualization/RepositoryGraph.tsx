@@ -5,9 +5,18 @@ import React, {
   forwardRef,
   useState,
   useCallback,
+  useMemo,
 } from 'react';
 import * as d3 from 'd3';
 import { RepositoryData } from '../../types/schema';
+import { SearchMode } from '../Controls';
+import {
+  createSearchIndex,
+  performExactSearch,
+  performSemanticSearch,
+  getNodeSizeMultiplier,
+  SearchIndex,
+} from '../../utils/search';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
@@ -16,6 +25,10 @@ interface RepositoryGraphProps {
   referenceWeight: number;
   filesystemWeight: number;
   semanticWeight: number;
+  searchQuery: string;
+  searchMode: SearchMode;
+  searchResults: Map<string, number>;
+  onSearchResultsChange: (results: Map<string, number>) => void;
 }
 
 export interface RepositoryGraphHandle {
@@ -48,7 +61,18 @@ interface Link extends d3.SimulationLinkDatum<Node> {
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
   (
-    { data, onSelectFile, selectedFile, referenceWeight, filesystemWeight, semanticWeight },
+    {
+      data,
+      onSelectFile,
+      selectedFile,
+      referenceWeight,
+      filesystemWeight,
+      semanticWeight,
+      searchQuery,
+      searchMode,
+      searchResults,
+      onSearchResultsChange,
+    },
     ref
   ) => {
     const svgRef = useRef<SVGSVGElement>(null);

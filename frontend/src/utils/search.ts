@@ -1,4 +1,4 @@
-import lunr from 'lunr';
+import * as lunr from 'lunr';
 import Fuse from 'fuse.js';
 import { RepositoryData, File, Component } from '../types/schema';
 
@@ -120,8 +120,8 @@ export function performExactSearch(query: string, index: SearchIndex): Map<strin
 
     lunrResults.forEach(result => {
       // Lunr scores are typically between 0 and some positive number
-      // We'll normalize them to 0-1 range
-      const normalizedScore = Math.min(result.score / 5, 1);
+      // We'll normalize them to 0-1 range, but don't divide by 5 as that under-scales
+      const normalizedScore = Math.min(result.score, 1);
       results.set(result.ref, normalizedScore);
     });
 
@@ -189,7 +189,7 @@ export function getSearchResultScore(itemId: string, searchResults: Map<string, 
 
 export function getNodeSizeMultiplier(score: number): number {
   if (score === 0) {
-    return 0.3; // Very small for non-matching nodes
+    return 0.1; // Make non-matching nodes just tiny points
   }
 
   // Scale from 0.5 to 2.0 based on score
