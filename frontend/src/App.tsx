@@ -165,15 +165,17 @@ const App: React.FC = () => {
             <div className="bg-white shadow sm:rounded-lg mb-6 p-4 text-center">
               <h2 className="text-lg font-semibold">
                 {repositoryData.metadata.repoName}
-                {repositoryData.metadata.description &&
-                  ` - ${repositoryData.metadata.description}`}
+                {repositoryData.metadata.description && ` - ${repositoryData.metadata.description}`}
               </h2>
             </div>
 
             <div
               className={`flex-1 flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}
             >
-              <div className="flex-1 min-h-0 relative" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div
+                className="flex-1 min-h-0 relative"
+                style={{ display: 'flex', flexDirection: 'column' }}
+              >
                 <RepositoryGraph
                   ref={graphRef}
                   data={repositoryData}
