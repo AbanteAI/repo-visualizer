@@ -56,6 +56,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+    const previousNodePositions = useRef<Map<string, { x: number; y: number }>>(new Map());
 
     // Function to toggle node expansion
     const toggleNodeExpansion = useCallback((fileId: string) => {
@@ -164,6 +165,17 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create a group for the graph
       const g = svg.append('g');
 
+      // Save current node positions before creating new nodes
+      if (simulationRef.current) {
+        const currentNodes = simulationRef.current.nodes();
+        previousNodePositions.current.clear();
+        currentNodes.forEach(node => {
+          if (node.x !== undefined && node.y !== undefined) {
+            previousNodePositions.current.set(node.id, { x: node.x, y: node.y });
+          }
+        });
+      }
+
       // Extract nodes from files and their components
       const nodes: Node[] = [];
 
@@ -171,7 +183,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       data.files.forEach(file => {
         // Only add file-level nodes (not components as separate nodes)
         if (file.type === 'file' || file.type === 'directory') {
-          nodes.push({
+          const nodeData: Node = {
             id: file.id,
             name: file.name,
             path: file.path,
@@ -180,12 +192,21 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             size: file.size,
             depth: file.depth,
             expanded: expandedFiles.has(file.id),
-          });
+          };
+
+          // Preserve position from previous frame if node existed
+          const prevPosition = previousNodePositions.current.get(file.id);
+          if (prevPosition) {
+            nodeData.x = prevPosition.x;
+            nodeData.y = prevPosition.y;
+          }
+
+          nodes.push(nodeData);
 
           // Add component nodes only if file is expanded
           if (expandedFiles.has(file.id) && file.components) {
             file.components.forEach(component => {
-              nodes.push({
+              const componentNodeData: Node = {
                 id: component.id,
                 name: component.name,
                 path: file.path,
@@ -194,13 +215,22 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                 size: 0, // Components don't have file size
                 depth: file.depth + 1,
                 parentId: file.id,
-              });
+              };
+
+              // Preserve position from previous frame if node existed
+              const prevPosition = previousNodePositions.current.get(component.id);
+              if (prevPosition) {
+                componentNodeData.x = prevPosition.x;
+                componentNodeData.y = prevPosition.y;
+              }
+
+              nodes.push(componentNodeData);
 
               // Add nested component nodes recursively
               const addNestedComponents = (comp: any, currentDepth: number, parentId: string) => {
                 if (comp.components) {
                   comp.components.forEach((nestedComp: any) => {
-                    nodes.push({
+                    const nestedNodeData: Node = {
                       id: nestedComp.id,
                       name: nestedComp.name,
                       path: file.path,
@@ -209,7 +239,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                       size: 0,
                       depth: currentDepth + 1,
                       parentId: parentId,
-                    });
+                    };
+
+                    // Preserve position from previous frame if node existed
+                    const prevPosition = previousNodePositions.current.get(nestedComp.id);
+                    if (prevPosition) {
+                      nestedNodeData.x = prevPosition.x;
+                      nestedNodeData.y = prevPosition.y;
+                    }
+
+                    nodes.push(nestedNodeData);
                     addNestedComponents(nestedComp, currentDepth + 1, parentId);
                   });
                 }
