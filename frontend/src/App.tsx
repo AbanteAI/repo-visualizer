@@ -4,6 +4,7 @@ import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import Controls from './components/Controls';
 import FileDetails from './components/FileDetails';
+import DraggableControls from './components/DraggableControls';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -48,11 +49,10 @@ const App: React.FC = () => {
             return;
           }
         }
-      } catch (err) {
-        console.warn('Could not auto-load repo_data.json:', err);
+      } catch (error) {
+        console.log('Failed to auto-load repo_data.json:', error);
       }
 
-      // Auto-load failed, show file upload interface
       setAutoLoadFailed(true);
       setIsAutoLoading(false);
     };
@@ -88,7 +88,7 @@ const App: React.FC = () => {
         document.exitFullscreen();
       }
     }
-    setIsFullscreen(prev => !prev);
+    setIsFullscreen(!isFullscreen);
   };
 
   const handleZoomIn = () => {
@@ -137,49 +137,45 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col" style={{ height: '100vh' }}>
-      <header className="bg-white shadow-sm flex-shrink-0">
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <h1 className="text-2xl font-bold text-gray-900">Repo Visualizer</h1>
           <p className="text-sm text-gray-500">Visualize your repository structure interactively</p>
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col" style={{ flex: 1 }}>
+      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         {isAutoLoading ? (
-          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-            <div className="bg-white shadow sm:rounded-lg p-6 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading repository data...</p>
-            </div>
+          <div className="bg-white shadow sm:rounded-lg p-6 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading repository data...</p>
           </div>
         ) : !repositoryData ? (
-          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-            <div className="bg-white shadow sm:rounded-lg p-6">
-              {autoLoadFailed && (
-                <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded">
-                  Could not auto-load repo_data.json. Please select a file manually.
-                </div>
-              )}
-              <FileUpload onDataLoaded={handleDataLoaded} onLoadExample={handleLoadExample} />
-            </div>
+          <div className="bg-white shadow sm:rounded-lg p-6">
+            {autoLoadFailed && (
+              <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded">
+                Could not auto-load repo_data.json. Please select a file manually.
+              </div>
+            )}
+            <FileUpload onDataLoaded={handleDataLoaded} onLoadExample={handleLoadExample} />
           </div>
         ) : (
           <>
-            <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8 flex-shrink-0">
-              <div className="bg-white shadow sm:rounded-lg p-4 text-center">
-                <h2 className="text-lg font-semibold">
-                  {repositoryData.metadata.repoName}
-                  {repositoryData.metadata.description &&
-                    ` - ${repositoryData.metadata.description}`}
-                </h2>
-              </div>
+            <div className="bg-white shadow sm:rounded-lg mb-6 p-4 text-center">
+              <h2 className="text-lg font-semibold">
+                {repositoryData.metadata.repoName}
+                {repositoryData.metadata.description && ` - ${repositoryData.metadata.description}`}
+              </h2>
             </div>
 
             <div
               className={`flex-1 flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}
             >
-              <div className="flex-1 min-h-0" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div
+                className="flex-1 min-h-0 relative"
+                style={{ display: 'flex', flexDirection: 'column' }}
+              >
                 <RepositoryGraph
                   ref={graphRef}
                   data={repositoryData}
@@ -194,6 +190,15 @@ const App: React.FC = () => {
                   identifiersWeight={identifiersWeight}
                   referencesWeight={referencesWeight}
                 />
+
+                <DraggableControls
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                  onReferenceWeightChange={handleReferenceWeightChange}
+                  onFilesystemWeightChange={handleFilesystemWeightChange}
+                  onSemanticWeightChange={handleSemanticWeightChange}
+                />
               </div>
 
               <div className="flex-shrink-0 bg-white border-t">
@@ -203,12 +208,6 @@ const App: React.FC = () => {
                   onReset={handleReset}
                   onFullscreen={toggleFullscreen}
                   isFullscreen={isFullscreen}
-                  referenceWeight={referenceWeight}
-                  filesystemWeight={filesystemWeight}
-                  semanticWeight={semanticWeight}
-                  onReferenceWeightChange={handleReferenceWeightChange}
-                  onFilesystemWeightChange={handleFilesystemWeightChange}
-                  onSemanticWeightChange={handleSemanticWeightChange}
                   fileSizeWeight={fileSizeWeight}
                   commitCountWeight={commitCountWeight}
                   recencyWeight={recencyWeight}
