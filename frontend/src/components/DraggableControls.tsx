@@ -19,7 +19,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
 }) => {
   const [position, setPosition] = useState({ x: 0, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, elementX: 0, elementY: 0 });
   const [isInitialized, setIsInitialized] = useState(false);
   const controlsRef = useRef<HTMLDivElement>(null);
 
@@ -52,10 +52,22 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!controlsRef.current) return;
 
-    const rect = controlsRef.current.getBoundingClientRect();
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+    // Don't start dragging if clicking on input elements or their labels
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'LABEL' ||
+      target.closest('input, label')
+    ) {
+      return;
+    }
+
+    // Store initial positions
+    setDragStart({
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      elementX: position.x,
+      elementY: position.y,
     });
     setIsDragging(true);
     e.preventDefault();
@@ -68,9 +80,13 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       const parent = controlsRef.current.parentElement;
       if (!parent) return;
 
-      const parentRect = parent.getBoundingClientRect();
-      const newX = e.clientX - parentRect.left - dragOffset.x;
-      const newY = e.clientY - parentRect.top - dragOffset.y;
+      // Calculate how much the mouse has moved since drag started
+      const deltaX = e.clientX - dragStart.mouseX;
+      const deltaY = e.clientY - dragStart.mouseY;
+
+      // Calculate new position
+      const newX = dragStart.elementX + deltaX;
+      const newY = dragStart.elementY + deltaY;
 
       // Keep within bounds
       const maxX = parent.offsetWidth - controlsRef.current.offsetWidth;
@@ -81,7 +97,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
         y: Math.max(0, Math.min(maxY, newY)),
       });
     },
-    [isDragging, dragOffset]
+    [isDragging, dragStart]
   );
 
   const handleMouseUp = useCallback(() => {
