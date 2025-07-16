@@ -71,41 +71,45 @@ Refer to ROADMAP.md for the complete development trajectory.
 
 ## How to Start the Server
 
-When users ask to run the repository visualizer, follow these steps that have been tested to work:
+The setup has been streamlined to a one-step process:
 
-### 1. Generate Repository Data
+### Quick Start
 ```bash
-# Install the analyzer package
-pip install -e .
-
-# Generate data for the current repository
-python -m repo_visualizer . -o repo_data.json -v
+# Run the project (this will handle all setup and start the server)
+./start_project.sh
 ```
 
-### 2. Prepare Frontend
-```bash
-# Copy the generated data to frontend directory
-cp repo_data.json frontend/
+This script will:
+1. Generate repository data for the current repository
+2. Copy the data to the frontend directory
+3. Start the development server with proper host binding
 
-# Navigate to frontend
-cd frontend
-
-# Install dependencies (if not already installed)
-npm install
-```
-
-### 3. Start the Development Server
-```bash
-# Start Vite dev server with proper host binding for external access
-npm run dev -- --host 0.0.0.0
-```
-
-### 4. Access the Application
+### Access the Application
 - **Local URL**: http://localhost:5173/
 - **Network URL**: Will be shown in terminal (e.g., http://172.17.0.3:5173/)
 - **Usage**: 
   - Click "Choose File" and select `repo_data.json` to visualize the current repository
   - Or click "Load Example Data" to see a demo visualization
+
+### Manual Steps (if needed)
+If you need to run the steps manually:
+
+1. **Generate Repository Data**
+   ```bash
+   python -m repo_visualizer . -o repo_data.json -v
+   ```
+
+2. **Prepare Frontend**
+   ```bash
+   cp repo_data.json frontend/
+   cd frontend
+   npm install  # if not already installed
+   ```
+
+3. **Start Development Server**
+   ```bash
+   npm run dev -- --host 0.0.0.0
+   ```
 
 ### Troubleshooting
 - If `npm run dev` fails with "vite: not found", run `npm install` first

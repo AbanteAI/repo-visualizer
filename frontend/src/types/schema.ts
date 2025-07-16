@@ -41,6 +41,10 @@ export interface FileMetrics {
   linesOfCode?: number;
   commentLines?: number;
   emptyLines?: number;
+  commitCount?: number;
+  lastCommitDaysAgo?: number;
+  lastCommitDate?: string;
+  topLevelIdentifiers?: number;
   custom?: Record<string, any>;
 }
 

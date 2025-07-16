@@ -105,6 +105,36 @@ The JSON includes:
 - Relationships between files and components
 - Git history data
 
+### Starting the Visualization Server
+
+To run the complete visualization interface locally:
+
+**Prerequisites:**
+- Python 3.8+ 
+- Node.js and npm
+
+**Quick start:**
+```bash
+# One-step startup - runs the analyzer and starts the visualization server
+./start_project.sh
+```
+
+This will:
+1. Install the Python package if needed
+2. Generate repository data for the current repository
+3. Install frontend dependencies if needed
+4. Start the development server with proper host binding
+
+**Access the application at:**
+- Local: http://localhost:5173/
+- Network: (URL shown in terminal output)
+
+**Usage:**
+- Click "Choose File" and select `repo_data.json` to visualize the current repository
+- Or click "Load Example Data" to see a demo visualization
+
+**Note:** For full development setup, you can still run `.mentat/setup.sh` which sets up virtual environments and installs all dependencies.
+
 ## Development
 
 To set up a development environment:
@@ -112,7 +142,7 @@ To set up a development environment:
 ```bash
 git clone https://github.com/AbanteAI/repo-visualizer.git
 cd repo-visualizer
-source .mentat/setup.sh  # Sets up a virtual environment and installs dependencies
+bash .mentat/setup.sh  # Sets up a virtual environment and installs dependencies
 ```
 
 ### Running Tests

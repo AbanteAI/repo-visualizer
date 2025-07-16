@@ -18,6 +18,14 @@ const App: React.FC = () => {
   const [semanticWeight, setSemanticWeight] = useState(30);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
+
+  // Node sizing weights
+  const [fileSizeWeight, setFileSizeWeight] = useState(100);
+  const [commitCountWeight, setCommitCountWeight] = useState(0);
+  const [recencyWeight, setRecencyWeight] = useState(0);
+  const [identifiersWeight, setIdentifiersWeight] = useState(0);
+  const [referencesWeight, setReferencesWeight] = useState(0);
+
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   // Auto-load repo_data.json on component mount
@@ -41,11 +49,10 @@ const App: React.FC = () => {
             return;
           }
         }
-      } catch (err) {
-        console.warn('Could not auto-load repo_data.json:', err);
+      } catch (error) {
+        console.log('Failed to auto-load repo_data.json:', error);
       }
 
-      // Auto-load failed, show file upload interface
       setAutoLoadFailed(true);
       setIsAutoLoading(false);
     };
@@ -108,6 +115,27 @@ const App: React.FC = () => {
     setSemanticWeight(weight);
   };
 
+  // Node sizing weight handlers
+  const handleFileSizeWeightChange = (weight: number) => {
+    setFileSizeWeight(weight);
+  };
+
+  const handleCommitCountWeightChange = (weight: number) => {
+    setCommitCountWeight(weight);
+  };
+
+  const handleRecencyWeightChange = (weight: number) => {
+    setRecencyWeight(weight);
+  };
+
+  const handleIdentifiersWeightChange = (weight: number) => {
+    setIdentifiersWeight(weight);
+  };
+
+  const handleReferencesWeightChange = (weight: number) => {
+    setReferencesWeight(weight);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -153,6 +181,11 @@ const App: React.FC = () => {
                   referenceWeight={referenceWeight}
                   filesystemWeight={filesystemWeight}
                   semanticWeight={semanticWeight}
+                  fileSizeWeight={fileSizeWeight}
+                  commitCountWeight={commitCountWeight}
+                  recencyWeight={recencyWeight}
+                  identifiersWeight={identifiersWeight}
+                  referencesWeight={referencesWeight}
                 />
 
                 <DraggableControls
@@ -171,6 +204,16 @@ const App: React.FC = () => {
                 onReset={handleReset}
                 onFullscreen={toggleFullscreen}
                 isFullscreen={isFullscreen}
+                fileSizeWeight={fileSizeWeight}
+                commitCountWeight={commitCountWeight}
+                recencyWeight={recencyWeight}
+                identifiersWeight={identifiersWeight}
+                referencesWeight={referencesWeight}
+                onFileSizeWeightChange={handleFileSizeWeightChange}
+                onCommitCountWeightChange={handleCommitCountWeightChange}
+                onRecencyWeightChange={handleRecencyWeightChange}
+                onIdentifiersWeightChange={handleIdentifiersWeightChange}
+                onReferencesWeightChange={handleReferencesWeightChange}
               />
 
               {selectedFile && (
