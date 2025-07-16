@@ -12,14 +12,8 @@ add-apt-repository -y ppa:deadsnakes/ppa
 apt-get update
 apt-get install -y python3.12 python3.12-venv python3.12-dev
 
-# Ensure pip is available for Python 3.12
-echo "Setting up pip for Python 3.12..."
-python3.12 -m ensurepip --upgrade
-python3.12 -m pip install --upgrade pip
-
 # Use Python 3.12 directly instead of system python3
 PYTHON_CMD="python3.12"
-PIP_CMD="python3.12 -m pip"
 
 echo "Using Python command: $PYTHON_CMD"
 
@@ -35,7 +29,7 @@ source .venv/bin/activate
 
 # Install package with dev dependencies
 echo "Installing package with dev dependencies..."
-$PIP_CMD install -e ".[dev]"
+pip install -e ".[dev]"
 
 # Install frontend dependencies
 echo "Installing frontend dependencies..."
