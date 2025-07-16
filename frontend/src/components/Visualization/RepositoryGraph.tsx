@@ -72,6 +72,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
     // Function to toggle node expansion
@@ -79,10 +80,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       setExpandedFiles(prev => {
         const next = new Set(prev);
         if (next.has(fileId)) {
-          console.log('Collapsing file:', fileId);
           next.delete(fileId);
         } else {
-          console.log('Expanding file:', fileId);
           next.add(fileId);
         }
         return next;
@@ -160,17 +159,121 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       },
     }));
 
+    // Effect to handle container size changes using ResizeObserver
+    useEffect(() => {
+      let resizeTimeout: NodeJS.Timeout;
+
+      const handleResize = () => {
+        if (containerRef.current) {
+          const newWidth = containerRef.current.clientWidth;
+
+          // Calculate available height dynamically
+          const viewportHeight = window.innerHeight;
+          const header = document.querySelector('header');
+          const repoInfo = document.querySelector('.max-w-7xl'); // repo info section
+          const controls = document.querySelector('.border-t'); // controls section
+
+          const headerHeight = header ? header.offsetHeight : 0;
+          const repoInfoHeight = repoInfo ? repoInfo.offsetHeight : 0;
+          const controlsHeight = controls ? controls.offsetHeight : 0;
+
+          // Calculate available height for the graph
+          const availableHeight =
+            viewportHeight - headerHeight - repoInfoHeight - controlsHeight - 16; // 16px for padding
+          const newHeight = Math.max(availableHeight, 400); // minimum 400px
+
+          // Only update if dimensions actually changed significantly (avoid micro-changes)
+          setDimensions(prev => {
+            const widthChanged = Math.abs(prev.width - newWidth) > 2;
+            const heightChanged = Math.abs(prev.height - newHeight) > 2;
+
+            if (widthChanged || heightChanged) {
+              return { width: newWidth, height: newHeight };
+            }
+            return prev;
+          });
+        }
+      };
+
+      const debouncedResize = () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(handleResize, 100);
+      };
+
+      // Set initial dimensions
+      handleResize();
+
+      // Use ResizeObserver for better detection of container size changes
+      if (containerRef.current && window.ResizeObserver) {
+        const resizeObserver = new ResizeObserver(debouncedResize);
+        resizeObserver.observe(containerRef.current);
+
+        // Cleanup
+        return () => {
+          clearTimeout(resizeTimeout);
+          resizeObserver.disconnect();
+        };
+      } else {
+        // Fallback to window resize listener
+        window.addEventListener('resize', debouncedResize);
+        return () => {
+          clearTimeout(resizeTimeout);
+          window.removeEventListener('resize', debouncedResize);
+        };
+      }
+    }, []);
+
+    // Effect to handle dimension changes - only update simulation if it exists
+    useEffect(() => {
+      if (
+        !svgRef.current ||
+        !simulationRef.current ||
+        dimensions.width === 0 ||
+        dimensions.height === 0
+      )
+        return;
+
+      const svg = d3.select(svgRef.current);
+      const simulation = simulationRef.current;
+      const width = dimensions.width;
+      const height = dimensions.height;
+
+      // Update SVG dimensions - ensure it doesn't expand beyond container
+      svg
+        .attr('width', width)
+        .attr('height', height)
+        .attr('viewBox', [0, 0, width, height])
+        .style('max-width', '100%')
+        .style('max-height', '100%');
+
+      // Update center force to new dimensions
+      const centerForce = simulation.force('center') as d3.ForceCenter<Node>;
+      if (centerForce) {
+        centerForce.x(width / 2).y(height / 2);
+      }
+
+      // Gently restart simulation to adjust to new dimensions (reduce alpha to minimize movement)
+      simulation.alpha(0.05).restart();
+    }, [dimensions]);
+
     // Initial setup effect - runs when data changes
     useEffect(() => {
-      if (!svgRef.current || !containerRef.current || !data) return;
+      if (
+        !svgRef.current ||
+        !containerRef.current ||
+        !data ||
+        dimensions.width === 0 ||
+        dimensions.height === 0
+      )
+        return;
 
       // Clear any existing visualization
       const svg = d3.select(svgRef.current);
       svg.selectAll('*').remove();
 
       // Set up dimensions
-      const width = containerRef.current.clientWidth;
-      const height = 600; // Fixed height, could be made responsive
+      const width = dimensions.width;
+      const height = dimensions.height;
 
       // Update SVG dimensions
       svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
@@ -396,7 +499,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .filter(d => d.type === 'file' && hasComponents(d.id))
         .on('dblclick', (event, d) => {
           event.stopPropagation();
-          console.log('Double-clicked file:', d.id, 'Current expanded files:', expandedFiles);
           toggleNodeExpansion(d.id);
         });
 
@@ -459,7 +561,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         svg.on('.zoom', null);
         svg.on('click', null);
       };
-    }, [data, expandedFiles, toggleNodeExpansion, hasComponents]);
+    }, [data, dimensions, expandedFiles, toggleNodeExpansion, hasComponents]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
@@ -924,8 +1026,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     };
 
     return (
-      <div ref={containerRef} className="w-full h-[600px] relative">
-        <svg ref={svgRef} className="w-full h-full bg-white"></svg>
+      <div
+        ref={containerRef}
+        className="w-full h-full relative overflow-hidden"
+        style={{ flex: 1, minHeight: '400px' }}
+      >
+        <svg ref={svgRef} className="w-full h-full bg-white" style={{ display: 'block' }}></svg>
       </div>
     );
   }
