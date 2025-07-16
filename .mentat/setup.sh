@@ -21,6 +21,14 @@ echo "Using Python command: $PYTHON_CMD"
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment..."
     $PYTHON_CMD -m venv .venv
+    echo "Virtual environment created. Checking contents..."
+    ls -la .venv/
+    if [ -f ".venv/bin/activate" ]; then
+        echo "✓ activate script found"
+    else
+        echo "✗ activate script missing"
+        exit 1
+    fi
 fi
 
 # Activate virtual environment
