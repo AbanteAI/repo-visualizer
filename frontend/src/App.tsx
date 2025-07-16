@@ -88,7 +88,7 @@ const App: React.FC = () => {
         document.exitFullscreen();
       }
     }
-    setIsFullscreen(!isFullscreen);
+    setIsFullscreen(prev => !prev);
   };
 
   const handleZoomIn = () => {
@@ -137,79 +137,90 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
+    <div className="h-screen bg-gray-50 flex flex-col" style={{ height: '100vh' }}>
+      <header className="bg-white shadow-sm flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <h1 className="text-2xl font-bold text-gray-900">Repo Visualizer</h1>
           <p className="text-sm text-gray-500">Visualize your repository structure interactively</p>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+      <main className="flex-1 flex flex-col" style={{ flex: 1 }}>
         {isAutoLoading ? (
-          <div className="bg-white shadow sm:rounded-lg p-6 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading repository data...</p>
+          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+            <div className="bg-white shadow sm:rounded-lg p-6 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading repository data...</p>
+            </div>
           </div>
         ) : !repositoryData ? (
-          <div className="bg-white shadow sm:rounded-lg p-6">
-            {autoLoadFailed && (
-              <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded">
-                Could not auto-load repo_data.json. Please select a file manually.
-              </div>
-            )}
-            <FileUpload onDataLoaded={handleDataLoaded} onLoadExample={handleLoadExample} />
+          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+            <div className="bg-white shadow sm:rounded-lg p-6">
+              {autoLoadFailed && (
+                <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded">
+                  Could not auto-load repo_data.json. Please select a file manually.
+                </div>
+              )}
+              <FileUpload onDataLoaded={handleDataLoaded} onLoadExample={handleLoadExample} />
+            </div>
           </div>
         ) : (
           <>
-            <div className="bg-white shadow sm:rounded-lg mb-6 p-4 text-center">
-              <h2 className="text-lg font-semibold">
-                {repositoryData.metadata.repoName}
-                {repositoryData.metadata.description && ` - ${repositoryData.metadata.description}`}
-              </h2>
+            <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8 flex-shrink-0">
+              <div className="bg-white shadow sm:rounded-lg p-4 text-center">
+                <h2 className="text-lg font-semibold">
+                  {repositoryData.metadata.repoName}
+                  {repositoryData.metadata.description &&
+                    ` - ${repositoryData.metadata.description}`}
+                </h2>
+              </div>
             </div>
 
             <div
-              className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
+              className={`flex-1 flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}
             >
-              <RepositoryGraph
-                ref={graphRef}
-                data={repositoryData}
-                onSelectFile={handleFileSelect}
-                selectedFile={selectedFile}
-                referenceWeight={referenceWeight}
-                filesystemWeight={filesystemWeight}
-                semanticWeight={semanticWeight}
-                fileSizeWeight={fileSizeWeight}
-                commitCountWeight={commitCountWeight}
-                recencyWeight={recencyWeight}
-                identifiersWeight={identifiersWeight}
-                referencesWeight={referencesWeight}
-              />
+              <div className="flex-1 min-h-0" style={{ display: 'flex', flexDirection: 'column' }}>
+                <RepositoryGraph
+                  ref={graphRef}
+                  data={repositoryData}
+                  onSelectFile={handleFileSelect}
+                  selectedFile={selectedFile}
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                  fileSizeWeight={fileSizeWeight}
+                  commitCountWeight={commitCountWeight}
+                  recencyWeight={recencyWeight}
+                  identifiersWeight={identifiersWeight}
+                  referencesWeight={referencesWeight}
+                />
+              </div>
 
-              <Controls
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
-                onReset={handleReset}
-                onFullscreen={toggleFullscreen}
-                isFullscreen={isFullscreen}
-                referenceWeight={referenceWeight}
-                filesystemWeight={filesystemWeight}
-                semanticWeight={semanticWeight}
-                onReferenceWeightChange={handleReferenceWeightChange}
-                onFilesystemWeightChange={handleFilesystemWeightChange}
-                onSemanticWeightChange={handleSemanticWeightChange}
-                fileSizeWeight={fileSizeWeight}
-                commitCountWeight={commitCountWeight}
-                recencyWeight={recencyWeight}
-                identifiersWeight={identifiersWeight}
-                referencesWeight={referencesWeight}
-                onFileSizeWeightChange={handleFileSizeWeightChange}
-                onCommitCountWeightChange={handleCommitCountWeightChange}
-                onRecencyWeightChange={handleRecencyWeightChange}
-                onIdentifiersWeightChange={handleIdentifiersWeightChange}
-                onReferencesWeightChange={handleReferencesWeightChange}
-              />
+              <div className="flex-shrink-0 bg-white border-t">
+                <Controls
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onReset={handleReset}
+                  onFullscreen={toggleFullscreen}
+                  isFullscreen={isFullscreen}
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                  onReferenceWeightChange={handleReferenceWeightChange}
+                  onFilesystemWeightChange={handleFilesystemWeightChange}
+                  onSemanticWeightChange={handleSemanticWeightChange}
+                  fileSizeWeight={fileSizeWeight}
+                  commitCountWeight={commitCountWeight}
+                  recencyWeight={recencyWeight}
+                  identifiersWeight={identifiersWeight}
+                  referencesWeight={referencesWeight}
+                  onFileSizeWeightChange={handleFileSizeWeightChange}
+                  onCommitCountWeightChange={handleCommitCountWeightChange}
+                  onRecencyWeightChange={handleRecencyWeightChange}
+                  onIdentifiersWeightChange={handleIdentifiersWeightChange}
+                  onReferencesWeightChange={handleReferencesWeightChange}
+                />
+              </div>
 
               {selectedFile && (
                 <FileDetails
