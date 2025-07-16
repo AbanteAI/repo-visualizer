@@ -89,7 +89,7 @@ const Controls: React.FC<ControlsProps> = ({
         <div className="text-xs text-gray-500 text-center">
           {searchMode === 'exact'
             ? 'Use quotes for exact phrases, AND/OR for boolean logic'
-            : 'Semantic search finds conceptually similar content'}
+            : 'Semantic search (placeholder - uses fuzzy matching)'}
         </div>
       </div>
 

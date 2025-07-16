@@ -29,7 +29,7 @@ export function createSearchIndex(data: RepositoryData): SearchIndex {
   const documents = new Map<string, SearchableItem>();
   const searchableItems: SearchableItem[] = [];
 
-  // Index files
+  // Index files and directories
   data.files.forEach(file => {
     const item: SearchableItem = {
       id: file.id,
@@ -42,8 +42,8 @@ export function createSearchIndex(data: RepositoryData): SearchIndex {
     documents.set(file.id, item);
     searchableItems.push(item);
 
-    // Index components within files
-    if (file.components) {
+    // Index components within files (not directories)
+    if (file.type === 'file' && file.components) {
       indexComponents(file.components, file, documents, searchableItems);
     }
   });
@@ -118,12 +118,16 @@ export function performExactSearch(query: string, index: SearchIndex): Map<strin
     // Use Lunr for boolean search
     const lunrResults = index.lunrIndex.search(query);
 
-    lunrResults.forEach(result => {
-      // Lunr scores are typically between 0 and some positive number
-      // We'll normalize them to 0-1 range, but don't divide by 5 as that under-scales
-      const normalizedScore = Math.min(result.score, 1);
-      results.set(result.ref, normalizedScore);
-    });
+    if (lunrResults.length > 0) {
+      // Find the maximum score to normalize properly
+      const maxScore = Math.max(...lunrResults.map(r => r.score));
+
+      lunrResults.forEach(result => {
+        // Normalize scores relative to the highest score in this result set
+        const normalizedScore = maxScore > 0 ? result.score / maxScore : 0;
+        results.set(result.ref, normalizedScore);
+      });
+    }
 
     // If no results from Lunr (maybe it's not boolean syntax), fallback to Fuse
     if (results.size === 0) {

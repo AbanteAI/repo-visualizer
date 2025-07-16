@@ -495,7 +495,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         svg.on('.zoom', null);
         svg.on('click', null);
       };
-    }, [data, expandedFiles, toggleNodeExpansion, hasComponents, searchResults]);
+    }, [data, expandedFiles, toggleNodeExpansion, hasComponents]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
@@ -519,7 +519,53 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('stroke', '#e74c3c')
           .attr('stroke-width', 3);
       }
-    }, [selectedFile, data, expandedFiles, searchResults]);
+    }, [selectedFile, data, expandedFiles]);
+
+    // Lightweight effect to update node sizes when search results change
+    useEffect(() => {
+      if (!svgRef.current || !data) return;
+
+      const svg = d3.select(svgRef.current);
+      const circles = svg.selectAll('circle.node');
+      const labels = svg.selectAll('text');
+
+      if (circles.empty()) return;
+
+      // Update circle radii with smooth transition
+      circles
+        .transition()
+        .duration(300)
+        .attr('r', function (d: any) {
+          if (d && typeof d === 'object' && 'id' in d) {
+            return getNodeRadius(d);
+          }
+          return 5;
+        });
+
+      // Update label positions to match new radii
+      labels
+        .filter(function () {
+          return d3.select(this).attr('dx') !== null; // Only update position labels, not expand icons
+        })
+        .transition()
+        .duration(300)
+        .attr('dx', function (d: any) {
+          if (d && typeof d === 'object' && 'id' in d) {
+            return getNodeRadius(d) + 5;
+          }
+          return 10;
+        });
+
+      // Update collision force radius
+      if (simulationRef.current) {
+        const simulation = simulationRef.current;
+        const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
+        if (collisionForce) {
+          collisionForce.radius(d => getNodeRadius(d) + 5);
+          simulation.alpha(0.1).restart();
+        }
+      }
+    }, [searchResults, getNodeRadius]);
 
     // Weight update effect - runs when weights change
     useEffect(() => {
@@ -673,6 +719,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         const searchScore = searchResults.get(node.id) || 0;
         const sizeMultiplier = getNodeSizeMultiplier(searchScore);
         baseRadius *= sizeMultiplier;
+
+        // Clamp radius after applying search multiplier
+        baseRadius = Math.max(1, Math.min(30, baseRadius));
       }
 
       return baseRadius;
