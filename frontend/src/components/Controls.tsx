@@ -12,6 +12,17 @@ interface ControlsProps {
   onReferenceWeightChange: (weight: number) => void;
   onFilesystemWeightChange: (weight: number) => void;
   onSemanticWeightChange: (weight: number) => void;
+  // Node sizing controls
+  fileSizeWeight: number;
+  commitCountWeight: number;
+  recencyWeight: number;
+  identifiersWeight: number;
+  referencesWeight: number;
+  onFileSizeWeightChange: (weight: number) => void;
+  onCommitCountWeightChange: (weight: number) => void;
+  onRecencyWeightChange: (weight: number) => void;
+  onIdentifiersWeightChange: (weight: number) => void;
+  onReferencesWeightChange: (weight: number) => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({
@@ -26,6 +37,17 @@ const Controls: React.FC<ControlsProps> = ({
   onReferenceWeightChange,
   onFilesystemWeightChange,
   onSemanticWeightChange,
+  // Node sizing controls
+  fileSizeWeight,
+  commitCountWeight,
+  recencyWeight,
+  identifiersWeight,
+  referencesWeight,
+  onFileSizeWeightChange,
+  onCommitCountWeightChange,
+  onRecencyWeightChange,
+  onIdentifiersWeightChange,
+  onReferencesWeightChange,
 }) => {
   return (
     <div className="flex flex-col gap-2 p-2">
@@ -108,6 +130,97 @@ const Controls: React.FC<ControlsProps> = ({
             <span className="text-xs text-gray-500 w-6">100</span>
           </div>
           <span className="text-xs text-gray-600">{semanticWeight}%</span>
+        </div>
+      </div>
+
+      {/* Node Sizing Controls */}
+      <div className="border-t pt-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3 text-center">Node Sizing Factors</h3>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="flex flex-col items-center gap-2">
+            <label className="text-xs font-medium text-gray-700">File Size</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">0</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={fileSizeWeight}
+                onChange={e => onFileSizeWeightChange(Number(e.target.value))}
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-xs text-gray-500">100</span>
+            </div>
+            <span className="text-xs text-gray-600">{fileSizeWeight}%</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            <label className="text-xs font-medium text-gray-700">Commit Count</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">0</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={commitCountWeight}
+                onChange={e => onCommitCountWeightChange(Number(e.target.value))}
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-xs text-gray-500">100</span>
+            </div>
+            <span className="text-xs text-gray-600">{commitCountWeight}%</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            <label className="text-xs font-medium text-gray-700">Recency</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">0</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={recencyWeight}
+                onChange={e => onRecencyWeightChange(Number(e.target.value))}
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-xs text-gray-500">100</span>
+            </div>
+            <span className="text-xs text-gray-600">{recencyWeight}%</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            <label className="text-xs font-medium text-gray-700">Identifiers</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">0</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={identifiersWeight}
+                onChange={e => onIdentifiersWeightChange(Number(e.target.value))}
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-xs text-gray-500">100</span>
+            </div>
+            <span className="text-xs text-gray-600">{identifiersWeight}%</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            <label className="text-xs font-medium text-gray-700">Incoming Refs</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">0</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={referencesWeight}
+                onChange={e => onReferencesWeightChange(Number(e.target.value))}
+                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-xs text-gray-500">100</span>
+            </div>
+            <span className="text-xs text-gray-600">{referencesWeight}%</span>
+          </div>
         </div>
       </div>
     </div>

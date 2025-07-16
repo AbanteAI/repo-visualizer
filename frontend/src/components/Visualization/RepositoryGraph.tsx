@@ -16,6 +16,11 @@ interface RepositoryGraphProps {
   referenceWeight: number;
   filesystemWeight: number;
   semanticWeight: number;
+  fileSizeWeight: number;
+  commitCountWeight: number;
+  recencyWeight: number;
+  identifiersWeight: number;
+  referencesWeight: number;
 }
 
 export interface RepositoryGraphHandle {
@@ -48,7 +53,19 @@ interface Link extends d3.SimulationLinkDatum<Node> {
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
   (
-    { data, onSelectFile, selectedFile, referenceWeight, filesystemWeight, semanticWeight },
+    {
+      data,
+      onSelectFile,
+      selectedFile,
+      referenceWeight,
+      filesystemWeight,
+      semanticWeight,
+      fileSizeWeight,
+      commitCountWeight,
+      recencyWeight,
+      identifiersWeight,
+      referencesWeight,
+    },
     ref
   ) => {
     const svgRef = useRef<SVGSVGElement>(null);
@@ -63,10 +80,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       setExpandedFiles(prev => {
         const next = new Set(prev);
         if (next.has(fileId)) {
-          console.log('Collapsing file:', fileId);
           next.delete(fileId);
         } else {
-          console.log('Expanding file:', fileId);
           next.add(fileId);
         }
         return next;
@@ -167,38 +182,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             viewportHeight - headerHeight - repoInfoHeight - controlsHeight - 16; // 16px for padding
           const newHeight = Math.max(availableHeight, 400); // minimum 400px
 
-          // Debug: log dimensions and zoom level
-          console.log('Resize detected:', {
-            width: newWidth,
-            height: newHeight,
-            calculatedHeight: availableHeight,
-            zoom: window.devicePixelRatio,
-            viewport: {
-              width: window.innerWidth,
-              height: window.innerHeight,
-            },
-            fixedElements: {
-              header: headerHeight,
-              repoInfo: repoInfoHeight,
-              controls: controlsHeight,
-            },
-            container: {
-              boundingRect: containerRef.current.getBoundingClientRect(),
-              offsetHeight: containerRef.current.offsetHeight,
-              scrollHeight: containerRef.current.scrollHeight,
-            },
-          });
-
           // Only update if dimensions actually changed significantly (avoid micro-changes)
           setDimensions(prev => {
             const widthChanged = Math.abs(prev.width - newWidth) > 2;
             const heightChanged = Math.abs(prev.height - newHeight) > 2;
 
             if (widthChanged || heightChanged) {
-              console.log('Updating dimensions from', prev, 'to', {
-                width: newWidth,
-                height: newHeight,
-              });
               return { width: newWidth, height: newHeight };
             }
             return prev;
@@ -510,7 +499,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .filter(d => d.type === 'file' && hasComponents(d.id))
         .on('dblclick', (event, d) => {
           event.stopPropagation();
-          console.log('Double-clicked file:', d.id, 'Current expanded files:', expandedFiles);
           toggleNodeExpansion(d.id);
         });
 
@@ -562,6 +550,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Store references for weight updates
       (simulation as any).__linkSelection = link;
       (simulation as any).__nodeSelection = node;
+      (simulation as any).__labelSelection = label;
 
       // Clean up on unmount
       return () => {
@@ -708,6 +697,39 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       simulation.alpha(0.3).restart();
     }, [referenceWeight, filesystemWeight, semanticWeight, data]);
 
+    // Node sizing update effect - runs when sizing weights change
+    useEffect(() => {
+      if (!simulationRef.current || !data) return;
+
+      const simulation = simulationRef.current;
+      const nodeSelection = (simulation as any).__nodeSelection;
+      const labelSelection = (simulation as any).__labelSelection;
+
+      if (!nodeSelection) return;
+
+      // Update node radiuses
+      nodeSelection.attr('r', (d: Node) => getNodeRadius(d));
+
+      // Update label positions to match new node sizes
+      if (labelSelection) {
+        labelSelection.attr('dx', (d: Node) => getNodeRadius(d) + 5);
+      }
+
+      // Update collision force with new radiuses
+      const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
+      collisionForce.radius((d: Node) => getNodeRadius(d) + 5);
+
+      // Restart simulation with gentle animation
+      simulation.alpha(0.1).restart();
+    }, [
+      fileSizeWeight,
+      commitCountWeight,
+      recencyWeight,
+      identifiersWeight,
+      referencesWeight,
+      data,
+    ]);
+
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
       return d3
@@ -734,17 +756,102 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         return 10; // Fixed size for directories
       }
 
-      // Components are smaller than files
-      if (node.type === 'class' || node.type === 'function' || node.type === 'method') {
-        return 6;
+      // Set different size ranges for components vs files
+      let minRadius = 5;
+      let maxRadius = 25;
+
+      const isComponent =
+        node.type === 'class' || node.type === 'function' || node.type === 'method';
+      if (isComponent) {
+        minRadius = 3;
+        maxRadius = 12; // Components are smaller than files
       }
 
-      // Scale file size to a reasonable radius
-      const minRadius = 5;
-      const maxRadius = 15;
-      const baseRadius = node.size ? Math.sqrt(node.size) / 15 : minRadius;
+      // Get file data for additional metrics
+      // For components, use the parent file's metrics
+      let fileData = data.files.find(f => f.id === node.id);
+      if (!fileData && isComponent) {
+        // Component IDs are like "file.py:ClassName" - extract the file part
+        const fileId = node.id.split(':')[0];
+        fileData = data.files.find(f => f.id === fileId);
+      }
 
-      return Math.max(minRadius, Math.min(maxRadius, baseRadius));
+      // Calculate normalized factors (0-1)
+      const factors = {
+        fileSize: 0,
+        commitCount: 0,
+        recency: 0,
+        identifiers: 0,
+        references: 0,
+      };
+
+      // File size factor
+      let sizeToUse = node.size;
+      // Components don't have file size, but we can use their line count as a proxy
+      if (isComponent && sizeToUse === 0) {
+        // Check if this component has line information
+        const component = fileData?.components?.find(c => c.id === node.id);
+        if (component && component.lineStart && component.lineEnd) {
+          const lineCount = component.lineEnd - component.lineStart + 1;
+          // Convert line count to approximate byte size (assume ~50 characters per line)
+          sizeToUse = lineCount * 50;
+        } else if (fileData) {
+          // Fallback to using a fraction of parent file size
+          sizeToUse = fileData.size * 0.1; // Components are ~10% of parent file
+        }
+      }
+
+      if (sizeToUse && sizeToUse > 0) {
+        // Square root scale for better distribution across typical file sizes
+        // This gives more range to smaller files while still scaling large ones
+        factors.fileSize = Math.min(1, Math.sqrt(sizeToUse) / 500); // Normalize for ~250KB max
+      }
+
+      if (fileData?.metrics) {
+        // Commit count factor
+        if (fileData.metrics.commitCount !== undefined) {
+          factors.commitCount = Math.min(1, fileData.metrics.commitCount / 50); // Normalize to ~50 commits max
+        }
+
+        // Recency factor (invert days ago - more recent = larger)
+        if (fileData.metrics.lastCommitDaysAgo !== undefined) {
+          const daysAgo = fileData.metrics.lastCommitDaysAgo;
+          factors.recency = Math.max(0, 1 - daysAgo / 365); // Normalize to 1 year
+        }
+
+        // Top-level identifiers factor
+        if (fileData.metrics.topLevelIdentifiers !== undefined) {
+          factors.identifiers = Math.min(1, fileData.metrics.topLevelIdentifiers / 20); // Normalize to ~20 identifiers max
+        }
+      }
+
+      // References factor (count incoming references)
+      const incomingRefs = data.relationships.filter(
+        rel => rel.target === node.id && rel.type !== 'contains'
+      ).length;
+      factors.references = Math.min(1, incomingRefs / 10); // Normalize to ~10 references max
+
+      // Apply weights (convert from 0-100 to 0-1)
+      const weightedSum =
+        (factors.fileSize * fileSizeWeight) / 100 +
+        (factors.commitCount * commitCountWeight) / 100 +
+        (factors.recency * recencyWeight) / 100 +
+        (factors.identifiers * identifiersWeight) / 100 +
+        (factors.references * referencesWeight) / 100;
+
+      // Ensure we have some minimum size even if all weights are 0
+      const totalWeight =
+        (fileSizeWeight +
+          commitCountWeight +
+          recencyWeight +
+          identifiersWeight +
+          referencesWeight) /
+        100;
+      const normalizedSum = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
+
+      // Scale to radius range
+      const radius = minRadius + normalizedSum * (maxRadius - minRadius);
+      return Math.max(minRadius, Math.min(maxRadius, radius));
     };
 
     const getLinkWidth = (link: Link) => {
