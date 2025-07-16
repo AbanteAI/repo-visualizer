@@ -71,6 +71,7 @@ class TestExampleExtended:
         data = create_example_data()
 
         history = data["history"]
+        assert history is not None
         assert "commits" in history
         assert "timelinePoints" in history
 
@@ -211,13 +212,13 @@ class TestExampleExtended:
                 metrics = file["metrics"]
 
                 # Check that metrics are reasonable
-                if "complexity" in metrics:
+                if metrics and "complexity" in metrics:
                     assert metrics["complexity"] > 0
-                if "linesOfCode" in metrics:
+                if metrics and "linesOfCode" in metrics:
                     assert metrics["linesOfCode"] > 0
-                if "commentLines" in metrics:
+                if metrics and "commentLines" in metrics:
                     assert metrics["commentLines"] >= 0
-                if "emptyLines" in metrics:
+                if metrics and "emptyLines" in metrics:
                     assert metrics["emptyLines"] >= 0
 
     def test_example_data_component_nesting(self):

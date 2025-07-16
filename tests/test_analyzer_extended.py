@@ -127,7 +127,7 @@ class TestRepositoryAnalyzerExtended:
         }.get(path, 0)
 
         analyzer = RepositoryAnalyzer("/fake/repo")
-        analyzer.gitignore_spec = None  # Mock gitignore
+        analyzer.gitignore_spec = None  # type: ignore
         analyzer._is_ignored = MagicMock(return_value=False)
 
         stats = analyzer._calculate_language_stats()
@@ -151,7 +151,7 @@ class TestRepositoryAnalyzerExtended:
         mock_walk.return_value = []
 
         analyzer = RepositoryAnalyzer("/fake/repo")
-        analyzer.gitignore_spec = None
+        analyzer.gitignore_spec = None  # type: ignore
         analyzer._is_ignored = MagicMock(return_value=False)
 
         stats = analyzer._calculate_language_stats()
@@ -300,7 +300,7 @@ const functionExpression = function() {
             },
         ]
 
-        analyzer._update_directory_sizes(files)
+        analyzer._update_directory_sizes(files)  # type: ignore
 
         # Check that directory sizes were updated
         src_dir = next(f for f in files if f["id"] == "src")
@@ -474,7 +474,7 @@ function function_name() {
         mock_isdir.return_value = True
 
         analyzer = RepositoryAnalyzer("/fake/repo")
-        analyzer.data = {
+        analyzer.data = {  # type: ignore
             "metadata": {"repoName": "test"},
             "files": [],
             "relationships": [],
