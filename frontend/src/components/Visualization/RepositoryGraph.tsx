@@ -135,6 +135,36 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       performSearch();
     }, [searchQuery, searchMode, searchIndex, onSearchResultsChange]);
 
+    // Helper functions
+    const getNodeRadius = useCallback((node: Node) => {
+      // Calculate base radius
+      let baseRadius: number;
+      
+      if (node.type === 'directory') {
+        baseRadius = 10; // Fixed size for directories
+      } else if (node.type === 'class' || node.type === 'function' || node.type === 'method') {
+        baseRadius = 6; // Components are smaller than files
+      } else {
+        // Scale file size to a reasonable radius
+        const minRadius = 5;
+        const maxRadius = 15;
+        baseRadius = node.size ? Math.sqrt(node.size) / 15 : minRadius;
+        baseRadius = Math.max(minRadius, Math.min(maxRadius, baseRadius));
+      }
+
+      // Apply search result scaling if there are search results
+      if (searchResults.size > 0) {
+        const searchScore = searchResults.get(node.id) || 0;
+        const sizeMultiplier = getNodeSizeMultiplier(searchScore);
+        baseRadius *= sizeMultiplier;
+        
+        // Clamp radius after applying search multiplier
+        baseRadius = Math.max(1, Math.min(30, baseRadius));
+      }
+
+      return baseRadius;
+    }, [searchResults]);
+
     // Extension colors mapping
     const extensionColors: Record<string, string> = {
       py: '#3572A5', // Python
@@ -697,35 +727,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         });
     };
 
-    // Helper functions
-    const getNodeRadius = (node: Node) => {
-      // Calculate base radius
-      let baseRadius: number;
-
-      if (node.type === 'directory') {
-        baseRadius = 10; // Fixed size for directories
-      } else if (node.type === 'class' || node.type === 'function' || node.type === 'method') {
-        baseRadius = 6; // Components are smaller than files
-      } else {
-        // Scale file size to a reasonable radius
-        const minRadius = 5;
-        const maxRadius = 15;
-        baseRadius = node.size ? Math.sqrt(node.size) / 15 : minRadius;
-        baseRadius = Math.max(minRadius, Math.min(maxRadius, baseRadius));
-      }
-
-      // Apply search result scaling if there are search results
-      if (searchResults.size > 0) {
-        const searchScore = searchResults.get(node.id) || 0;
-        const sizeMultiplier = getNodeSizeMultiplier(searchScore);
-        baseRadius *= sizeMultiplier;
-
-        // Clamp radius after applying search multiplier
-        baseRadius = Math.max(1, Math.min(30, baseRadius));
-      }
-
-      return baseRadius;
-    };
+    // Other helper functions
 
     const getLinkWidth = (link: Link) => {
       const baseWidth = (() => {
