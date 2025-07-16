@@ -308,57 +308,75 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       const links = createLinks();
 
-      // Create a force simulation
-      const simulation = d3
-        .forceSimulation<Node>(nodes)
-        .force(
-          'link',
-          d3
-            .forceLink<Node, Link>(links)
-            .id(d => d.id)
-            .distance(d => {
-              // Adjust distance based on connection type and weight
-              const baseDistance = 100;
-              const weight = d.weight || 0;
-              const strength = d.originalStrength || 1;
+      // Create or update the force simulation
+      let simulation: d3.Simulation<Node, Link>;
 
-              if (d.type === 'filesystem_proximity') {
-                // Filesystem connections should be closer
-                return baseDistance * (1 - weight * 0.5) * (1 / strength);
-              } else if (d.type === 'semantic_similarity') {
-                // Semantic connections should be moderately close
-                return baseDistance * (1 - weight * 0.4) * (1 / strength);
-              } else if (d.type === 'contains') {
-                // Containment relationships should be very close for clear hierarchy
-                return 50; // Much shorter distance for parent-child relationships
-              } else {
-                // Reference connections
-                return baseDistance * (1 - weight * 0.3);
-              }
-            })
-            .strength(d => {
-              // Adjust strength based on weight
-              const baseStrength = 1;
-              const weight = d.weight || 0;
-              const strength = d.originalStrength || 1;
+      if (simulationRef.current) {
+        // Reuse existing simulation to prevent drift
+        simulation = simulationRef.current;
 
-              if (d.type === 'contains') {
-                // Strong attraction for parent-child relationships
-                return 2; // Stronger force for containment
-              }
+        // Update nodes without restarting the simulation
+        simulation.nodes(nodes);
 
-              return baseStrength * weight * strength;
-            })
-        )
-        .force('charge', d3.forceManyBody().strength(-300))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force(
-          'collision',
-          d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5)
-        );
+        // Update links
+        const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
+        linkForce.links(links);
 
-      // Save simulation to ref for potential future interactions
-      simulationRef.current = simulation;
+        // Gently restart the simulation with low alpha to minimize drift
+        simulation.alpha(0.1).restart();
+      } else {
+        // Create new simulation for first time
+        simulation = d3
+          .forceSimulation<Node>(nodes)
+          .force(
+            'link',
+            d3
+              .forceLink<Node, Link>(links)
+              .id(d => d.id)
+              .distance(d => {
+                // Adjust distance based on connection type and weight
+                const baseDistance = 100;
+                const weight = d.weight || 0;
+                const strength = d.originalStrength || 1;
+
+                if (d.type === 'filesystem_proximity') {
+                  // Filesystem connections should be closer
+                  return baseDistance * (1 - weight * 0.5) * (1 / strength);
+                } else if (d.type === 'semantic_similarity') {
+                  // Semantic connections should be moderately close
+                  return baseDistance * (1 - weight * 0.4) * (1 / strength);
+                } else if (d.type === 'contains') {
+                  // Containment relationships should be very close for clear hierarchy
+                  return 50; // Much shorter distance for parent-child relationships
+                } else {
+                  // Reference connections
+                  return baseDistance * (1 - weight * 0.3);
+                }
+              })
+              .strength(d => {
+                // Adjust strength based on weight
+                const baseStrength = 1;
+                const weight = d.weight || 0;
+                const strength = d.originalStrength || 1;
+
+                if (d.type === 'contains') {
+                  // Strong attraction for parent-child relationships
+                  return 2; // Stronger force for containment
+                }
+
+                return baseStrength * weight * strength;
+              })
+          )
+          .force('charge', d3.forceManyBody().strength(-300))
+          .force('center', d3.forceCenter(width / 2, height / 2))
+          .force(
+            'collision',
+            d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5)
+          );
+
+        // Save simulation to ref for potential future interactions
+        simulationRef.current = simulation;
+      }
 
       // Create links
       const link = g

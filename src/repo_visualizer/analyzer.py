@@ -1934,21 +1934,50 @@ class RepositoryAnalyzer:
         if not commits:
             return timeline_points
 
-        # Create timeline points for key commits
-        # We'll create points for every 5th commit, but cap at 20 points for performance
-        max_points = 20
+        # Create timeline points for key commits, focusing on actual development
+        max_points = 30  # Increase max points to capture more file additions
         total_commits = len(commits)
         
-        if total_commits <= max_points:
-            # Use all commits if we have fewer than max_points
-            indices = list(range(total_commits))
-        else:
-            # Sample commits evenly across the history
-            step = total_commits // max_points
-            indices = [i * step for i in range(max_points)]
-            # Always include the latest commit
-            if indices[-1] != total_commits - 1:
-                indices.append(total_commits - 1)
+        # First, collect all commits that add files (these are most important)
+        file_adding_commits = []
+        other_important_commits = []
+        
+        for i, commit in enumerate(commits):
+            # Skip merge commits
+            if commit["message"].startswith("Merge "):
+                continue
+            
+            # Prioritize commits that add files
+            adds_files = any(fc["type"] == "add" for fc in commit["fileChanges"])
+            if adds_files:
+                file_adding_commits.append(i)
+            elif len(commit["fileChanges"]) > 0:
+                other_important_commits.append(i)
+        
+        # Always include the first commit (index 0)
+        indices = [0]
+        
+        # Include ALL file-adding commits (these show repository growth)
+        indices.extend(file_adding_commits)
+        
+        # Fill remaining slots with other important commits
+        remaining_slots = max_points - len(indices)
+        if remaining_slots > 0 and other_important_commits:
+            if len(other_important_commits) <= remaining_slots:
+                indices.extend(other_important_commits)
+            else:
+                # Sample other commits evenly
+                step = len(other_important_commits) // remaining_slots
+                for i in range(0, len(other_important_commits), step):
+                    if len(indices) < max_points:
+                        indices.append(other_important_commits[i])
+        
+        # Remove duplicates and sort
+        indices = sorted(list(set(indices)))
+        
+        # Always include the latest commit
+        if indices[-1] != total_commits - 1:
+            indices.append(total_commits - 1)
 
         for i in indices:
             commit = commits[i]
