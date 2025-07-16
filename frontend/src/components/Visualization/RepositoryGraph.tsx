@@ -146,120 +146,132 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     }, [searchQuery, searchMode, searchIndex, onSearchResultsChange]);
 
     // Helper functions
-    const getNodeRadius = useCallback((node: Node) => {
-      if (node.type === 'directory') {
-        return 10; // Fixed size for directories
-      }
-
-      // Set different size ranges for components vs files
-      let minRadius = 5;
-      let maxRadius = 25;
-
-      const isComponent =
-        node.type === 'class' || node.type === 'function' || node.type === 'method';
-      if (isComponent) {
-        minRadius = 3;
-        maxRadius = 12; // Components are smaller than files
-      }
-
-      // Get file data for additional metrics
-      // For components, use the parent file's metrics
-      let fileData = data.files.find(f => f.id === node.id);
-      if (!fileData && isComponent) {
-        // Component IDs are like "file.py:ClassName" - extract the file part
-        const fileId = node.id.split(':')[0];
-        fileData = data.files.find(f => f.id === fileId);
-      }
-
-      // Calculate normalized factors (0-1)
-      const factors = {
-        fileSize: 0,
-        commitCount: 0,
-        recency: 0,
-        identifiers: 0,
-        references: 0,
-      };
-
-      // File size factor
-      let sizeToUse = node.size;
-      // Components don't have file size, but we can use their line count as a proxy
-      if (isComponent && sizeToUse === 0) {
-        // Check if this component has line information
-        const component = fileData?.components?.find(c => c.id === node.id);
-        if (component && component.lineStart && component.lineEnd) {
-          const lineCount = component.lineEnd - component.lineStart + 1;
-          // Convert line count to approximate byte size (assume ~50 characters per line)
-          sizeToUse = lineCount * 50;
-        } else if (fileData) {
-          // Fallback to using a fraction of parent file size
-          sizeToUse = fileData.size * 0.1; // Components are ~10% of parent file
-        }
-      }
-
-      if (sizeToUse && sizeToUse > 0) {
-        // Square root scale for better distribution across typical file sizes
-        // This gives more range to smaller files while still scaling large ones
-        factors.fileSize = Math.min(1, Math.sqrt(sizeToUse) / 500); // Normalize for ~250KB max
-      }
-
-      if (fileData?.metrics) {
-        // Commit count factor
-        if (fileData.metrics.commitCount !== undefined) {
-          factors.commitCount = Math.min(1, fileData.metrics.commitCount / 50); // Normalize to ~50 commits max
+    const getNodeRadius = useCallback(
+      (node: Node) => {
+        if (node.type === 'directory') {
+          return 10; // Fixed size for directories
         }
 
-        // Recency factor (invert days ago - more recent = larger)
-        if (fileData.metrics.lastCommitDaysAgo !== undefined) {
-          const daysAgo = fileData.metrics.lastCommitDaysAgo;
-          factors.recency = Math.max(0, 1 - daysAgo / 365); // Normalize to 1 year
+        // Set different size ranges for components vs files
+        let minRadius = 5;
+        let maxRadius = 25;
+
+        const isComponent =
+          node.type === 'class' || node.type === 'function' || node.type === 'method';
+        if (isComponent) {
+          minRadius = 3;
+          maxRadius = 12; // Components are smaller than files
         }
 
-        // Top-level identifiers factor
-        if (fileData.metrics.topLevelIdentifiers !== undefined) {
-          factors.identifiers = Math.min(1, fileData.metrics.topLevelIdentifiers / 20); // Normalize to ~20 identifiers max
+        // Get file data for additional metrics
+        // For components, use the parent file's metrics
+        let fileData = data.files.find(f => f.id === node.id);
+        if (!fileData && isComponent) {
+          // Component IDs are like "file.py:ClassName" - extract the file part
+          const fileId = node.id.split(':')[0];
+          fileData = data.files.find(f => f.id === fileId);
         }
-      }
 
-      // References factor (count incoming references)
-      const incomingRefs = data.relationships.filter(
-        rel => rel.target === node.id && rel.type !== 'contains'
-      ).length;
-      factors.references = Math.min(1, incomingRefs / 10); // Normalize to ~10 references max
+        // Calculate normalized factors (0-1)
+        const factors = {
+          fileSize: 0,
+          commitCount: 0,
+          recency: 0,
+          identifiers: 0,
+          references: 0,
+        };
 
-      // Apply weights (convert from 0-100 to 0-1)
-      const weightedSum =
-        (factors.fileSize * fileSizeWeight) / 100 +
-        (factors.commitCount * commitCountWeight) / 100 +
-        (factors.recency * recencyWeight) / 100 +
-        (factors.identifiers * identifiersWeight) / 100 +
-        (factors.references * referencesWeight) / 100;
+        // File size factor
+        let sizeToUse = node.size;
+        // Components don't have file size, but we can use their line count as a proxy
+        if (isComponent && sizeToUse === 0) {
+          // Check if this component has line information
+          const component = fileData?.components?.find(c => c.id === node.id);
+          if (component && component.lineStart && component.lineEnd) {
+            const lineCount = component.lineEnd - component.lineStart + 1;
+            // Convert line count to approximate byte size (assume ~50 characters per line)
+            sizeToUse = lineCount * 50;
+          } else if (fileData) {
+            // Fallback to using a fraction of parent file size
+            sizeToUse = fileData.size * 0.1; // Components are ~10% of parent file
+          }
+        }
 
-      // Ensure we have some minimum size even if all weights are 0
-      const totalWeight =
-        (fileSizeWeight +
-          commitCountWeight +
-          recencyWeight +
-          identifiersWeight +
-          referencesWeight) /
-        100;
-      const normalizedSum = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
+        if (sizeToUse && sizeToUse > 0) {
+          // Square root scale for better distribution across typical file sizes
+          // This gives more range to smaller files while still scaling large ones
+          factors.fileSize = Math.min(1, Math.sqrt(sizeToUse) / 500); // Normalize for ~250KB max
+        }
 
-      // Scale to radius range
-      let radius = minRadius + normalizedSum * (maxRadius - minRadius);
-      radius = Math.max(minRadius, Math.min(maxRadius, radius));
+        if (fileData?.metrics) {
+          // Commit count factor
+          if (fileData.metrics.commitCount !== undefined) {
+            factors.commitCount = Math.min(1, fileData.metrics.commitCount / 50); // Normalize to ~50 commits max
+          }
 
-      // Apply search result scaling if there are search results
-      if (searchResults.size > 0) {
-        const searchScore = searchResults.get(node.id) || 0;
-        const sizeMultiplier = getNodeSizeMultiplier(searchScore);
-        radius *= sizeMultiplier;
-        
-        // Clamp radius after applying search multiplier
-        radius = Math.max(1, Math.min(30, radius));
-      }
+          // Recency factor (invert days ago - more recent = larger)
+          if (fileData.metrics.lastCommitDaysAgo !== undefined) {
+            const daysAgo = fileData.metrics.lastCommitDaysAgo;
+            factors.recency = Math.max(0, 1 - daysAgo / 365); // Normalize to 1 year
+          }
 
-      return radius;
-    }, [searchResults, fileSizeWeight, commitCountWeight, recencyWeight, identifiersWeight, referencesWeight, data.files, data.relationships]);
+          // Top-level identifiers factor
+          if (fileData.metrics.topLevelIdentifiers !== undefined) {
+            factors.identifiers = Math.min(1, fileData.metrics.topLevelIdentifiers / 20); // Normalize to ~20 identifiers max
+          }
+        }
+
+        // References factor (count incoming references)
+        const incomingRefs = data.relationships.filter(
+          rel => rel.target === node.id && rel.type !== 'contains'
+        ).length;
+        factors.references = Math.min(1, incomingRefs / 10); // Normalize to ~10 references max
+
+        // Apply weights (convert from 0-100 to 0-1)
+        const weightedSum =
+          (factors.fileSize * fileSizeWeight) / 100 +
+          (factors.commitCount * commitCountWeight) / 100 +
+          (factors.recency * recencyWeight) / 100 +
+          (factors.identifiers * identifiersWeight) / 100 +
+          (factors.references * referencesWeight) / 100;
+
+        // Ensure we have some minimum size even if all weights are 0
+        const totalWeight =
+          (fileSizeWeight +
+            commitCountWeight +
+            recencyWeight +
+            identifiersWeight +
+            referencesWeight) /
+          100;
+        const normalizedSum = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
+
+        // Scale to radius range
+        let radius = minRadius + normalizedSum * (maxRadius - minRadius);
+        radius = Math.max(minRadius, Math.min(maxRadius, radius));
+
+        // Apply search result scaling if there are search results
+        if (searchResults.size > 0) {
+          const searchScore = searchResults.get(node.id) || 0;
+          const sizeMultiplier = getNodeSizeMultiplier(searchScore);
+          radius *= sizeMultiplier;
+
+          // Clamp radius after applying search multiplier
+          radius = Math.max(1, Math.min(30, radius));
+        }
+
+        return radius;
+      },
+      [
+        searchResults,
+        fileSizeWeight,
+        commitCountWeight,
+        recencyWeight,
+        identifiersWeight,
+        referencesWeight,
+        data.files,
+        data.relationships,
+      ]
+    );
 
     // Extension colors mapping
     const extensionColors: Record<string, string> = {
