@@ -104,6 +104,27 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
     setIsDragging(false);
   }, []);
 
+  // Handle window resize to keep panel visible
+  useEffect(() => {
+    const handleResize = () => {
+      if (controlsRef.current && isInitialized) {
+        const parent = controlsRef.current.parentElement;
+        if (parent) {
+          const maxX = parent.offsetWidth - controlsRef.current.offsetWidth;
+          const maxY = parent.offsetHeight - controlsRef.current.offsetHeight;
+
+          setPosition(prev => ({
+            x: Math.max(0, Math.min(maxX, prev.x)),
+            y: Math.max(0, Math.min(maxY, prev.y)),
+          }));
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isInitialized]);
+
   useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
