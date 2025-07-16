@@ -4,31 +4,32 @@ set -euo pipefail
 # Set non-interactive frontend for APT
 export DEBIAN_FRONTEND=noninteractive
 
-# Install Python 3.12 and required packages
-echo "Installing Python 3.12 and required packages..."
-apt-get update
-apt-get install -y software-properties-common
-add-apt-repository -y ppa:deadsnakes/ppa
-apt-get update
-apt-get install -y python3.12 python3.12-venv python3.12-dev
+# Install Python 3.12 and required packages if not available
+echo "Checking for Python 3.12..."
+if command -v python3.12 &> /dev/null; then
+    echo "Python 3.12 found"
+    PYTHON_CMD="python3.12"
+else
+    echo "Installing Python 3.12..."
+    apt-get update
+    apt-get install -y --no-install-recommends python3.12 python3.12-venv python3.12-dev
+    PYTHON_CMD="python3.12"
+fi
 
-# Use Python 3.12 directly instead of system python3
-PYTHON_CMD="python3.12"
+# Also install pip for system (needed for venv pip setup)
+apt-get install -y --no-install-recommends python3-pip
 
 echo "Using Python command: $PYTHON_CMD"
 
-# Create virtual environment if it doesn't exist
-if [ ! -d ".venv" ]; then
+# Create or recreate virtual environment if activate script is missing
+if [ ! -f ".venv/bin/activate" ]; then
     echo "Creating virtual environment..."
-    $PYTHON_CMD -m venv .venv
-    echo "Virtual environment created. Checking contents..."
-    ls -la .venv/
-    if [ -f ".venv/bin/activate" ]; then
-        echo "✓ activate script found"
-    else
-        echo "✗ activate script missing"
-        exit 1
-    fi
+    rm -rf .venv
+    "$PYTHON_CMD" -m venv .venv
+    
+    # Install pip in the venv (Ubuntu disables ensurepip)
+    echo "Setting up pip in virtual environment..."
+    .venv/bin/python -m pip install --upgrade pip setuptools wheel
 fi
 
 # Activate virtual environment
