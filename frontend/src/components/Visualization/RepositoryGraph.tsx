@@ -187,8 +187,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         if (isComponent && sizeToUse === 0) {
           // Check if this component has line information
           const component = fileData?.components?.find(c => c.id === node.id);
-          if (component && component.lineStart && component.lineEnd) {
-            const lineCount = component.lineEnd - component.lineStart + 1;
+          if (
+            component &&
+            (component.lineStart || component.line_start) &&
+            (component.lineEnd || component.line_end)
+          ) {
+            const lineStart = component.lineStart || component.line_start || 0;
+            const lineEnd = component.lineEnd || component.line_end || 0;
+            const lineCount = lineEnd - lineStart + 1;
             // Convert line count to approximate byte size (assume ~50 characters per line)
             sizeToUse = lineCount * 50;
           } else if (fileData) {
@@ -681,19 +687,21 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           return 5;
         });
 
-      // Update label positions to match new radii
-      labels
-        .filter(function () {
-          return d3.select(this).attr('dx') !== null; // Only update position labels, not expand icons
-        })
-        .transition()
-        .duration(300)
-        .attr('dx', function (d: any) {
-          if (d && typeof d === 'object' && 'id' in d) {
-            return getNodeRadius(d) + 5;
-          }
-          return 10;
-        });
+      // Update label positions to match new radii - with null check
+      if (!labels.empty()) {
+        labels
+          .filter(function () {
+            return d3.select(this).attr('dx') !== null; // Only update position labels, not expand icons
+          })
+          .transition()
+          .duration(300)
+          .attr('dx', function (d: any) {
+            if (d && typeof d === 'object' && 'id' in d) {
+              return getNodeRadius(d) + 5;
+            }
+            return 10;
+          });
+      }
 
       // Update collision force radius
       if (simulationRef.current) {

@@ -1,4 +1,4 @@
-import lunr from 'lunr';
+import * as lunr from 'lunr';
 import Fuse from 'fuse.js';
 import { RepositoryData, File, Component } from '../types/schema';
 
@@ -193,7 +193,7 @@ export function getSearchResultScore(itemId: string, searchResults: Map<string, 
 
 export function getNodeSizeMultiplier(score: number): number {
   if (score === 0) {
-    return 0.1; // Make non-matching nodes just tiny points
+    return 0.2; // Make non-matching nodes small but still clickable
   }
 
   // Scale from 0.5 to 2.0 based on score
