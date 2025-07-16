@@ -1884,34 +1884,120 @@ class RepositoryAnalyzer:
         Returns:
             List of timeline points
         """
-        # This is a simplified implementation that creates a timeline point
-        # for every 10th commit (or fewer if there aren't many commits)
         timeline_points = []
 
         if not commits:
             return timeline_points
 
-        step = max(1, len(commits) // 10)
+        # Create timeline points for key commits
+        # We'll create points for every 5th commit, but cap at 20 points for performance
+        max_points = 20
+        total_commits = len(commits)
+        
+        if total_commits <= max_points:
+            # Use all commits if we have fewer than max_points
+            indices = list(range(total_commits))
+        else:
+            # Sample commits evenly across the history
+            step = total_commits // max_points
+            indices = [i * step for i in range(max_points)]
+            # Always include the latest commit
+            if indices[-1] != total_commits - 1:
+                indices.append(total_commits - 1)
 
-        for i in range(0, len(commits), step):
+        for i in indices:
             commit = commits[i]
+            
+            # Create a snapshot by tracking which files existed at this commit
+            snapshot_files = self._get_files_at_commit(commit, commits[:i+1])
+            snapshot_relationships = self._get_relationships_at_commit(snapshot_files)
 
-            # Create a simplified snapshot
             timeline_points.append(
                 {
                     "commitId": commit["id"],
                     "state": {
                         "commitIndex": i,
                         "timestamp": commit["date"],
+                        "message": commit["message"],
+                        "author": commit["author"],
+                        "totalCommits": total_commits,
                     },
                     "snapshot": {
-                        "files": [],  # Simplified for now
-                        "relationships": [],  # Simplified for now
+                        "files": snapshot_files,
+                        "relationships": snapshot_relationships,
                     },
                 }
             )
 
         return timeline_points
+
+    def _get_files_at_commit(self, commit: Dict[str, Any], commits_up_to_here: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Get the list of files that existed at a specific commit.
+        
+        Args:
+            commit: The commit to get files for
+            commits_up_to_here: All commits up to and including this one (in chronological order)
+        
+        Returns:
+            List of file objects that existed at this commit
+        """
+        # Track file states by path
+        file_states = {}
+        
+        # Go through all commits up to this point to track file changes
+        for c in reversed(commits_up_to_here):  # Go from oldest to newest
+            for file_change in c["fileChanges"]:
+                file_path = file_change["fileId"]
+                change_type = file_change["type"]
+                
+                if change_type == "add" or change_type == "modify":
+                    # File was added or modified, so it exists
+                    file_states[file_path] = True
+                elif change_type == "delete":
+                    # File was deleted, so it doesn't exist
+                    file_states[file_path] = False
+        
+        # Filter current files to only include those that existed at this commit
+        existing_files = []
+        for file in self.data["files"]:
+            file_path = file["path"]
+            
+            # If we have explicit state information, use it
+            if file_path in file_states:
+                if file_states[file_path]:
+                    existing_files.append(file)
+            else:
+                # If no explicit state, assume the file existed
+                # (this handles files that were present from the beginning)
+                existing_files.append(file)
+        
+        return existing_files
+
+    def _get_relationships_at_commit(self, files_at_commit: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Get the relationships between files that existed at a specific commit.
+        
+        Args:
+            files_at_commit: List of files that existed at this commit
+        
+        Returns:
+            List of relationship objects for this commit
+        """
+        # Get the set of file IDs that existed at this commit
+        existing_file_ids = set(file["id"] for file in files_at_commit)
+        
+        # Filter relationships to only include those between existing files
+        relationships_at_commit = []
+        for rel in self.data["relationships"]:
+            source_id = rel["source"]
+            target_id = rel["target"]
+            
+            # Check if both source and target existed at this commit
+            if source_id in existing_file_ids and target_id in existing_file_ids:
+                relationships_at_commit.append(rel)
+        
+        return relationships_at_commit
 
     def save_to_file(self, output_path: str) -> None:
         """

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { RepositoryData } from './types/schema';
+import { RepositoryData, TimelinePoint } from './types/schema';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import Controls from './components/Controls';
@@ -18,6 +18,12 @@ const App: React.FC = () => {
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
+
+  // Timeline state
+  const [currentTimelineIndex, setCurrentTimelineIndex] = useState<number>(-1); // -1 means current state
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1); // 1x, 2x, 3x speed
+  const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-load repo_data.json on component mount
   useEffect(() => {
@@ -55,6 +61,9 @@ const App: React.FC = () => {
   const handleDataLoaded = (data: RepositoryData) => {
     setRepositoryData(data);
     setSelectedFile(null);
+    // Reset timeline to current state when new data is loaded
+    setCurrentTimelineIndex(-1);
+    setIsPlaying(false);
   };
 
   const handleFileSelect = (fileId: string | null) => {
@@ -107,6 +116,90 @@ const App: React.FC = () => {
     setSemanticWeight(weight);
   };
 
+  // Timeline control handlers
+  const handleTimelineChange = (index: number) => {
+    setCurrentTimelineIndex(index);
+    setIsPlaying(false);
+  };
+
+  const handlePlayPause = () => {
+    if (!isPlaying) {
+      // If starting playback, start from beginning if at current state
+      if (currentTimelineIndex === -1) {
+        setCurrentTimelineIndex(0);
+      }
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handlePlaybackSpeedChange = (speed: number) => {
+    setPlaybackSpeed(speed);
+  };
+
+  // Get current data based on timeline position
+  const getCurrentData = (): RepositoryData | null => {
+    if (!repositoryData) return null;
+
+    // If no timeline data or showing current state, return original data
+    if (!repositoryData.history?.timelinePoints || currentTimelineIndex === -1) {
+      return repositoryData;
+    }
+
+    // Get the timeline point
+    const timelinePoint = repositoryData.history.timelinePoints[currentTimelineIndex];
+    if (!timelinePoint) return repositoryData;
+
+    // Create a modified version of the data with timeline snapshot
+    return {
+      ...repositoryData,
+      files: timelinePoint.snapshot.files || [],
+      relationships: timelinePoint.snapshot.relationships || [],
+    };
+  };
+
+  // Get current timeline info
+  const getCurrentTimelineInfo = () => {
+    if (!repositoryData?.history?.timelinePoints || currentTimelineIndex === -1) {
+      return null;
+    }
+
+    const timelinePoint = repositoryData.history.timelinePoints[currentTimelineIndex];
+    return timelinePoint?.state || null;
+  };
+
+  // Playback effect
+  useEffect(() => {
+    if (!isPlaying || !repositoryData?.history?.timelinePoints) return;
+
+    const interval = setInterval(() => {
+      setCurrentTimelineIndex(prev => {
+        const maxIndex = repositoryData.history!.timelinePoints.length - 1;
+        if (prev >= maxIndex) {
+          setIsPlaying(false);
+          return maxIndex;
+        }
+        return prev + 1;
+      });
+    }, 2000 / playbackSpeed); // Base speed: 2 seconds per commit
+
+    playbackIntervalRef.current = interval;
+
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+      }
+    };
+  }, [isPlaying, playbackSpeed, repositoryData]);
+
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -145,7 +238,7 @@ const App: React.FC = () => {
             >
               <RepositoryGraph
                 ref={graphRef}
-                data={repositoryData}
+                data={getCurrentData()}
                 onSelectFile={handleFileSelect}
                 selectedFile={selectedFile}
                 referenceWeight={referenceWeight}
@@ -165,12 +258,20 @@ const App: React.FC = () => {
                 onReferenceWeightChange={handleReferenceWeightChange}
                 onFilesystemWeightChange={handleFilesystemWeightChange}
                 onSemanticWeightChange={handleSemanticWeightChange}
+                timelinePoints={repositoryData?.history?.timelinePoints || []}
+                currentTimelineIndex={currentTimelineIndex}
+                isPlaying={isPlaying}
+                playbackSpeed={playbackSpeed}
+                onTimelineChange={handleTimelineChange}
+                onPlayPause={handlePlayPause}
+                onPlaybackSpeedChange={handlePlaybackSpeedChange}
+                timelineInfo={getCurrentTimelineInfo()}
               />
 
               {selectedFile && (
                 <FileDetails
                   fileId={selectedFile}
-                  data={repositoryData}
+                  data={getCurrentData()}
                   onClose={handleCloseFileDetails}
                 />
               )}
