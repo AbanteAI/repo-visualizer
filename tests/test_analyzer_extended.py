@@ -132,7 +132,7 @@ class TestRepositoryAnalyzerExtended:
 
         stats = analyzer._calculate_language_stats()
 
-        total_size = 1000 + 500 + 800 + 300 + 200  # 2800
+        1000 + 500 + 800 + 300 + 200  # 2800
 
         assert stats["Python"] == pytest.approx(1500 / 2800, rel=1e-3)
         assert stats["JavaScript"] == pytest.approx(800 / 2800, rel=1e-3)
@@ -170,7 +170,7 @@ class TestClass extends BaseClass {
     constructor() {
         super();
     }
-    
+
     method1() {
         return "test";
     }
@@ -374,7 +374,7 @@ def example_function():
 
 class ExampleClass:
     """Class docstring."""
-    
+
     def method_one(self):
         # Method comment
         return True
