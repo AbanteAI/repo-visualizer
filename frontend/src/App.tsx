@@ -4,6 +4,7 @@ import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import Controls, { SearchMode } from './components/Controls';
 import FileDetails from './components/FileDetails';
+import DraggableControls from './components/DraggableControls';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -51,11 +52,10 @@ const App: React.FC = () => {
             return;
           }
         }
-      } catch (err) {
-        console.warn('Could not auto-load repo_data.json:', err);
+      } catch (error) {
+        console.log('Failed to auto-load repo_data.json:', error);
       }
 
-      // Auto-load failed, show file upload interface
       setAutoLoadFailed(true);
       setIsAutoLoading(false);
     };
@@ -186,55 +186,65 @@ const App: React.FC = () => {
             </div>
 
             <div
-              className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
+              className={`flex-1 flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}
             >
-              <RepositoryGraph
-                ref={graphRef}
-                data={repositoryData}
-                onSelectFile={handleFileSelect}
-                selectedFile={selectedFile}
-                referenceWeight={referenceWeight}
-                filesystemWeight={filesystemWeight}
-                semanticWeight={semanticWeight}
-                searchQuery={searchQuery}
-                searchMode={searchMode}
-                searchResults={searchResults}
-                onSearchResultsChange={setSearchResults}
-                fileSizeWeight={fileSizeWeight}
-                commitCountWeight={commitCountWeight}
-                recencyWeight={recencyWeight}
-                identifiersWeight={identifiersWeight}
-                referencesWeight={referencesWeight}
-              />
+              <div
+                className="flex-1 min-h-0 relative"
+                style={{ display: 'flex', flexDirection: 'column' }}
+              >
+                <RepositoryGraph
+                  ref={graphRef}
+                  data={repositoryData}
+                  onSelectFile={handleFileSelect}
+                  selectedFile={selectedFile}
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                  searchQuery={searchQuery}
+                  searchMode={searchMode}
+                  searchResults={searchResults}
+                  onSearchResultsChange={setSearchResults}
+                  fileSizeWeight={fileSizeWeight}
+                  commitCountWeight={commitCountWeight}
+                  recencyWeight={recencyWeight}
+                  identifiersWeight={identifiersWeight}
+                  referencesWeight={referencesWeight}
+                />
 
-              <Controls
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
-                onReset={handleReset}
-                onFullscreen={toggleFullscreen}
-                isFullscreen={isFullscreen}
-                referenceWeight={referenceWeight}
-                filesystemWeight={filesystemWeight}
-                semanticWeight={semanticWeight}
-                onReferenceWeightChange={handleReferenceWeightChange}
-                onFilesystemWeightChange={handleFilesystemWeightChange}
-                onSemanticWeightChange={handleSemanticWeightChange}
-                searchQuery={searchQuery}
-                searchMode={searchMode}
-                onSearchQueryChange={handleSearchQueryChange}
-                onSearchModeChange={handleSearchModeChange}
-                onClearSearch={handleClearSearch}
-                fileSizeWeight={fileSizeWeight}
-                commitCountWeight={commitCountWeight}
-                recencyWeight={recencyWeight}
-                identifiersWeight={identifiersWeight}
-                referencesWeight={referencesWeight}
-                onFileSizeWeightChange={handleFileSizeWeightChange}
-                onCommitCountWeightChange={handleCommitCountWeightChange}
-                onRecencyWeightChange={handleRecencyWeightChange}
-                onIdentifiersWeightChange={handleIdentifiersWeightChange}
-                onReferencesWeightChange={handleReferencesWeightChange}
-              />
+                <DraggableControls
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                  onReferenceWeightChange={handleReferenceWeightChange}
+                  onFilesystemWeightChange={handleFilesystemWeightChange}
+                  onSemanticWeightChange={handleSemanticWeightChange}
+                />
+              </div>
+
+              <div className="flex-shrink-0 bg-white border-t">
+                <Controls
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onReset={handleReset}
+                  onFullscreen={toggleFullscreen}
+                  isFullscreen={isFullscreen}
+                  searchQuery={searchQuery}
+                  searchMode={searchMode}
+                  onSearchQueryChange={handleSearchQueryChange}
+                  onSearchModeChange={handleSearchModeChange}
+                  onClearSearch={handleClearSearch}
+                  fileSizeWeight={fileSizeWeight}
+                  commitCountWeight={commitCountWeight}
+                  recencyWeight={recencyWeight}
+                  identifiersWeight={identifiersWeight}
+                  referencesWeight={referencesWeight}
+                  onFileSizeWeightChange={handleFileSizeWeightChange}
+                  onCommitCountWeightChange={handleCommitCountWeightChange}
+                  onRecencyWeightChange={handleRecencyWeightChange}
+                  onIdentifiersWeightChange={handleIdentifiersWeightChange}
+                  onReferencesWeightChange={handleReferencesWeightChange}
+                />
+              </div>
 
               {selectedFile && (
                 <FileDetails
