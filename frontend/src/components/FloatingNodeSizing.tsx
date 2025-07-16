@@ -1,45 +1,47 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
-interface DraggableControlsProps {
-  referenceWeight: number;
-  filesystemWeight: number;
-  semanticWeight: number;
-  onReferenceWeightChange: (weight: number) => void;
-  onFilesystemWeightChange: (weight: number) => void;
-  onSemanticWeightChange: (weight: number) => void;
+interface FloatingNodeSizingProps {
+  fileSizeWeight: number;
+  commitCountWeight: number;
+  recencyWeight: number;
+  identifiersWeight: number;
+  referencesWeight: number;
+  onFileSizeWeightChange: (weight: number) => void;
+  onCommitCountWeightChange: (weight: number) => void;
+  onRecencyWeightChange: (weight: number) => void;
+  onIdentifiersWeightChange: (weight: number) => void;
+  onReferencesWeightChange: (weight: number) => void;
   onClose: () => void;
 }
 
-const DraggableControls: React.FC<DraggableControlsProps> = ({
-  referenceWeight,
-  filesystemWeight,
-  semanticWeight,
-  onReferenceWeightChange,
-  onFilesystemWeightChange,
-  onSemanticWeightChange,
+const FloatingNodeSizing: React.FC<FloatingNodeSizingProps> = ({
+  fileSizeWeight,
+  commitCountWeight,
+  recencyWeight,
+  identifiersWeight,
+  referencesWeight,
+  onFileSizeWeightChange,
+  onCommitCountWeightChange,
+  onRecencyWeightChange,
+  onIdentifiersWeightChange,
+  onReferencesWeightChange,
   onClose,
 }) => {
-  const [position, setPosition] = useState({ x: 0, y: 20 });
+  const [position, setPosition] = useState({ x: 320, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, elementX: 0, elementY: 0 });
   const [isInitialized, setIsInitialized] = useState(false);
   const controlsRef = useRef<HTMLDivElement>(null);
 
-  // Initialize position to upper right corner
+  // Initialize position to upper left (offset from connection weights)
   useEffect(() => {
     const initializePosition = () => {
       if (controlsRef.current) {
-        const parent = controlsRef.current.parentElement;
-        if (parent) {
-          const parentWidth = parent.offsetWidth;
-          const controlsWidth = controlsRef.current.offsetWidth || 320;
-
-          setPosition({
-            x: Math.max(0, parentWidth - controlsWidth - 20),
-            y: 20,
-          });
-          setIsInitialized(true);
-        }
+        setPosition({
+          x: 320, // Offset from connection weights menu
+          y: 20,
+        });
+        setIsInitialized(true);
       }
     };
 
@@ -91,9 +93,9 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       const newX = dragStart.elementX + deltaX;
       const newY = dragStart.elementY + deltaY;
 
-      // Keep within bounds - use window dimensions for better movement freedom
+      // Keep within bounds
       const maxX = Math.max(0, parent.offsetWidth - controlsRef.current.offsetWidth);
-      const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40); // 40px buffer from bottom
+      const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40);
 
       setPosition({
         x: Math.max(0, Math.min(maxX, newX)),
@@ -146,9 +148,9 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       onMouseDown={handleMouseDown}
       style={{
         position: 'absolute',
-        left: isInitialized ? position.x : 'calc(100% - 300px)',
+        left: isInitialized ? position.x : '320px',
         top: isInitialized ? position.y : '20px',
-        width: '280px',
+        width: '300px',
         pointerEvents: 'auto',
         transform: 'translate3d(0, 0, 0)',
         zIndex: 1000,
@@ -167,7 +169,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
           <div className="w-3 h-3 bg-red-500 rounded-full"></div>
           <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
           <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-          <span className="text-base font-semibold text-gray-800">Connection Weights</span>
+          <span className="text-base font-semibold text-gray-800">Node Sizing</span>
         </div>
         <button
           onClick={onClose}
@@ -179,84 +181,123 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       </div>
 
       {/* Controls */}
-      <div className="space-y-5">
-        {/* Reference Connections */}
+      <div className="space-y-4">
+        {/* File Size */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-600">Reference</label>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
-                {referenceWeight}%
-              </span>
-            </div>
+            <label className="text-sm font-medium text-gray-600">File Size</label>
+            <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
+              {fileSizeWeight}%
+            </span>
           </div>
           <div className="relative">
             <input
               type="range"
               min="0"
               max="100"
-              value={referenceWeight}
-              onChange={e => onReferenceWeightChange(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-blue"
+              value={fileSizeWeight}
+              onChange={e => onFileSizeWeightChange(Number(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               style={{
-                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${referenceWeight}%, #e5e7eb ${referenceWeight}%, #e5e7eb 100%)`,
+                background: `linear-gradient(to right, #8b5cf6 0%, #8b5cf6 ${fileSizeWeight}%, #e5e7eb ${fileSizeWeight}%, #e5e7eb 100%)`,
               }}
-              aria-label="Reference connections weight"
+              aria-label="File size weight"
             />
           </div>
         </div>
 
-        {/* Filesystem Connections */}
+        {/* Commit Count */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-600">Filesystem</label>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-              <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
-                {filesystemWeight}%
-              </span>
-            </div>
+            <label className="text-sm font-medium text-gray-600">Commit Count</label>
+            <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
+              {commitCountWeight}%
+            </span>
           </div>
           <div className="relative">
             <input
               type="range"
               min="0"
               max="100"
-              value={filesystemWeight}
-              onChange={e => onFilesystemWeightChange(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-red"
+              value={commitCountWeight}
+              onChange={e => onCommitCountWeightChange(Number(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               style={{
-                background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${filesystemWeight}%, #e5e7eb ${filesystemWeight}%, #e5e7eb 100%)`,
+                background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${commitCountWeight}%, #e5e7eb ${commitCountWeight}%, #e5e7eb 100%)`,
               }}
-              aria-label="Filesystem connections weight"
+              aria-label="Commit count weight"
             />
           </div>
         </div>
 
-        {/* Semantic Connections */}
+        {/* Recency */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-600">Semantic</label>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
-                {semanticWeight}%
-              </span>
-            </div>
+            <label className="text-sm font-medium text-gray-600">Recency</label>
+            <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
+              {recencyWeight}%
+            </span>
           </div>
           <div className="relative">
             <input
               type="range"
               min="0"
               max="100"
-              value={semanticWeight}
-              onChange={e => onSemanticWeightChange(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-green"
+              value={recencyWeight}
+              onChange={e => onRecencyWeightChange(Number(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               style={{
-                background: `linear-gradient(to right, #22c55e 0%, #22c55e ${semanticWeight}%, #e5e7eb ${semanticWeight}%, #e5e7eb 100%)`,
+                background: `linear-gradient(to right, #06b6d4 0%, #06b6d4 ${recencyWeight}%, #e5e7eb ${recencyWeight}%, #e5e7eb 100%)`,
               }}
-              aria-label="Semantic connections weight"
+              aria-label="Recency weight"
+            />
+          </div>
+        </div>
+
+        {/* Identifiers */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-600">Identifiers</label>
+            <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
+              {identifiersWeight}%
+            </span>
+          </div>
+          <div className="relative">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={identifiersWeight}
+              onChange={e => onIdentifiersWeightChange(Number(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, #ec4899 0%, #ec4899 ${identifiersWeight}%, #e5e7eb ${identifiersWeight}%, #e5e7eb 100%)`,
+              }}
+              aria-label="Identifiers weight"
+            />
+          </div>
+        </div>
+
+        {/* Incoming References */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-600">Incoming Refs</label>
+            <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
+              {referencesWeight}%
+            </span>
+          </div>
+          <div className="relative">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={referencesWeight}
+              onChange={e => onReferencesWeightChange(Number(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, #10b981 0%, #10b981 ${referencesWeight}%, #e5e7eb ${referencesWeight}%, #e5e7eb 100%)`,
+              }}
+              aria-label="References weight"
             />
           </div>
         </div>
@@ -265,4 +306,4 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
   );
 };
 
-export default DraggableControls;
+export default FloatingNodeSizing;
