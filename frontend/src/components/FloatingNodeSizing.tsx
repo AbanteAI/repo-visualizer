@@ -164,21 +164,29 @@ const FloatingNodeSizing: React.FC<FloatingNodeSizingProps> = ({
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-          <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-          <span className="text-base font-semibold text-gray-800">Node Sizing</span>
-        </div>
-        <button
-          onClick={onClose}
-          className="text-gray-500 hover:text-gray-700 text-xl font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100"
-          style={{ cursor: 'pointer' }}
-        >
-          ×
-        </button>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+        <span className="text-base font-semibold text-gray-800">Node Sizing</span>
       </div>
+
+      {/* Close button positioned absolutely in top right */}
+      <button
+        onClick={onClose}
+        className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-gray-400 hover:text-gray-600 transition-all duration-200 shadow-sm hover:shadow-md"
+        style={{ cursor: 'pointer' }}
+        aria-label="Close"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      </button>
 
       {/* Controls */}
       <div className="space-y-4">

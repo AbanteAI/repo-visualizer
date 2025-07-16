@@ -5,6 +5,7 @@ import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualizati
 import FileDetails from './components/FileDetails';
 import DraggableControls from './components/DraggableControls';
 import FloatingNodeSizing from './components/FloatingNodeSizing';
+import MenuDropdown from './components/MenuDropdown';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -197,22 +198,12 @@ const App: React.FC = () => {
                 </button>
 
                 <div className="border-l border-gray-300 pl-2 ml-2">
-                  {!showConnectionWeights && (
-                    <button
-                      onClick={handleOpenConnectionWeights}
-                      className="bg-gray-100 text-gray-700 py-2 px-3 rounded text-sm hover:bg-gray-200 transition-colors mr-2"
-                    >
-                      Connection Weights
-                    </button>
-                  )}
-                  {!showNodeSizing && (
-                    <button
-                      onClick={handleOpenNodeSizing}
-                      className="bg-gray-100 text-gray-700 py-2 px-3 rounded text-sm hover:bg-gray-200 transition-colors"
-                    >
-                      Node Sizing
-                    </button>
-                  )}
+                  <MenuDropdown
+                    showConnectionWeights={showConnectionWeights}
+                    showNodeSizing={showNodeSizing}
+                    onOpenConnectionWeights={handleOpenConnectionWeights}
+                    onOpenNodeSizing={handleOpenNodeSizing}
+                  />
                 </div>
               </div>
             )}
