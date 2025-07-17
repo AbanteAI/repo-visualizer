@@ -474,7 +474,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('cursor', 'pointer')
         .call(dragBehavior(simulation));
 
-      // Get all node metrics for normalization
+      // Get all node metrics for normalization (compute once per render)
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
       // Create circles for nodes
@@ -514,7 +514,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('font-size', '12px')
         .attr('font-weight', 'bold')
         .attr('fill', '#333')
-        .text(d => (d.expanded ? '−' : '+'))
+        .text(d => (expandedFiles.has(d.id) ? '−' : '+'))
         .style('pointer-events', 'none');
 
       // Add click handler for expand/collapse
@@ -758,7 +758,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           exit => exit.remove()
         );
 
-      // Get all node metrics for normalization
+      // Get all node metrics for normalization (compute once)
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
       // Update node visual properties
