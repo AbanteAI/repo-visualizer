@@ -17,7 +17,6 @@ import {
   computeNodeMetrics,
   computeLinkMetrics,
   calculateNodeSize,
-  calculateNodeColorIntensity,
   calculateEdgeStrength,
   calculateEdgeWidth,
   getNodeColor,
@@ -492,10 +491,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
-        .on('mouseover', function (event, d) {
+        .on('mouseover', function (_event, _d) {
           d3.select(this).attr('stroke-width', 3);
         })
-        .on('mouseout', function (event, d) {
+        .on('mouseout', function (_event, _d) {
           // Reset to default hover state, but preserve selection highlighting
           const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
           d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
@@ -506,7 +505,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         });
 
       // Add expand/collapse indicators for files with components
-      const expandIcons = nodeGroups
+      nodeGroups
         .filter(d => d.type === 'file' && hasComponents(d.id))
         .append('text')
         .attr('x', 0)
@@ -634,14 +633,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       if (!linkSelection || !nodeSelection) return;
 
-      // Calculate current centroid before changes
-      const nodes = simulation.nodes();
-      const centroidBefore = {
-        x: d3.mean(nodes, d => d.x || 0) || 0,
-        y: d3.mean(nodes, d => d.y || 0) || 0,
-      };
-
       // Get current visible node IDs
+      const nodes = simulation.nodes();
       const currentNodeIds = new Set(nodes.map(n => n.id));
 
       // Recreate links with new weights, but only for visible nodes

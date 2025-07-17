@@ -1,5 +1,5 @@
 import { RepositoryData } from '../types/schema';
-import { VisualizationConfig, getFeatureMapping } from '../types/visualization';
+import { VisualizationConfig, getFeatureMapping, DATA_SOURCES } from '../types/visualization';
 
 export interface NodeData {
   id: string;
@@ -136,8 +136,6 @@ export const isColorMappingCategorical = (config: VisualizationConfig): boolean 
   const mapping = getFeatureMapping(config, 'node_color');
   if (!mapping) return true; // Default to categorical
 
-  const { DATA_SOURCES } = require('../types/visualization');
-
   // Check if any active data source is categorical
   return Object.entries(mapping.dataSourceWeights).some(([dataSourceId, weight]) => {
     if (weight > 0) {
@@ -170,14 +168,12 @@ export const calculateCategoricalValue = (
   const mapping = getFeatureMapping(config, featureId);
   if (!mapping) return 'unknown';
 
-  const { DATA_SOURCES } = require('../types/visualization');
-
   // Find the first active categorical data source
   for (const [dataSourceId, weight] of Object.entries(mapping.dataSourceWeights)) {
     if (weight > 0) {
       const dataSource = DATA_SOURCES.find(ds => ds.id === dataSourceId);
       if (dataSource && dataSource.dataType === 'categorical') {
-        return (metrics as any)[dataSourceId] || 'unknown';
+        return (metrics as Record<string, string>)[dataSourceId] || 'unknown';
       }
     }
   }
