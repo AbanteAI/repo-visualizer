@@ -467,6 +467,7 @@ class RepositoryAnalyzer:
                     "id": rel_path,
                     "path": rel_path,
                     "name": dir_name,
+                    "extension": None,
                     "type": "directory",
                     "depth": depth,
                     "size": 0,  # Will be updated later
@@ -595,6 +596,7 @@ class RepositoryAnalyzer:
                                     "id": current_path,
                                     "path": current_path,
                                     "name": part,
+                                    "extension": None,
                                     "type": "directory",
                                     "depth": dir_depth,
                                     "size": 0,
