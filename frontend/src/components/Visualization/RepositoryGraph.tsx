@@ -74,6 +74,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+    const previousNodePositions = useRef<Map<string, { x: number; y: number }>>(new Map());
 
     // Function to toggle node expansion
     const toggleNodeExpansion = useCallback((fileId: string) => {
@@ -267,8 +268,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       )
         return;
 
-      // Clear any existing visualization
+      // Save current transform to preserve zoom/pan position during timeline playback
       const svg = d3.select(svgRef.current);
+      const currentTransform = svg.node() ? d3.zoomTransform(svg.node()!) : d3.zoomIdentity;
+
+      // Clear any existing visualization
       svg.selectAll('*').remove();
 
       // Set up dimensions
@@ -281,6 +285,17 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create a group for the graph
       const g = svg.append('g');
 
+      // Save current node positions before creating new nodes
+      if (simulationRef.current) {
+        const currentNodes = simulationRef.current.nodes();
+        previousNodePositions.current.clear();
+        currentNodes.forEach(node => {
+          if (node.x !== undefined && node.y !== undefined) {
+            previousNodePositions.current.set(node.id, { x: node.x, y: node.y });
+          }
+        });
+      }
+
       // Extract nodes from files and their components
       const nodes: Node[] = [];
 
@@ -288,7 +303,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       data.files.forEach(file => {
         // Only add file-level nodes (not components as separate nodes)
         if (file.type === 'file' || file.type === 'directory') {
-          nodes.push({
+          const nodeData: Node = {
             id: file.id,
             name: file.name,
             path: file.path,
@@ -297,12 +312,21 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             size: file.size,
             depth: file.depth,
             expanded: expandedFiles.has(file.id),
-          });
+          };
+
+          // Preserve position from previous frame if node existed
+          const prevPosition = previousNodePositions.current.get(file.id);
+          if (prevPosition) {
+            nodeData.x = prevPosition.x;
+            nodeData.y = prevPosition.y;
+          }
+
+          nodes.push(nodeData);
 
           // Add component nodes only if file is expanded
           if (expandedFiles.has(file.id) && file.components) {
             file.components.forEach(component => {
-              nodes.push({
+              const componentNodeData: Node = {
                 id: component.id,
                 name: component.name,
                 path: file.path,
@@ -311,13 +335,22 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                 size: 0, // Components don't have file size
                 depth: file.depth + 1,
                 parentId: file.id,
-              });
+              };
+
+              // Preserve position from previous frame if node existed
+              const prevPosition = previousNodePositions.current.get(component.id);
+              if (prevPosition) {
+                componentNodeData.x = prevPosition.x;
+                componentNodeData.y = prevPosition.y;
+              }
+
+              nodes.push(componentNodeData);
 
               // Add nested component nodes recursively
               const addNestedComponents = (comp: any, currentDepth: number, parentId: string) => {
                 if (comp.components) {
                   comp.components.forEach((nestedComp: any) => {
-                    nodes.push({
+                    const nestedNodeData: Node = {
                       id: nestedComp.id,
                       name: nestedComp.name,
                       path: file.path,
@@ -326,7 +359,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                       size: 0,
                       depth: currentDepth + 1,
                       parentId: parentId,
-                    });
+                    };
+
+                    // Preserve position from previous frame if node existed
+                    const prevPosition = previousNodePositions.current.get(nestedComp.id);
+                    if (prevPosition) {
+                      nestedNodeData.x = prevPosition.x;
+                      nestedNodeData.y = prevPosition.y;
+                    }
+
+                    nodes.push(nestedNodeData);
                     addNestedComponents(nestedComp, currentDepth + 1, parentId);
                   });
                 }
@@ -386,57 +428,75 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       const links = createLinks();
 
-      // Create a force simulation
-      const simulation = d3
-        .forceSimulation<Node>(nodes)
-        .force(
-          'link',
-          d3
-            .forceLink<Node, Link>(links)
-            .id(d => d.id)
-            .distance(d => {
-              // Adjust distance based on connection type and weight
-              const baseDistance = 100;
-              const weight = d.weight || 0;
-              const strength = d.originalStrength || 1;
+      // Create or update the force simulation
+      let simulation: d3.Simulation<Node, Link>;
 
-              if (d.type === 'filesystem_proximity') {
-                // Filesystem connections should be closer
-                return baseDistance * (1 - weight * 0.5) * (1 / strength);
-              } else if (d.type === 'semantic_similarity') {
-                // Semantic connections should be moderately close
-                return baseDistance * (1 - weight * 0.4) * (1 / strength);
-              } else if (d.type === 'contains') {
-                // Containment relationships should be very close for clear hierarchy
-                return 50; // Much shorter distance for parent-child relationships
-              } else {
-                // Reference connections
-                return baseDistance * (1 - weight * 0.3);
-              }
-            })
-            .strength(d => {
-              // Adjust strength based on weight
-              const baseStrength = 1;
-              const weight = d.weight || 0;
-              const strength = d.originalStrength || 1;
+      if (simulationRef.current) {
+        // Reuse existing simulation to prevent drift
+        simulation = simulationRef.current;
 
-              if (d.type === 'contains') {
-                // Strong attraction for parent-child relationships
-                return 2; // Stronger force for containment
-              }
+        // Update nodes without restarting the simulation
+        simulation.nodes(nodes);
 
-              return baseStrength * weight * strength;
-            })
-        )
-        .force('charge', d3.forceManyBody().strength(-300))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force(
-          'collision',
-          d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5)
-        );
+        // Update links
+        const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
+        linkForce.links(links);
 
-      // Save simulation to ref for potential future interactions
-      simulationRef.current = simulation;
+        // Gently restart the simulation with low alpha to minimize drift
+        simulation.alpha(0.1).restart();
+      } else {
+        // Create new simulation for first time
+        simulation = d3
+          .forceSimulation<Node>(nodes)
+          .force(
+            'link',
+            d3
+              .forceLink<Node, Link>(links)
+              .id(d => d.id)
+              .distance(d => {
+                // Adjust distance based on connection type and weight
+                const baseDistance = 100;
+                const weight = d.weight || 0;
+                const strength = d.originalStrength || 1;
+
+                if (d.type === 'filesystem_proximity') {
+                  // Filesystem connections should be closer
+                  return baseDistance * (1 - weight * 0.5) * (1 / strength);
+                } else if (d.type === 'semantic_similarity') {
+                  // Semantic connections should be moderately close
+                  return baseDistance * (1 - weight * 0.4) * (1 / strength);
+                } else if (d.type === 'contains') {
+                  // Containment relationships should be very close for clear hierarchy
+                  return 50; // Much shorter distance for parent-child relationships
+                } else {
+                  // Reference connections
+                  return baseDistance * (1 - weight * 0.3);
+                }
+              })
+              .strength(d => {
+                // Adjust strength based on weight
+                const baseStrength = 1;
+                const weight = d.weight || 0;
+                const strength = d.originalStrength || 1;
+
+                if (d.type === 'contains') {
+                  // Strong attraction for parent-child relationships
+                  return 2; // Stronger force for containment
+                }
+
+                return baseStrength * weight * strength;
+              })
+          )
+          .force('charge', d3.forceManyBody().strength(-300))
+          .force('center', d3.forceCenter(width / 2, height / 2))
+          .force(
+            'collision',
+            d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5)
+          );
+
+        // Save simulation to ref for potential future interactions
+        simulationRef.current = simulation;
+      }
 
       // Create links
       const link = g
@@ -532,6 +592,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       zoomRef.current = zoom;
 
       svg.call(zoom);
+
+      // Restore the saved transform to preserve zoom/pan position during timeline playback
+      if (
+        currentTransform &&
+        (currentTransform.k !== 1 || currentTransform.x !== 0 || currentTransform.y !== 0)
+      ) {
+        svg.call(zoom.transform, currentTransform);
+      }
 
       // Update positions on each tick
       simulation.on('tick', () => {

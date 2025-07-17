@@ -467,6 +467,7 @@ class RepositoryAnalyzer:
                     "id": rel_path,
                     "path": rel_path,
                     "name": dir_name,
+                    "extension": None,
                     "type": "directory",
                     "depth": depth,
                     "size": 0,  # Will be updated later
@@ -595,6 +596,7 @@ class RepositoryAnalyzer:
                                     "id": current_path,
                                     "path": current_path,
                                     "name": part,
+                                    "extension": None,
                                     "type": "directory",
                                     "depth": dir_depth,
                                     "size": 0,
@@ -1843,19 +1845,18 @@ class RepositoryAnalyzer:
         Extract commit history from the git repository.
 
         Returns:
-            List of commit data
+            List of commit data (ordered from oldest to newest)
         """
         try:
-            # Get commit logs
+            # Get commit logs from all branches and sort chronologically
             result = subprocess.run(
                 [
                     "git",
                     "log",
+                    "--all",  # Get commits from all branches
                     "--pretty=format:%H|||%an <%ae>|||%ad|||%s",
                     "--date=iso",
-                    "--name-status",
-                    "-n",
-                    "100",  # Limit to 100 commits for performance
+                    # Remove commit limit to get all commits
                 ],
                 cwd=self.repo_path,
                 capture_output=True,
@@ -1868,16 +1869,18 @@ class RepositoryAnalyzer:
 
             # Parse commit log
             commits = []
-            commit_blocks = result.stdout.split("\n\n")
+            commit_lines = result.stdout.strip().split("\n")
 
-            for block in commit_blocks:
-                lines = block.strip().split("\n")
-                if not lines:
+            for line in commit_lines:
+                if not line.strip():
                     continue
 
                 # Parse header
                 try:
-                    header = lines[0].split("|||")
+                    header = line.split("|||")
+                    if len(header) < 4:
+                        continue
+
                     commit_hash = header[0]
                     author = header[1]
                     date_str = header[2]
@@ -1889,52 +1892,8 @@ class RepositoryAnalyzer:
                     )
                     date = dt.isoformat()
 
-                    # Parse file changes
-                    file_changes = []
-                    for i in range(1, len(lines)):
-                        if not lines[i].strip():
-                            continue
-
-                        change_parts = lines[i].split("\t")
-                        if len(change_parts) < 2:
-                            continue
-
-                        change_type = change_parts[0]
-                        file_path = change_parts[-1].replace("\\", "/")
-
-                        # Skip files outside the repo
-                        if ".." in file_path:
-                            continue
-
-                        # Map change type
-                        if change_type == "A":
-                            change_type_mapped = "add"
-                        elif change_type in ("M", "R"):
-                            change_type_mapped = "modify"
-                        elif change_type == "D":
-                            change_type_mapped = "delete"
-                        else:
-                            continue
-
-                        # Get additions and deletions (simplified)
-                        additions = 0
-                        deletions = 0
-                        if change_type_mapped == "add":
-                            additions = 10  # Placeholder value
-                        elif change_type_mapped == "modify":
-                            additions = 5  # Placeholder value
-                            deletions = 3  # Placeholder value
-                        elif change_type_mapped == "delete":
-                            deletions = 10  # Placeholder value
-
-                        file_changes.append(
-                            {
-                                "fileId": file_path,
-                                "type": change_type_mapped,
-                                "additions": additions,
-                                "deletions": deletions,
-                            }
-                        )
+                    # Get file changes for this specific commit
+                    file_changes = self._get_file_changes_for_commit(commit_hash)
 
                     commits.append(
                         {
@@ -1943,15 +1902,104 @@ class RepositoryAnalyzer:
                             "date": date,
                             "message": message,
                             "fileChanges": file_changes,
+                            "timestamp": dt,  # Keep datetime for sorting
                         }
                     )
                 except Exception as e:
                     print(f"Error parsing commit: {e}")
                     continue
 
+            # Sort commits by timestamp (oldest first)
+            commits.sort(key=lambda c: c["timestamp"])
+
+            # Remove the timestamp field as it's not needed in the final output
+            for commit in commits:
+                del commit["timestamp"]
+
             return commits
         except Exception as e:
             print(f"Error extracting commits: {e}")
+            return []
+
+    def _get_file_changes_for_commit(self, commit_hash: str) -> List[Dict[str, Any]]:
+        """
+        Get file changes for a specific commit.
+
+        Args:
+            commit_hash: The commit hash to get changes for
+
+        Returns:
+            List of file changes for this commit
+        """
+        try:
+            # Get file changes for this specific commit
+            result = subprocess.run(
+                [
+                    "git",
+                    "diff-tree",
+                    "-r",  # Recursively show all file changes, not just directories
+                    "--no-commit-id",
+                    "--name-status",
+                    commit_hash,
+                ],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                return []
+
+            file_changes = []
+            for line in result.stdout.strip().split("\n"):
+                if not line.strip():
+                    continue
+
+                change_parts = line.split("\t")
+                if len(change_parts) < 2:
+                    continue
+
+                change_type = change_parts[0]
+                file_path = change_parts[-1].replace("\\", "/")
+
+                # Skip files outside the repo
+                if ".." in file_path:
+                    continue
+
+                # Map change type
+                if change_type == "A":
+                    change_type_mapped = "add"
+                elif change_type in ("M", "R"):
+                    change_type_mapped = "modify"
+                elif change_type == "D":
+                    change_type_mapped = "delete"
+                else:
+                    continue
+
+                # Get additions and deletions (simplified)
+                additions = 0
+                deletions = 0
+                if change_type_mapped == "add":
+                    additions = 10  # Placeholder value
+                elif change_type_mapped == "modify":
+                    additions = 5  # Placeholder value
+                    deletions = 3  # Placeholder value
+                elif change_type_mapped == "delete":
+                    deletions = 10  # Placeholder value
+
+                file_changes.append(
+                    {
+                        "fileId": file_path,
+                        "type": change_type_mapped,
+                        "additions": additions,
+                        "deletions": deletions,
+                    }
+                )
+
+            return file_changes
+        except Exception as e:
+            print(f"Error getting file changes for commit {commit_hash}: {e}")
             return []
 
     def _create_timeline_points(
@@ -1966,34 +2014,181 @@ class RepositoryAnalyzer:
         Returns:
             List of timeline points
         """
-        # This is a simplified implementation that creates a timeline point
-        # for every 10th commit (or fewer if there aren't many commits)
         timeline_points = []
 
         if not commits:
             return timeline_points
 
-        step = max(1, len(commits) // 10)
+        # Create timeline points for key commits, focusing on actual development
+        max_points = 30  # Increase max points to capture more file additions
+        total_commits = len(commits)
 
-        for i in range(0, len(commits), step):
+        # First, collect all commits that add files (these are most important)
+        file_adding_commits = []
+        other_important_commits = []
+
+        for i, commit in enumerate(commits):
+            # Skip merge commits
+            if commit["message"].startswith("Merge "):
+                continue
+
+            # Prioritize commits that add files
+            adds_files = any(fc["type"] == "add" for fc in commit["fileChanges"])
+            if adds_files:
+                file_adding_commits.append(i)
+            elif len(commit["fileChanges"]) > 0:
+                other_important_commits.append(i)
+
+        # Always include the first commit (index 0)
+        indices = [0]
+
+        # Include ALL file-adding commits (these show repository growth)
+        indices.extend(file_adding_commits)
+
+        # Fill remaining slots with other important commits
+        remaining_slots = max_points - len(indices)
+        if remaining_slots > 0 and other_important_commits:
+            if len(other_important_commits) <= remaining_slots:
+                indices.extend(other_important_commits)
+            else:
+                # Sample other commits evenly
+                step = len(other_important_commits) // remaining_slots
+                for i in range(0, len(other_important_commits), step):
+                    if len(indices) < max_points:
+                        indices.append(other_important_commits[i])
+
+        # Remove duplicates and sort
+        indices = sorted(list(set(indices)))
+
+        # Always include the latest commit
+        if indices[-1] != total_commits - 1:
+            indices.append(total_commits - 1)
+
+        for i in indices:
             commit = commits[i]
 
-            # Create a simplified snapshot
+            # Create a snapshot by tracking which files existed at this commit
+            snapshot_files = self._get_files_at_commit(commits[: i + 1])
+            snapshot_relationships = self._get_relationships_at_commit(snapshot_files)
+
             timeline_points.append(
                 {
                     "commitId": commit["id"],
                     "state": {
                         "commitIndex": i,
                         "timestamp": commit["date"],
+                        "message": commit["message"],
+                        "author": commit["author"],
+                        "totalCommits": total_commits,
                     },
                     "snapshot": {
-                        "files": [],  # Simplified for now
-                        "relationships": [],  # Simplified for now
+                        "files": snapshot_files,
+                        "relationships": snapshot_relationships,
                     },
                 }
             )
 
         return timeline_points
+
+    def _get_files_at_commit(
+        self, commits_up_to_here: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Get the list of files that existed at a specific commit.
+
+        Args:
+            commits_up_to_here: All commits up to and including this one
+
+        Returns:
+            List of file objects that existed at this commit
+        """
+        # Track file states by path - start with all files not existing
+        file_states = {}
+
+        # Go through all commits up to this point to track file changes
+        for c in commits_up_to_here:
+            for file_change in c["fileChanges"]:
+                file_path = file_change["fileId"]
+                change_type = file_change["type"]
+
+                if change_type == "add" or change_type == "modify":
+                    # File was added or modified, so it exists
+                    file_states[file_path] = True
+                elif change_type == "delete":
+                    # File was deleted, so it doesn't exist
+                    file_states[file_path] = False
+
+        # Create file objects for files that existed at this commit
+        existing_files = []
+
+        # Create a map of current files by path for quick lookup
+        current_files_by_path = {f["path"]: f for f in self.data["files"]}
+
+        # Go through all file paths that have state information
+        for file_path, exists in file_states.items():
+            if exists:  # File existed at this commit
+                if file_path in current_files_by_path:
+                    # File exists in current state, use existing file object
+                    existing_files.append(current_files_by_path[file_path])
+                else:
+                    # File existed in history but not in current state
+                    # Create a minimal file object for it
+                    import os
+
+                    file_name = os.path.basename(file_path)
+                    extension = os.path.splitext(file_name)[1].lstrip(".")
+                    depth = len(file_path.split("/")) - 1 if "/" in file_path else 0
+
+                    # Determine if it's a directory (heuristic: no extension)
+                    file_type = (
+                        "directory"
+                        if not extension
+                        and file_path
+                        in [".github", ".mentat", "src", "tests", "docs", "frontend"]
+                        else "file"
+                    )
+
+                    existing_files.append(
+                        {
+                            "id": file_path,
+                            "path": file_path,
+                            "name": file_name,
+                            "extension": extension if extension else None,
+                            "size": 0,  # Unknown size for historical files
+                            "type": file_type,
+                            "depth": depth,
+                            "components": [],
+                        }
+                    )
+
+        return existing_files
+
+    def _get_relationships_at_commit(
+        self, files_at_commit: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Get the relationships between files that existed at a specific commit.
+
+        Args:
+            files_at_commit: List of files that existed at this commit
+
+        Returns:
+            List of relationship objects for this commit
+        """
+        # Get the set of file IDs that existed at this commit
+        existing_file_ids = set(file["id"] for file in files_at_commit)
+
+        # Filter relationships to only include those between existing files
+        relationships_at_commit = []
+        for rel in self.data["relationships"]:
+            source_id = rel["source"]
+            target_id = rel["target"]
+
+            # Check if both source and target existed at this commit
+            if source_id in existing_file_ids and target_id in existing_file_ids:
+                relationships_at_commit.append(rel)
+
+        return relationships_at_commit
 
     def _extract_file_git_metrics(self, file_path: str) -> Dict[str, Any]:
         """

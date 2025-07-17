@@ -33,6 +33,12 @@ const App: React.FC = () => {
 
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
+  // Timeline state
+  const [currentTimelineIndex, setCurrentTimelineIndex] = useState<number>(-1); // -1 means current state
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1); // 1x, 2x, 3x speed
+  const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   // Auto-load repo_data.json on component mount
   useEffect(() => {
     const autoLoadRepoData = async () => {
@@ -68,6 +74,9 @@ const App: React.FC = () => {
   const handleDataLoaded = (data: RepositoryData) => {
     setRepositoryData(data);
     setSelectedFile(null);
+    // Reset timeline to current state when new data is loaded
+    setCurrentTimelineIndex(-1);
+    setIsPlaying(false);
   };
 
   const handleFileSelect = (fileId: string | null) => {
@@ -119,6 +128,90 @@ const App: React.FC = () => {
   const handleSemanticWeightChange = (weight: number) => {
     setSemanticWeight(weight);
   };
+
+  // Timeline control handlers
+  const handleTimelineChange = (index: number) => {
+    setCurrentTimelineIndex(index);
+    setIsPlaying(false);
+  };
+
+  const handlePlayPause = () => {
+    if (!isPlaying) {
+      // If starting playback, start from beginning if at current state
+      if (currentTimelineIndex === -1) {
+        setCurrentTimelineIndex(0);
+      }
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handlePlaybackSpeedChange = (speed: number) => {
+    setPlaybackSpeed(speed);
+  };
+
+  // Get current data based on timeline position
+  const getCurrentData = (): RepositoryData | null => {
+    if (!repositoryData) return null;
+
+    // If no timeline data or showing current state, return original data
+    if (!repositoryData.history?.timelinePoints || currentTimelineIndex === -1) {
+      return repositoryData;
+    }
+
+    // Get the timeline point
+    const timelinePoint = repositoryData.history.timelinePoints[currentTimelineIndex];
+    if (!timelinePoint) return repositoryData;
+
+    // Create a modified version of the data with timeline snapshot
+    return {
+      ...repositoryData,
+      files: timelinePoint.snapshot.files || [],
+      relationships: timelinePoint.snapshot.relationships || [],
+    };
+  };
+
+  // Get current timeline info
+  const getCurrentTimelineInfo = () => {
+    if (!repositoryData?.history?.timelinePoints || currentTimelineIndex === -1) {
+      return null;
+    }
+
+    const timelinePoint = repositoryData.history.timelinePoints[currentTimelineIndex];
+    return timelinePoint?.state || null;
+  };
+
+  // Playback effect
+  useEffect(() => {
+    if (!isPlaying || !repositoryData?.history?.timelinePoints) return;
+
+    const interval = setInterval(() => {
+      setCurrentTimelineIndex(prev => {
+        const maxIndex = repositoryData.history!.timelinePoints.length - 1;
+        if (prev >= maxIndex) {
+          setIsPlaying(false);
+          return maxIndex;
+        }
+        return prev + 1;
+      });
+    }, 2000 / playbackSpeed); // Base speed: 2 seconds per commit
+
+    playbackIntervalRef.current = interval;
+
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+      }
+    };
+  }, [isPlaying, playbackSpeed, repositoryData]);
+
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Node sizing weight handlers
   const handleFileSizeWeightChange = (weight: number) => {
@@ -250,7 +343,7 @@ const App: React.FC = () => {
               >
                 <RepositoryGraph
                   ref={graphRef}
-                  data={repositoryData}
+                  data={getCurrentData() || repositoryData}
                   onSelectFile={handleFileSelect}
                   selectedFile={selectedFile}
                   referenceWeight={referenceWeight}
@@ -275,31 +368,119 @@ const App: React.FC = () => {
                     onClose={handleCloseConnectionWeights}
                   />
                 )}
-
-                {showNodeSizing && (
-                  <FloatingNodeSizing
-                    fileSizeWeight={fileSizeWeight}
-                    commitCountWeight={commitCountWeight}
-                    recencyWeight={recencyWeight}
-                    identifiersWeight={identifiersWeight}
-                    referencesWeight={referencesWeight}
-                    onFileSizeWeightChange={handleFileSizeWeightChange}
-                    onCommitCountWeightChange={handleCommitCountWeightChange}
-                    onRecencyWeightChange={handleRecencyWeightChange}
-                    onIdentifiersWeightChange={handleIdentifiersWeightChange}
-                    onReferencesWeightChange={handleReferencesWeightChange}
-                    onClose={handleCloseNodeSizing}
-                  />
-                )}
-
-                {selectedFile && (
-                  <FileDetails
-                    fileId={selectedFile}
-                    data={repositoryData}
-                    onClose={handleCloseFileDetails}
-                  />
-                )}
               </div>
+
+              {showNodeSizing && (
+                <FloatingNodeSizing
+                  fileSizeWeight={fileSizeWeight}
+                  commitCountWeight={commitCountWeight}
+                  recencyWeight={recencyWeight}
+                  identifiersWeight={identifiersWeight}
+                  referencesWeight={referencesWeight}
+                  onFileSizeWeightChange={handleFileSizeWeightChange}
+                  onCommitCountWeightChange={handleCommitCountWeightChange}
+                  onRecencyWeightChange={handleRecencyWeightChange}
+                  onIdentifiersWeightChange={handleIdentifiersWeightChange}
+                  onReferencesWeightChange={handleReferencesWeightChange}
+                  onClose={handleCloseNodeSizing}
+                />
+              )}
+
+              {/* Timeline Controls */}
+              {repositoryData?.history?.timelinePoints &&
+                repositoryData.history.timelinePoints.length > 0 && (
+                  <div className="flex-shrink-0 bg-white border-t p-4">
+                    <div className="flex flex-col gap-3">
+                      <h3 className="text-sm font-medium text-gray-700 text-center">
+                        Repository Timeline
+                      </h3>
+
+                      {/* Play Controls */}
+                      <div className="flex justify-center gap-2 items-center">
+                        <button
+                          onClick={handlePlayPause}
+                          className="bg-green-600 text-white py-1 px-3 rounded text-sm hover:bg-green-700 transition-colors"
+                        >
+                          {isPlaying ? 'Pause' : 'Play'}
+                        </button>
+
+                        <select
+                          value={playbackSpeed}
+                          onChange={e => handlePlaybackSpeedChange(Number(e.target.value))}
+                          className="bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm"
+                        >
+                          <option value={0.5}>0.5x</option>
+                          <option value={1}>1x</option>
+                          <option value={2}>2x</option>
+                          <option value={3}>3x</option>
+                        </select>
+
+                        <button
+                          onClick={() => handleTimelineChange(-1)}
+                          disabled={currentTimelineIndex === -1}
+                          className="bg-gray-600 text-white py-1 px-3 rounded text-sm hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Current
+                        </button>
+                      </div>
+
+                      {/* Timeline Scrubber */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">First</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={repositoryData.history.timelinePoints.length - 1}
+                          value={
+                            currentTimelineIndex === -1
+                              ? repositoryData.history.timelinePoints.length - 1
+                              : currentTimelineIndex
+                          }
+                          onChange={e => handleTimelineChange(Number(e.target.value))}
+                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-500">Latest</span>
+                      </div>
+
+                      {/* Timeline Info */}
+                      <div className="text-center text-xs text-gray-600">
+                        {currentTimelineIndex === -1 ? (
+                          <span>Current State</span>
+                        ) : getCurrentTimelineInfo() ? (
+                          <div className="flex flex-col gap-1">
+                            <span>
+                              Commit {currentTimelineIndex + 1} of{' '}
+                              {repositoryData.history.timelinePoints.length}
+                            </span>
+                            <span className="font-mono text-xs">
+                              {getCurrentTimelineInfo()?.message?.substring(0, 50)}
+                              {getCurrentTimelineInfo()?.message?.length > 50 ? '...' : ''}
+                            </span>
+                            <span className="text-gray-500">
+                              {getCurrentTimelineInfo()?.author} •{' '}
+                              {getCurrentTimelineInfo()?.timestamp
+                                ? new Date(getCurrentTimelineInfo()?.timestamp).toLocaleDateString()
+                                : ''}
+                            </span>
+                          </div>
+                        ) : (
+                          <span>
+                            Timeline point {currentTimelineIndex + 1} of{' '}
+                            {repositoryData.history.timelinePoints.length}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              {selectedFile && (
+                <FileDetails
+                  fileId={selectedFile}
+                  data={getCurrentData() || repositoryData}
+                  onClose={handleCloseFileDetails}
+                />
+              )}
             </div>
           </>
         )}
