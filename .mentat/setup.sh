@@ -1,24 +1,35 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# Determine Python command to use (python3 or python)
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-    PIP_CMD="pip3"
-elif command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-    PIP_CMD="pip"
+# Set non-interactive frontend for APT
+export DEBIAN_FRONTEND=noninteractive
+
+# Install Python 3.12 and required packages if not available
+echo "Checking for Python 3.12..."
+if command -v python3.12 &> /dev/null; then
+    echo "Python 3.12 found"
+    PYTHON_CMD="python3.12"
 else
-    echo "Error: Neither python3 nor python was found"
-    exit 1
+    echo "Installing Python 3.12..."
+    apt-get update
+    apt-get install -y --no-install-recommends python3.12 python3.12-venv python3.12-dev
+    PYTHON_CMD="python3.12"
 fi
+
+# Also install pip for system (needed for venv pip setup)
+apt-get install -y --no-install-recommends python3-pip
 
 echo "Using Python command: $PYTHON_CMD"
 
-# Create virtual environment if it doesn't exist
-if [ ! -d ".venv" ]; then
+# Create or recreate virtual environment if activate script is missing
+if [ ! -f ".venv/bin/activate" ]; then
     echo "Creating virtual environment..."
-    $PYTHON_CMD -m venv .venv
+    rm -rf .venv
+    "$PYTHON_CMD" -m venv .venv
+    
+    # Install pip in the venv (Ubuntu disables ensurepip)
+    echo "Setting up pip in virtual environment..."
+    .venv/bin/python -m pip install --upgrade pip setuptools wheel
 fi
 
 # Activate virtual environment
