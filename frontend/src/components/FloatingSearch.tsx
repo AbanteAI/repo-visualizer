@@ -45,16 +45,19 @@ const FloatingSearch: React.FC<FloatingSearchProps> = ({
   }, [isInitialized]);
 
   // Handle mouse down on the draggable header
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    setDragStart({
-      mouseX: e.clientX,
-      mouseY: e.clientY,
-      elementX: position.x,
-      elementY: position.y,
-    });
-  }, [position]);
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+      setDragStart({
+        mouseX: e.clientX,
+        mouseY: e.clientY,
+        elementX: position.x,
+        elementY: position.y,
+      });
+    },
+    [position]
+  );
 
   // Handle mouse move when dragging
   const handleMouseMove = useCallback(
@@ -115,10 +118,7 @@ const FloatingSearch: React.FC<FloatingSearchProps> = ({
       }}
     >
       {/* Header */}
-      <div 
-        className="flex items-center justify-between mb-5"
-        onMouseDown={handleMouseDown}
-      >
+      <div className="flex items-center justify-between mb-5" onMouseDown={handleMouseDown}>
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 bg-red-500 rounded-full"></div>
           <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
@@ -144,7 +144,7 @@ const FloatingSearch: React.FC<FloatingSearchProps> = ({
             onChange={e => onSearchQueryChange(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          
+
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-sm">
@@ -170,7 +170,7 @@ const FloatingSearch: React.FC<FloatingSearchProps> = ({
                 <span className="text-gray-700">Semantic</span>
               </label>
             </div>
-            
+
             {searchQuery && (
               <button
                 onClick={onClearSearch}
