@@ -5,7 +5,10 @@ import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualizati
 import FileDetails from './components/FileDetails';
 import DraggableControls from './components/DraggableControls';
 import FloatingNodeSizing from './components/FloatingNodeSizing';
+import FloatingSearch from './components/FloatingSearch';
 import MenuDropdown from './components/MenuDropdown';
+
+export type SearchMode = 'exact' | 'semantic';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -19,10 +22,14 @@ const App: React.FC = () => {
   const [semanticWeight, setSemanticWeight] = useState(30);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<SearchMode>('exact');
+  const [searchResults, setSearchResults] = useState<Map<string, number>>(new Map());
 
   // Menu visibility state
   const [showConnectionWeights, setShowConnectionWeights] = useState(true);
   const [showNodeSizing, setShowNodeSizing] = useState(true);
+  const [showSearch, setShowSearch] = useState(false);
 
   // Node sizing weights
   const [fileSizeWeight, setFileSizeWeight] = useState(100);
@@ -120,6 +127,19 @@ const App: React.FC = () => {
     setSemanticWeight(weight);
   };
 
+  const handleSearchQueryChange = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  const handleSearchModeChange = (mode: SearchMode) => {
+    setSearchMode(mode);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults(new Map());
+  };
+
   // Node sizing weight handlers
   const handleFileSizeWeightChange = (weight: number) => {
     setFileSizeWeight(weight);
@@ -150,12 +170,20 @@ const App: React.FC = () => {
     setShowNodeSizing(false);
   };
 
+  const handleCloseSearch = () => {
+    setShowSearch(false);
+  };
+
   const handleOpenConnectionWeights = () => {
     setShowConnectionWeights(true);
   };
 
   const handleOpenNodeSizing = () => {
     setShowNodeSizing(true);
+  };
+
+  const handleOpenSearch = () => {
+    setShowSearch(true);
   };
 
   return (
@@ -208,8 +236,10 @@ const App: React.FC = () => {
                 <MenuDropdown
                   showConnectionWeights={showConnectionWeights}
                   showNodeSizing={showNodeSizing}
+                  showSearch={showSearch}
                   onOpenConnectionWeights={handleOpenConnectionWeights}
                   onOpenNodeSizing={handleOpenNodeSizing}
+                  onOpenSearch={handleOpenSearch}
                 />
               </div>
             )}
@@ -256,6 +286,10 @@ const App: React.FC = () => {
                   referenceWeight={referenceWeight}
                   filesystemWeight={filesystemWeight}
                   semanticWeight={semanticWeight}
+                  searchQuery={searchQuery}
+                  searchMode={searchMode}
+                  searchResults={searchResults}
+                  onSearchResultsChange={setSearchResults}
                   fileSizeWeight={fileSizeWeight}
                   commitCountWeight={commitCountWeight}
                   recencyWeight={recencyWeight}
@@ -289,6 +323,17 @@ const App: React.FC = () => {
                     onIdentifiersWeightChange={handleIdentifiersWeightChange}
                     onReferencesWeightChange={handleReferencesWeightChange}
                     onClose={handleCloseNodeSizing}
+                  />
+                )}
+
+                {showSearch && (
+                  <FloatingSearch
+                    searchQuery={searchQuery}
+                    searchMode={searchMode}
+                    onSearchQueryChange={handleSearchQueryChange}
+                    onSearchModeChange={handleSearchModeChange}
+                    onClearSearch={handleClearSearch}
+                    onClose={handleCloseSearch}
                   />
                 )}
 

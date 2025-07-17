@@ -3,20 +3,24 @@ import React, { useState, useRef, useEffect } from 'react';
 interface MenuDropdownProps {
   showConnectionWeights: boolean;
   showNodeSizing: boolean;
+  showSearch: boolean;
   onOpenConnectionWeights: () => void;
   onOpenNodeSizing: () => void;
+  onOpenSearch: () => void;
 }
 
 const MenuDropdown: React.FC<MenuDropdownProps> = ({
   showConnectionWeights,
   showNodeSizing,
+  showSearch,
   onOpenConnectionWeights,
   onOpenNodeSizing,
+  onOpenSearch,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const hasHiddenMenus = !showConnectionWeights || !showNodeSizing;
+  const hasHiddenMenus = !showConnectionWeights || !showNodeSizing || !showSearch;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -84,6 +88,23 @@ const MenuDropdown: React.FC<MenuDropdownProps> = ({
                 <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
               </div>
               Node Sizing
+            </button>
+          )}
+
+          {!showSearch && (
+            <button
+              onClick={() => {
+                onOpenSearch();
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-3"
+            >
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-violet-500 rounded-full"></div>
+              </div>
+              Search
             </button>
           )}
         </div>
