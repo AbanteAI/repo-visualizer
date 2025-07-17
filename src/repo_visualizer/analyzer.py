@@ -1878,7 +1878,7 @@ class RepositoryAnalyzer:
                     header = line.split("|||")
                     if len(header) < 4:
                         continue
-                        
+
                     commit_hash = header[0]
                     author = header[1]
                     date_str = header[2]
@@ -1909,11 +1909,11 @@ class RepositoryAnalyzer:
 
             # Sort commits by timestamp (oldest first)
             commits.sort(key=lambda c: c["timestamp"])
-            
+
             # Remove the timestamp field as it's not needed in the final output
             for commit in commits:
                 del commit["timestamp"]
-            
+
             return commits
         except Exception as e:
             print(f"Error extracting commits: {e}")
@@ -1922,10 +1922,10 @@ class RepositoryAnalyzer:
     def _get_file_changes_for_commit(self, commit_hash: str) -> List[Dict[str, Any]]:
         """
         Get file changes for a specific commit.
-        
+
         Args:
             commit_hash: The commit hash to get changes for
-            
+
         Returns:
             List of file changes for this commit
         """
@@ -2019,29 +2019,29 @@ class RepositoryAnalyzer:
         # Create timeline points for key commits, focusing on actual development
         max_points = 30  # Increase max points to capture more file additions
         total_commits = len(commits)
-        
+
         # First, collect all commits that add files (these are most important)
         file_adding_commits = []
         other_important_commits = []
-        
+
         for i, commit in enumerate(commits):
             # Skip merge commits
             if commit["message"].startswith("Merge "):
                 continue
-            
+
             # Prioritize commits that add files
             adds_files = any(fc["type"] == "add" for fc in commit["fileChanges"])
             if adds_files:
                 file_adding_commits.append(i)
             elif len(commit["fileChanges"]) > 0:
                 other_important_commits.append(i)
-        
+
         # Always include the first commit (index 0)
         indices = [0]
-        
+
         # Include ALL file-adding commits (these show repository growth)
         indices.extend(file_adding_commits)
-        
+
         # Fill remaining slots with other important commits
         remaining_slots = max_points - len(indices)
         if remaining_slots > 0 and other_important_commits:
@@ -2053,19 +2053,19 @@ class RepositoryAnalyzer:
                 for i in range(0, len(other_important_commits), step):
                     if len(indices) < max_points:
                         indices.append(other_important_commits[i])
-        
+
         # Remove duplicates and sort
         indices = sorted(list(set(indices)))
-        
+
         # Always include the latest commit
         if indices[-1] != total_commits - 1:
             indices.append(total_commits - 1)
 
         for i in indices:
             commit = commits[i]
-            
+
             # Create a snapshot by tracking which files existed at this commit
-            snapshot_files = self._get_files_at_commit(commit, commits[:i+1])
+            snapshot_files = self._get_files_at_commit(commit, commits[: i + 1])
             snapshot_relationships = self._get_relationships_at_commit(snapshot_files)
 
             timeline_points.append(
@@ -2087,39 +2087,41 @@ class RepositoryAnalyzer:
 
         return timeline_points
 
-    def _get_files_at_commit(self, commit: Dict[str, Any], commits_up_to_here: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _get_files_at_commit(
+        self, commit: Dict[str, Any], commits_up_to_here: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         Get the list of files that existed at a specific commit.
-        
+
         Args:
             commit: The commit to get files for
             commits_up_to_here: All commits up to and including this one (in chronological order, oldest first)
-        
+
         Returns:
             List of file objects that existed at this commit
         """
         # Track file states by path - start with all files not existing
         file_states = {}
-        
+
         # Go through all commits up to this point to track file changes (oldest to newest)
         for c in commits_up_to_here:
             for file_change in c["fileChanges"]:
                 file_path = file_change["fileId"]
                 change_type = file_change["type"]
-                
+
                 if change_type == "add" or change_type == "modify":
                     # File was added or modified, so it exists
                     file_states[file_path] = True
                 elif change_type == "delete":
                     # File was deleted, so it doesn't exist
                     file_states[file_path] = False
-        
+
         # Create file objects for files that existed at this commit
         existing_files = []
-        
+
         # Create a map of current files by path for quick lookup
         current_files_by_path = {f["path"]: f for f in self.data["files"]}
-        
+
         # Go through all file paths that have state information
         for file_path, exists in file_states.items():
             if exists:  # File existed at this commit
@@ -2130,49 +2132,60 @@ class RepositoryAnalyzer:
                     # File existed in history but not in current state
                     # Create a minimal file object for it
                     import os
+
                     file_name = os.path.basename(file_path)
                     extension = os.path.splitext(file_name)[1].lstrip(".")
                     depth = len(file_path.split("/")) - 1 if "/" in file_path else 0
-                    
+
                     # Determine if it's a directory (heuristic: no extension and known to be a directory)
-                    file_type = "directory" if not extension and file_path in [".github", ".mentat", "src", "tests", "docs", "frontend"] else "file"
-                    
-                    existing_files.append({
-                        "id": file_path,
-                        "path": file_path,
-                        "name": file_name,
-                        "extension": extension if extension else None,
-                        "size": 0,  # Unknown size for historical files
-                        "type": file_type,
-                        "depth": depth,
-                        "components": []
-                    })
-        
+                    file_type = (
+                        "directory"
+                        if not extension
+                        and file_path
+                        in [".github", ".mentat", "src", "tests", "docs", "frontend"]
+                        else "file"
+                    )
+
+                    existing_files.append(
+                        {
+                            "id": file_path,
+                            "path": file_path,
+                            "name": file_name,
+                            "extension": extension if extension else None,
+                            "size": 0,  # Unknown size for historical files
+                            "type": file_type,
+                            "depth": depth,
+                            "components": [],
+                        }
+                    )
+
         return existing_files
 
-    def _get_relationships_at_commit(self, files_at_commit: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _get_relationships_at_commit(
+        self, files_at_commit: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         Get the relationships between files that existed at a specific commit.
-        
+
         Args:
             files_at_commit: List of files that existed at this commit
-        
+
         Returns:
             List of relationship objects for this commit
         """
         # Get the set of file IDs that existed at this commit
         existing_file_ids = set(file["id"] for file in files_at_commit)
-        
+
         # Filter relationships to only include those between existing files
         relationships_at_commit = []
         for rel in self.data["relationships"]:
             source_id = rel["source"]
             target_id = rel["target"]
-            
+
             # Check if both source and target existed at this commit
             if source_id in existing_file_ids and target_id in existing_file_ids:
                 relationships_at_commit.append(rel)
-        
+
         return relationships_at_commit
 
     def _extract_file_git_metrics(self, file_path: str) -> Dict[str, Any]:
@@ -2238,7 +2251,6 @@ class RepositoryAnalyzer:
             metrics["lastCommitDate"] = datetime.now().isoformat()
 
         return metrics
->>>>>>> origin/main
 
     def save_to_file(self, output_path: str) -> None:
         """
