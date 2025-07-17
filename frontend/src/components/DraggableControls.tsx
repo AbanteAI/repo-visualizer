@@ -22,7 +22,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
 }) => {
   const { position, isDragging, isInitialized, controlsRef, handleMouseDown } = useDraggable({
     initialPosition: { x: 'calc(100% - 300px)', y: 20 },
-    width: 280,
+    width: 300,
   });
 
   return (

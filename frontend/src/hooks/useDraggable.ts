@@ -76,6 +76,7 @@ export const useDraggable = ({ initialPosition, width }: UseDraggableProps) => {
     });
 
     setIsDragging(true);
+    e.preventDefault();
   };
 
   const handleMouseMove = useCallback(
