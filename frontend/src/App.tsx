@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { RepositoryData } from './types/schema';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
-import Controls from './components/Controls';
 import FileDetails from './components/FileDetails';
 import DraggableControls from './components/DraggableControls';
+import FloatingNodeSizing from './components/FloatingNodeSizing';
+import MenuDropdown from './components/MenuDropdown';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -18,6 +19,10 @@ const App: React.FC = () => {
   const [semanticWeight, setSemanticWeight] = useState(30);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
+
+  // Menu visibility state
+  const [showConnectionWeights, setShowConnectionWeights] = useState(true);
+  const [showNodeSizing, setShowNodeSizing] = useState(true);
 
   // Node sizing weights
   const [fileSizeWeight, setFileSizeWeight] = useState(100);
@@ -136,12 +141,79 @@ const App: React.FC = () => {
     setReferencesWeight(weight);
   };
 
+  // Menu visibility handlers
+  const handleCloseConnectionWeights = () => {
+    setShowConnectionWeights(false);
+  };
+
+  const handleCloseNodeSizing = () => {
+    setShowNodeSizing(false);
+  };
+
+  const handleOpenConnectionWeights = () => {
+    setShowConnectionWeights(true);
+  };
+
+  const handleOpenNodeSizing = () => {
+    setShowNodeSizing(true);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-          <h1 className="text-2xl font-bold text-gray-900">Repo Visualizer</h1>
-          <p className="text-sm text-gray-500">Visualize your repository structure interactively</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Repo Visualizer</h1>
+              <p className="text-sm text-gray-500">
+                Visualize your repository structure interactively
+              </p>
+            </div>
+
+            {repositoryData && (
+              <div className="flex items-center gap-4">
+                {/* Navigation Controls */}
+                <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
+                  <button
+                    onClick={handleZoomIn}
+                    className="flex items-center justify-center w-10 h-10 rounded-md bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
+                    title="Zoom In"
+                  >
+                    <span className="text-lg font-bold">+</span>
+                  </button>
+                  <button
+                    onClick={handleZoomOut}
+                    className="flex items-center justify-center w-10 h-10 rounded-md bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
+                    title="Zoom Out"
+                  >
+                    <span className="text-lg font-bold">−</span>
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="flex items-center justify-center w-10 h-10 rounded-md bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
+                    title="Reset View"
+                  >
+                    <span className="text-base font-bold">⌂</span>
+                  </button>
+                  <button
+                    onClick={toggleFullscreen}
+                    className="flex items-center justify-center w-10 h-10 rounded-md bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
+                    title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                  >
+                    <span className="text-base font-bold">{isFullscreen ? '⇱' : '⛶'}</span>
+                  </button>
+                </div>
+
+                {/* Menu Controls */}
+                <MenuDropdown
+                  showConnectionWeights={showConnectionWeights}
+                  showNodeSizing={showNodeSizing}
+                  onOpenConnectionWeights={handleOpenConnectionWeights}
+                  onOpenNodeSizing={handleOpenNodeSizing}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -191,43 +263,43 @@ const App: React.FC = () => {
                   referencesWeight={referencesWeight}
                 />
 
-                <DraggableControls
-                  referenceWeight={referenceWeight}
-                  filesystemWeight={filesystemWeight}
-                  semanticWeight={semanticWeight}
-                  onReferenceWeightChange={handleReferenceWeightChange}
-                  onFilesystemWeightChange={handleFilesystemWeightChange}
-                  onSemanticWeightChange={handleSemanticWeightChange}
-                />
-              </div>
+                {/* Floating Menus */}
+                {showConnectionWeights && (
+                  <DraggableControls
+                    referenceWeight={referenceWeight}
+                    filesystemWeight={filesystemWeight}
+                    semanticWeight={semanticWeight}
+                    onReferenceWeightChange={handleReferenceWeightChange}
+                    onFilesystemWeightChange={handleFilesystemWeightChange}
+                    onSemanticWeightChange={handleSemanticWeightChange}
+                    onClose={handleCloseConnectionWeights}
+                  />
+                )}
 
-              <div className="flex-shrink-0 bg-white border-t">
-                <Controls
-                  onZoomIn={handleZoomIn}
-                  onZoomOut={handleZoomOut}
-                  onReset={handleReset}
-                  onFullscreen={toggleFullscreen}
-                  isFullscreen={isFullscreen}
-                  fileSizeWeight={fileSizeWeight}
-                  commitCountWeight={commitCountWeight}
-                  recencyWeight={recencyWeight}
-                  identifiersWeight={identifiersWeight}
-                  referencesWeight={referencesWeight}
-                  onFileSizeWeightChange={handleFileSizeWeightChange}
-                  onCommitCountWeightChange={handleCommitCountWeightChange}
-                  onRecencyWeightChange={handleRecencyWeightChange}
-                  onIdentifiersWeightChange={handleIdentifiersWeightChange}
-                  onReferencesWeightChange={handleReferencesWeightChange}
-                />
-              </div>
+                {showNodeSizing && (
+                  <FloatingNodeSizing
+                    fileSizeWeight={fileSizeWeight}
+                    commitCountWeight={commitCountWeight}
+                    recencyWeight={recencyWeight}
+                    identifiersWeight={identifiersWeight}
+                    referencesWeight={referencesWeight}
+                    onFileSizeWeightChange={handleFileSizeWeightChange}
+                    onCommitCountWeightChange={handleCommitCountWeightChange}
+                    onRecencyWeightChange={handleRecencyWeightChange}
+                    onIdentifiersWeightChange={handleIdentifiersWeightChange}
+                    onReferencesWeightChange={handleReferencesWeightChange}
+                    onClose={handleCloseNodeSizing}
+                  />
+                )}
 
-              {selectedFile && (
-                <FileDetails
-                  fileId={selectedFile}
-                  data={repositoryData}
-                  onClose={handleCloseFileDetails}
-                />
-              )}
+                {selectedFile && (
+                  <FileDetails
+                    fileId={selectedFile}
+                    data={repositoryData}
+                    onClose={handleCloseFileDetails}
+                  />
+                )}
+              </div>
             </div>
           </>
         )}
