@@ -111,7 +111,7 @@ export const computeLinkMetrics = (data: RepositoryData): Map<string, ComputedLi
 
 // Calculate weighted value for a visual feature (for numerical data)
 export const calculateWeightedValue = (
-  metrics: Record<string, number>,
+  metrics: Record<string, unknown>,
   config: VisualizationConfig,
   featureId: string
 ): number => {
@@ -122,8 +122,8 @@ export const calculateWeightedValue = (
   let totalWeight = 0;
 
   Object.entries(mapping.dataSourceWeights).forEach(([dataSourceId, weight]) => {
-    if (weight > 0 && metrics[dataSourceId] !== undefined) {
-      totalWeightedValue += (metrics[dataSourceId] * weight) / 100;
+    if (weight > 0 && typeof metrics[dataSourceId] === 'number') {
+      totalWeightedValue += ((metrics[dataSourceId] as number) * weight) / 100;
       totalWeight += weight / 100;
     }
   });
