@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   VisualizationConfig,
   VisualFeature,
-  DataSource,
   VISUAL_FEATURES,
   DATA_SOURCES,
   getFeatureMapping,

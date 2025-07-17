@@ -731,20 +731,42 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           return baseStrength * weight * strength;
         });
 
-      // Update link visual properties
+      // Update link visual properties with proper enter/update/exit handling
       linkSelection
-        .data(updatedLinks)
-        .attr('stroke', (d: Link) => getLinkColor(d.type))
-        .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
-        .attr('stroke-width', (d: Link) => {
-          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-          const linkMetric = linkMetrics.get(linkKey) ?? {
-            semantic_similarity: 0,
-            filesystem_proximity: 0,
-            code_references: d.type === 'contains' ? 1 : 0,
-          };
-          return calculateEdgeWidth(linkMetric, config, d.type);
-        });
+        .data(
+          updatedLinks,
+          (d: Link) => `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`
+        )
+        .join(
+          enter =>
+            enter
+              .append('line')
+              .attr('stroke', (d: Link) => getLinkColor(d.type))
+              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
+              .attr('stroke-width', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeWidth(linkMetric, config, d.type);
+              }),
+          update =>
+            update
+              .attr('stroke', (d: Link) => getLinkColor(d.type))
+              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
+              .attr('stroke-width', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeWidth(linkMetric, config, d.type);
+              }),
+          exit => exit.remove()
+        );
 
       // Get all node metrics for normalization
       const allNodeMetrics = Array.from(nodeMetrics.values());
@@ -762,6 +784,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           const intensity = calculateNodeColorIntensity(metrics, config, allNodeMetrics);
           return getNodeColorWithIntensity(d, extensionColors, intensity);
         });
+
+      // Update label positions to match new node sizes
+      const labelSelection = (simulation as any).__labelSelection;
+      if (labelSelection) {
+        labelSelection.attr('dx', (d: Node) => {
+          const metrics = nodeMetrics.get(d.id);
+          const radius = metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          return radius + 5;
+        });
+      }
 
       // Update collision force with new node sizes
       const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;

@@ -159,8 +159,6 @@ export const calculateNodeColorIntensity = (
   config: VisualizationConfig,
   allNodeMetrics: ComputedNodeMetrics[]
 ): number => {
-  const weightedValue = calculateWeightedValue(nodeMetrics, config, 'node_color');
-
   // Normalize across all nodes
   const allWeightedValues = allNodeMetrics.map(m =>
     calculateWeightedValue(m, config, 'node_color')
