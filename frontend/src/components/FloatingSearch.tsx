@@ -62,21 +62,26 @@ const FloatingSearch: React.FC<FloatingSearchProps> = ({
   // Handle mouse move when dragging
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
-      if (!isDragging) return;
+      if (!isDragging || !controlsRef.current) return;
 
+      const parent = controlsRef.current.parentElement;
+      if (!parent) return;
+
+      // Calculate how much the mouse has moved since drag started
       const deltaX = e.clientX - dragStart.mouseX;
       const deltaY = e.clientY - dragStart.mouseY;
 
+      // Calculate new position
       const newX = dragStart.elementX + deltaX;
       const newY = dragStart.elementY + deltaY;
 
-      // Constrain to viewport
-      const maxX = window.innerWidth - 340; // Menu width
-      const maxY = window.innerHeight - 400; // Menu height
+      // Keep within bounds - use window dimensions for better movement freedom
+      const maxX = Math.max(0, parent.offsetWidth - controlsRef.current.offsetWidth);
+      const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40); // 40px buffer from bottom
 
       setPosition({
-        x: Math.max(0, Math.min(newX, maxX)),
-        y: Math.max(0, Math.min(newY, maxY)),
+        x: Math.max(0, Math.min(maxX, newX)),
+        y: Math.max(0, Math.min(maxY, newY)),
       });
     },
     [isDragging, dragStart]
@@ -99,6 +104,29 @@ const FloatingSearch: React.FC<FloatingSearchProps> = ({
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
+  // Handle window resize to keep panel visible
+  useEffect(() => {
+    const handleResize = () => {
+      if (controlsRef.current && isInitialized) {
+        const parent = controlsRef.current.parentElement;
+        if (parent) {
+          const maxX = Math.max(0, parent.offsetWidth - controlsRef.current.offsetWidth);
+          const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40);
+
+          setPosition(prev => ({
+            x: Math.max(0, Math.min(maxX, prev.x)),
+            y: Math.max(0, Math.min(maxY, prev.y)),
+          }));
+        }
+      }
+    };
+
+    if (isInitialized) {
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, [isInitialized]);
+
   return (
     <div
       ref={controlsRef}
@@ -115,23 +143,29 @@ const FloatingSearch: React.FC<FloatingSearchProps> = ({
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
         cursor: isDragging ? 'grabbing' : 'grab',
         padding: '20px',
+        pointerEvents: 'auto',
       }}
     >
+      {/* Close button positioned absolutely in top right */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-white hover:bg-red-50 border border-gray-200 text-gray-400 hover:text-red-500 transition-all duration-200 shadow-sm hover:shadow-md"
+        style={{ cursor: 'pointer' }}
+        aria-label="Close"
+      >
+        <span className="text-lg font-bold">×</span>
+      </button>
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-5" onMouseDown={handleMouseDown}>
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-          <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-          <span className="text-base font-semibold text-gray-800">Search</span>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-          aria-label="Close search"
-        >
-          <span className="text-gray-500 hover:text-gray-700">×</span>
-        </button>
+      <div
+        className="flex items-center gap-3 mb-6 pr-12"
+        onMouseDown={handleMouseDown}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+      >
+        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+        <h3 className="text-xl font-bold text-gray-900 border-b-2 border-blue-500 pb-1">Search</h3>
       </div>
 
       {/* Search Controls */}

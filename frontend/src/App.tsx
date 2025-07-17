@@ -29,7 +29,7 @@ const App: React.FC = () => {
   // Menu visibility state
   const [showConnectionWeights, setShowConnectionWeights] = useState(true);
   const [showNodeSizing, setShowNodeSizing] = useState(true);
-  const [showSearch, setShowSearch] = useState(true);
+  const [showSearch, setShowSearch] = useState(false);
 
   // Node sizing weights
   const [fileSizeWeight, setFileSizeWeight] = useState(100);
