@@ -1935,6 +1935,7 @@ class RepositoryAnalyzer:
                 [
                     "git",
                     "diff-tree",
+                    "-r",  # Recursively show all file changes, not just directory changes
                     "--no-commit-id",
                     "--name-status",
                     commit_hash,
