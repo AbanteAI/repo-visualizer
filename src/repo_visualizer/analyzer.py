@@ -2066,7 +2066,7 @@ class RepositoryAnalyzer:
             commit = commits[i]
 
             # Create a snapshot by tracking which files existed at this commit
-            snapshot_files = self._get_files_at_commit(commit, commits[: i + 1])
+            snapshot_files = self._get_files_at_commit(commits[: i + 1])
             snapshot_relationships = self._get_relationships_at_commit(snapshot_files)
 
             timeline_points.append(
@@ -2089,14 +2089,13 @@ class RepositoryAnalyzer:
         return timeline_points
 
     def _get_files_at_commit(
-        self, commit: Dict[str, Any], commits_up_to_here: List[Dict[str, Any]]
+        self, commits_up_to_here: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
         Get the list of files that existed at a specific commit.
 
         Args:
-            commit: The commit to get files for
-            commits_up_to_here: All commits up to and including this one (chronologically)
+            commits_up_to_here: All commits up to and including this one
 
         Returns:
             List of file objects that existed at this commit
