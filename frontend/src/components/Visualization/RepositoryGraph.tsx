@@ -456,8 +456,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', d => {
           const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-          const linkMetric = linkMetrics.get(linkKey);
-          return linkMetric ? calculateEdgeWidth(linkMetric, config, d.type) : 1;
+          const linkMetric = linkMetrics.get(linkKey) ?? {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: d.type === 'contains' ? 1 : 0,
+          };
+          return calculateEdgeWidth(linkMetric, config, d.type);
         });
 
       // Create node groups (to hold both circles and expand/collapse indicators)
@@ -528,7 +532,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Add node labels
       const label = nodeGroups
         .append('text')
-        .attr('dx', d => getNodeRadius(d) + 5)
+        .attr('dx', d => {
+          const metrics = nodeMetrics.get(d.id);
+          const radius = metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          return radius + 5;
+        })
         .attr('dy', 4)
         .text(d => d.name)
         .style('font-size', '10px')
@@ -730,8 +738,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', (d: Link) => {
           const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-          const linkMetric = linkMetrics.get(linkKey);
-          return linkMetric ? calculateEdgeWidth(linkMetric, config, d.type) : 1;
+          const linkMetric = linkMetrics.get(linkKey) ?? {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: d.type === 'contains' ? 1 : 0,
+          };
+          return calculateEdgeWidth(linkMetric, config, d.type);
         });
 
       // Get all node metrics for normalization
