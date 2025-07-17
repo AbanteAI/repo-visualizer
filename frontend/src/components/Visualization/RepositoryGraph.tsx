@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import * as d3 from 'd3';
 import { RepositoryData } from '../../types/schema';
-import { SearchMode } from '../Controls';
+import { SearchMode } from '../../App';
 import {
   createSearchIndex,
   performExactSearch,
