@@ -188,11 +188,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           const component = fileData?.components?.find(c => c.id === node.id);
           if (
             component &&
-            (component.lineStart || component.line_start) &&
-            (component.lineEnd || component.line_end)
+            (component.lineStart || (component as any).line_start) &&
+            (component.lineEnd || (component as any).line_end)
           ) {
-            const lineStart = component.lineStart || component.line_start || 0;
-            const lineEnd = component.lineEnd || component.line_end || 0;
+            const lineStart = component.lineStart || (component as any).line_start || 0;
+            const lineEnd = component.lineEnd || (component as any).line_end || 0;
             const lineCount = lineEnd - lineStart + 1;
             // Convert line count to approximate byte size (assume ~50 characters per line)
             sizeToUse = lineCount * 50;
