@@ -156,7 +156,9 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-2">
                   {repositoryData.metadata.description.includes('github.com') && (
                     <a
-                      href={repositoryData.metadata.description.replace('Git repository at ', '')}
+                      href={repositoryData.metadata.description
+                        .replace('Git repository at ', '')
+                        .replace(/\.git$/, '')}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-center text-black hover:text-gray-600 transition-colors"
