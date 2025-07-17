@@ -8,19 +8,27 @@ import React, {
 } from 'react';
 import * as d3 from 'd3';
 import { RepositoryData } from '../../types/schema';
+import { VisualizationConfig } from '../../types/visualization';
+import {
+  NodeData,
+  LinkData,
+  ComputedNodeMetrics,
+  ComputedLinkMetrics,
+  computeNodeMetrics,
+  computeLinkMetrics,
+  calculateNodeSize,
+  calculateNodeColorIntensity,
+  calculateEdgeStrength,
+  calculateEdgeWidth,
+  getNodeColorWithIntensity,
+  getLinkColor,
+} from '../../utils/visualizationUtils';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
   onSelectFile: (fileId: string | null) => void;
   selectedFile: string | null;
-  referenceWeight: number;
-  filesystemWeight: number;
-  semanticWeight: number;
-  fileSizeWeight: number;
-  commitCountWeight: number;
-  recencyWeight: number;
-  identifiersWeight: number;
-  referencesWeight: number;
+  config: VisualizationConfig;
 }
 
 export interface RepositoryGraphHandle {
@@ -29,51 +37,23 @@ export interface RepositoryGraphHandle {
   resetView: () => void;
 }
 
-interface Node extends d3.SimulationNodeDatum {
-  id: string;
-  name: string;
-  path: string;
-  type: string;
-  extension?: string | null;
-  size: number;
-  depth: number;
-  expanded?: boolean;
-  parentId?: string;
-  x?: number;
-  y?: number;
-}
+interface Node extends d3.SimulationNodeDatum, NodeData {}
 
-interface Link extends d3.SimulationLinkDatum<Node> {
+interface Link extends d3.SimulationLinkDatum<Node>, LinkData {
   source: string | Node;
   target: string | Node;
-  type: string;
-  weight?: number;
-  originalStrength?: number;
 }
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
-  (
-    {
-      data,
-      onSelectFile,
-      selectedFile,
-      referenceWeight,
-      filesystemWeight,
-      semanticWeight,
-      fileSizeWeight,
-      commitCountWeight,
-      recencyWeight,
-      identifiersWeight,
-      referencesWeight,
-    },
-    ref
-  ) => {
+  ({ data, onSelectFile, selectedFile, config }, ref) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+    const [nodeMetrics, setNodeMetrics] = useState<Map<string, ComputedNodeMetrics>>(new Map());
+    const [linkMetrics, setLinkMetrics] = useState<Map<string, ComputedLinkMetrics>>(new Map());
 
     // Function to toggle node expansion
     const toggleNodeExpansion = useCallback((fileId: string) => {
@@ -256,6 +236,17 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       simulation.alpha(0.05).restart();
     }, [dimensions]);
 
+    // Compute metrics when data changes
+    useEffect(() => {
+      if (!data) return;
+
+      const computedNodeMetrics = computeNodeMetrics(data);
+      const computedLinkMetrics = computeLinkMetrics(data);
+
+      setNodeMetrics(computedNodeMetrics);
+      setLinkMetrics(computedLinkMetrics);
+    }, [data]);
+
     // Initial setup effect - runs when data changes
     useEffect(() => {
       if (
@@ -263,7 +254,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         !containerRef.current ||
         !data ||
         dimensions.width === 0 ||
-        dimensions.height === 0
+        dimensions.height === 0 ||
+        nodeMetrics.size === 0
       )
         return;
 
@@ -343,25 +335,26 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         const baseLinks = data.relationships
           .filter(rel => nodeIds.has(rel.source) && nodeIds.has(rel.target))
           .map(rel => {
-            let weight = 0;
+            const linkKey = `${rel.source}-${rel.target}`;
+            const linkMetric = linkMetrics.get(linkKey);
 
-            // Apply weights based on connection type
-            if (rel.type === 'filesystem_proximity') {
-              weight = filesystemWeight / 100;
-            } else if (rel.type === 'semantic_similarity') {
-              weight = semanticWeight / 100;
-            } else if (rel.type === 'import' || rel.type === 'call' || rel.type === 'contains') {
-              weight = referenceWeight / 100;
-            } else {
-              // Other relationship types get reference weight
-              weight = referenceWeight / 100;
+            if (!linkMetric) {
+              return {
+                source: rel.source,
+                target: rel.target,
+                type: rel.type,
+                weight: 0,
+                originalStrength: rel.strength || 1,
+              };
             }
+
+            const edgeStrength = calculateEdgeStrength(linkMetric, config);
 
             return {
               source: rel.source,
               target: rel.target,
               type: rel.type,
-              weight: weight,
+              weight: edgeStrength,
               originalStrength: rel.strength || 1,
             };
           })
@@ -371,11 +364,20 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         const dynamicLinks: Link[] = [];
         nodes.forEach(node => {
           if (node.parentId && nodeIds.has(node.parentId)) {
+            // Create a synthetic link metric for contains relationships
+            const containsMetric: ComputedLinkMetrics = {
+              semantic_similarity: 0,
+              filesystem_proximity: 0,
+              code_references: 1, // Contains relationships are code references
+            };
+
+            const edgeStrength = calculateEdgeStrength(containsMetric, config);
+
             dynamicLinks.push({
               source: node.parentId,
               target: node.id,
               type: 'contains',
-              weight: referenceWeight / 100,
+              weight: edgeStrength,
               originalStrength: 1,
             });
           }
@@ -432,7 +434,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force(
           'collision',
-          d3.forceCollide<Node>().radius(d => getNodeRadius(d) + 5)
+          d3.forceCollide<Node>().radius(d => {
+            const metrics = nodeMetrics.get(d.id);
+            if (!metrics) return 10;
+            const allNodeMetrics = Array.from(nodeMetrics.values());
+            return calculateNodeSize(metrics, config, allNodeMetrics, d.type) + 5;
+          })
         );
 
       // Save simulation to ref for potential future interactions
@@ -445,9 +452,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .data(links)
         .enter()
         .append('line')
-        .attr('stroke', d => getLinkColor(d))
+        .attr('stroke', d => getLinkColor(d.type))
         .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
-        .attr('stroke-width', d => getLinkWidth(d));
+        .attr('stroke-width', d => {
+          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+          const linkMetric = linkMetrics.get(linkKey);
+          return linkMetric ? calculateEdgeWidth(linkMetric, config, d.type) : 1;
+        });
 
       // Create node groups (to hold both circles and expand/collapse indicators)
       const nodeGroups = g
@@ -460,12 +471,24 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('cursor', 'pointer')
         .call(dragBehavior(simulation));
 
+      // Get all node metrics for normalization
+      const allNodeMetrics = Array.from(nodeMetrics.values());
+
       // Create circles for nodes
       const node = nodeGroups
         .append('circle')
         .attr('class', 'node')
-        .attr('r', d => getNodeRadius(d))
-        .attr('fill', d => getNodeColor(d, extensionColors))
+        .attr('r', d => {
+          const metrics = nodeMetrics.get(d.id);
+          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+        })
+        .attr('fill', d => {
+          const metrics = nodeMetrics.get(d.id);
+          if (!metrics) return getNodeColorWithIntensity(d, extensionColors, 0);
+
+          const intensity = calculateNodeColorIntensity(metrics, config, allNodeMetrics);
+          return getNodeColorWithIntensity(d, extensionColors, intensity);
+        })
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
         .on('mouseover', function (event, d) {
@@ -561,7 +584,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         svg.on('.zoom', null);
         svg.on('click', null);
       };
-    }, [data, dimensions, expandedFiles, toggleNodeExpansion, hasComponents]);
+    }, [
+      data,
+      dimensions,
+      expandedFiles,
+      toggleNodeExpansion,
+      hasComponents,
+      config,
+      nodeMetrics,
+      linkMetrics,
+    ]);
 
     // Separate effect for handling selection highlighting
     useEffect(() => {
@@ -587,14 +619,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }, [selectedFile, data, expandedFiles]);
 
-    // Weight update effect - runs when weights change
+    // Config update effect - runs when visualization config changes
     useEffect(() => {
-      if (!simulationRef.current || !data) return;
+      if (!simulationRef.current || !data || nodeMetrics.size === 0) return;
 
       const simulation = simulationRef.current;
       const linkSelection = (simulation as any).__linkSelection;
+      const nodeSelection = (simulation as any).__nodeSelection;
 
-      if (!linkSelection) return;
+      if (!linkSelection || !nodeSelection) return;
 
       // Calculate current centroid before changes
       const nodes = simulation.nodes();
@@ -610,25 +643,26 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const baseUpdatedLinks = data.relationships
         .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
         .map(rel => {
-          let weight = 0;
+          const linkKey = `${rel.source}-${rel.target}`;
+          const linkMetric = linkMetrics.get(linkKey);
 
-          // Apply weights based on connection type
-          if (rel.type === 'filesystem_proximity') {
-            weight = filesystemWeight / 100;
-          } else if (rel.type === 'semantic_similarity') {
-            weight = semanticWeight / 100;
-          } else if (rel.type === 'import' || rel.type === 'call' || rel.type === 'contains') {
-            weight = referenceWeight / 100;
-          } else {
-            // Other relationship types get reference weight
-            weight = referenceWeight / 100;
+          if (!linkMetric) {
+            return {
+              source: rel.source,
+              target: rel.target,
+              type: rel.type,
+              weight: 0,
+              originalStrength: rel.strength || 1,
+            };
           }
+
+          const edgeStrength = calculateEdgeStrength(linkMetric, config);
 
           return {
             source: rel.source,
             target: rel.target,
             type: rel.type,
-            weight: weight,
+            weight: edgeStrength,
             originalStrength: rel.strength || 1,
           };
         })
@@ -638,11 +672,19 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const dynamicUpdatedLinks: Link[] = [];
       nodes.forEach(node => {
         if (node.parentId && currentNodeIds.has(node.parentId)) {
+          const containsMetric: ComputedLinkMetrics = {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: 1,
+          };
+
+          const edgeStrength = calculateEdgeStrength(containsMetric, config);
+
           dynamicUpdatedLinks.push({
             source: node.parentId,
             target: node.id,
             type: 'contains',
-            weight: referenceWeight / 100,
+            weight: edgeStrength,
             originalStrength: 1,
           });
         }
@@ -664,7 +706,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           } else if (d.type === 'semantic_similarity') {
             return baseDistance * (1 - weight * 0.4) * (1 / strength);
           } else if (d.type === 'contains') {
-            return 50; // Much shorter distance for parent-child relationships
+            return 50;
           } else {
             return baseDistance * (1 - weight * 0.3);
           }
@@ -675,8 +717,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           const strength = d.originalStrength || 1;
 
           if (d.type === 'contains') {
-            // Strong attraction for parent-child relationships
-            return 2; // Stronger force for containment
+            return 2;
           }
 
           return baseStrength * weight * strength;
@@ -685,9 +726,38 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Update link visual properties
       linkSelection
         .data(updatedLinks)
-        .attr('stroke', (d: Link) => getLinkColor(d))
+        .attr('stroke', (d: Link) => getLinkColor(d.type))
         .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
-        .attr('stroke-width', (d: Link) => getLinkWidth(d));
+        .attr('stroke-width', (d: Link) => {
+          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+          const linkMetric = linkMetrics.get(linkKey);
+          return linkMetric ? calculateEdgeWidth(linkMetric, config, d.type) : 1;
+        });
+
+      // Get all node metrics for normalization
+      const allNodeMetrics = Array.from(nodeMetrics.values());
+
+      // Update node visual properties
+      nodeSelection
+        .attr('r', (d: Node) => {
+          const metrics = nodeMetrics.get(d.id);
+          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+        })
+        .attr('fill', (d: Node) => {
+          const metrics = nodeMetrics.get(d.id);
+          if (!metrics) return getNodeColorWithIntensity(d, extensionColors, 0);
+
+          const intensity = calculateNodeColorIntensity(metrics, config, allNodeMetrics);
+          return getNodeColorWithIntensity(d, extensionColors, intensity);
+        });
+
+      // Update collision force with new node sizes
+      const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
+      collisionForce.radius((d: Node) => {
+        const metrics = nodeMetrics.get(d.id);
+        if (!metrics) return 10;
+        return calculateNodeSize(metrics, config, allNodeMetrics, d.type) + 5;
+      });
 
       // Update center force to maintain current centroid
       const centerForce = simulation.force('center') as d3.ForceCenter<Node>;
@@ -695,40 +765,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Restart simulation with smooth animation
       simulation.alpha(0.3).restart();
-    }, [referenceWeight, filesystemWeight, semanticWeight, data]);
-
-    // Node sizing update effect - runs when sizing weights change
-    useEffect(() => {
-      if (!simulationRef.current || !data) return;
-
-      const simulation = simulationRef.current;
-      const nodeSelection = (simulation as any).__nodeSelection;
-      const labelSelection = (simulation as any).__labelSelection;
-
-      if (!nodeSelection) return;
-
-      // Update node radiuses
-      nodeSelection.attr('r', (d: Node) => getNodeRadius(d));
-
-      // Update label positions to match new node sizes
-      if (labelSelection) {
-        labelSelection.attr('dx', (d: Node) => getNodeRadius(d) + 5);
-      }
-
-      // Update collision force with new radiuses
-      const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
-      collisionForce.radius((d: Node) => getNodeRadius(d) + 5);
-
-      // Restart simulation with gentle animation
-      simulation.alpha(0.1).restart();
-    }, [
-      fileSizeWeight,
-      commitCountWeight,
-      recencyWeight,
-      identifiersWeight,
-      referencesWeight,
-      data,
-    ]);
+    }, [config, data, nodeMetrics, linkMetrics]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
@@ -748,179 +785,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d.fx = null;
           d.fy = null;
         });
-    };
-
-    // Helper functions
-    const getNodeRadius = (node: Node) => {
-      if (node.type === 'directory') {
-        return 10; // Fixed size for directories
-      }
-
-      // Set different size ranges for components vs files
-      let minRadius = 5;
-      let maxRadius = 25;
-
-      const isComponent =
-        node.type === 'class' || node.type === 'function' || node.type === 'method';
-      if (isComponent) {
-        minRadius = 3;
-        maxRadius = 12; // Components are smaller than files
-      }
-
-      // Get file data for additional metrics
-      // For components, use the parent file's metrics
-      let fileData = data.files.find(f => f.id === node.id);
-      if (!fileData && isComponent) {
-        // Component IDs are like "file.py:ClassName" - extract the file part
-        const fileId = node.id.split(':')[0];
-        fileData = data.files.find(f => f.id === fileId);
-      }
-
-      // Calculate normalized factors (0-1)
-      const factors = {
-        fileSize: 0,
-        commitCount: 0,
-        recency: 0,
-        identifiers: 0,
-        references: 0,
-      };
-
-      // File size factor
-      let sizeToUse = node.size;
-      // Components don't have file size, but we can use their line count as a proxy
-      if (isComponent && sizeToUse === 0) {
-        // Check if this component has line information
-        const component = fileData?.components?.find(c => c.id === node.id);
-        if (component && component.lineStart && component.lineEnd) {
-          const lineCount = component.lineEnd - component.lineStart + 1;
-          // Convert line count to approximate byte size (assume ~50 characters per line)
-          sizeToUse = lineCount * 50;
-        } else if (fileData) {
-          // Fallback to using a fraction of parent file size
-          sizeToUse = fileData.size * 0.1; // Components are ~10% of parent file
-        }
-      }
-
-      if (sizeToUse && sizeToUse > 0) {
-        // Square root scale for better distribution across typical file sizes
-        // This gives more range to smaller files while still scaling large ones
-        factors.fileSize = Math.min(1, Math.sqrt(sizeToUse) / 500); // Normalize for ~250KB max
-      }
-
-      if (fileData?.metrics) {
-        // Commit count factor
-        if (fileData.metrics.commitCount !== undefined) {
-          factors.commitCount = Math.min(1, fileData.metrics.commitCount / 50); // Normalize to ~50 commits max
-        }
-
-        // Recency factor (invert days ago - more recent = larger)
-        if (fileData.metrics.lastCommitDaysAgo !== undefined) {
-          const daysAgo = fileData.metrics.lastCommitDaysAgo;
-          factors.recency = Math.max(0, 1 - daysAgo / 365); // Normalize to 1 year
-        }
-
-        // Top-level identifiers factor
-        if (fileData.metrics.topLevelIdentifiers !== undefined) {
-          factors.identifiers = Math.min(1, fileData.metrics.topLevelIdentifiers / 20); // Normalize to ~20 identifiers max
-        }
-      }
-
-      // References factor (count incoming references)
-      const incomingRefs = data.relationships.filter(
-        rel => rel.target === node.id && rel.type !== 'contains'
-      ).length;
-      factors.references = Math.min(1, incomingRefs / 10); // Normalize to ~10 references max
-
-      // Apply weights (convert from 0-100 to 0-1)
-      const weightedSum =
-        (factors.fileSize * fileSizeWeight) / 100 +
-        (factors.commitCount * commitCountWeight) / 100 +
-        (factors.recency * recencyWeight) / 100 +
-        (factors.identifiers * identifiersWeight) / 100 +
-        (factors.references * referencesWeight) / 100;
-
-      // Ensure we have some minimum size even if all weights are 0
-      const totalWeight =
-        (fileSizeWeight +
-          commitCountWeight +
-          recencyWeight +
-          identifiersWeight +
-          referencesWeight) /
-        100;
-      const normalizedSum = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
-
-      // Scale to radius range
-      const radius = minRadius + normalizedSum * (maxRadius - minRadius);
-      return Math.max(minRadius, Math.min(maxRadius, radius));
-    };
-
-    const getLinkWidth = (link: Link) => {
-      const baseWidth = (() => {
-        switch (link.type) {
-          case 'import':
-          case 'call':
-          case 'calls':
-            return 2;
-          case 'contains':
-            return 3; // Thicker lines for containment to make hierarchy clear
-          case 'filesystem_proximity':
-            return 1.5;
-          case 'semantic_similarity':
-            return 2;
-          default:
-            return 1.5;
-        }
-      })();
-
-      // Scale width by weight for non-containment links
-      if (link.type === 'contains') {
-        return baseWidth; // Fixed width for containment to keep hierarchy clear
-      }
-
-      const weight = link.weight || 0;
-      return baseWidth * (0.5 + weight * 0.5);
-    };
-
-    const getLinkColor = (link: Link) => {
-      switch (link.type) {
-        case 'filesystem_proximity':
-          return '#e74c3c'; // Red for filesystem connections
-        case 'semantic_similarity':
-          return '#27ae60'; // Green for semantic connections
-        case 'import':
-        case 'call':
-          return '#3498db'; // Blue for reference connections
-        case 'contains':
-          return '#2c3e50'; // Dark blue-gray for containment - more visible
-        default:
-          return '#95a5a6';
-      }
-    };
-
-    const getNodeColor = (node: Node, colors: Record<string, string>) => {
-      // Directories have a different color
-      if (node.type === 'directory') {
-        return '#7f8c8d';
-      }
-
-      // Components have different colors based on type
-      if (node.type === 'class') {
-        return '#e67e22';
-      }
-      if (node.type === 'function') {
-        return '#3498db';
-      }
-      if (node.type === 'method') {
-        return '#9b59b6';
-      }
-
-      // Files are colored by extension
-      if (node.extension && colors[node.extension]) {
-        return colors[node.extension];
-      }
-
-      // Default color for unknown file types
-      return '#aaaaaa';
     };
 
     const createLegend = (
