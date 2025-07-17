@@ -722,7 +722,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         });
 
       // Update link visual properties with proper enter/update/exit handling
-      linkSelection
+      const newLinkSelection = linkSelection
         .data(
           updatedLinks,
           (d: Link) => `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`
@@ -757,6 +757,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               }),
           exit => exit.remove()
         );
+
+      // Store the new selection for future updates
+      (simulation as any).__linkSelection = newLinkSelection;
 
       // Get all node metrics for normalization (compute once)
       const allNodeMetrics = Array.from(nodeMetrics.values());
