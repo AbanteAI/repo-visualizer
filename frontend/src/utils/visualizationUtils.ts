@@ -24,6 +24,7 @@ export interface LinkData {
 }
 
 export interface ComputedNodeMetrics {
+  file_type: string;
   file_size: number;
   commit_count: number;
   recency: number;
@@ -61,12 +62,27 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
     }
 
     metrics.set(file.id, {
+      file_type: file.extension || 'unknown',
       file_size: file.size || 0,
       commit_count: fileMetrics.commitCount || 0,
       recency: recencyScore,
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
     });
+
+    // Add metrics for components (classes, functions, methods)
+    if (file.components) {
+      file.components.forEach(component => {
+        metrics.set(component.id, {
+          file_type: component.type, // Use component type as the categorical value
+          file_size: file.size || 0, // Use parent file size
+          commit_count: fileMetrics.commitCount || 0,
+          recency: recencyScore,
+          identifiers: fileMetrics.topLevelIdentifiers || 0,
+          references: incomingReferences.get(component.id) || 0,
+        });
+      });
+    }
   });
 
   return metrics;
@@ -93,7 +109,7 @@ export const computeLinkMetrics = (data: RepositoryData): Map<string, ComputedLi
   return metrics;
 };
 
-// Calculate weighted value for a visual feature
+// Calculate weighted value for a visual feature (for numerical data)
 export const calculateWeightedValue = (
   metrics: Record<string, number>,
   config: VisualizationConfig,
@@ -113,6 +129,60 @@ export const calculateWeightedValue = (
   });
 
   return totalWeight > 0 ? totalWeightedValue / totalWeight : 0;
+};
+
+// Determine if a color mapping is categorical or continuous
+export const isColorMappingCategorical = (config: VisualizationConfig): boolean => {
+  const mapping = getFeatureMapping(config, 'node_color');
+  if (!mapping) return true; // Default to categorical
+
+  const { DATA_SOURCES } = require('../types/visualization');
+
+  // Check if any active data source is categorical
+  return Object.entries(mapping.dataSourceWeights).some(([dataSourceId, weight]) => {
+    if (weight > 0) {
+      const dataSource = DATA_SOURCES.find(ds => ds.id === dataSourceId);
+      return dataSource && dataSource.dataType === 'categorical';
+    }
+    return false;
+  });
+};
+
+// Generate categorical colors distributed across the color wheel
+export const generateCategoricalColors = (categories: string[]): Record<string, string> => {
+  const colors: Record<string, string> = {};
+  const hueStep = 360 / categories.length;
+
+  categories.forEach((category, index) => {
+    const hue = (index * hueStep) % 360;
+    colors[category] = `hsl(${hue}, 65%, 50%)`;
+  });
+
+  return colors;
+};
+
+// Calculate categorical value for a visual feature
+export const calculateCategoricalValue = (
+  metrics: ComputedNodeMetrics,
+  config: VisualizationConfig,
+  featureId: string
+): string => {
+  const mapping = getFeatureMapping(config, featureId);
+  if (!mapping) return 'unknown';
+
+  const { DATA_SOURCES } = require('../types/visualization');
+
+  // Find the first active categorical data source
+  for (const [dataSourceId, weight] of Object.entries(mapping.dataSourceWeights)) {
+    if (weight > 0) {
+      const dataSource = DATA_SOURCES.find(ds => ds.id === dataSourceId);
+      if (dataSource && dataSource.dataType === 'categorical') {
+        return (metrics as any)[dataSourceId] || 'unknown';
+      }
+    }
+  }
+
+  return 'unknown';
 };
 
 // Normalize values to a 0-1 range
@@ -213,36 +283,58 @@ export const calculateEdgeWidth = (
   return baseWidth * (0.5 + weightedValue * 0.5);
 };
 
-// Get node color with intensity overlay
-export const getNodeColorWithIntensity = (
+// Get node color based on configuration
+export const getNodeColor = (
   node: NodeData,
-  extensionColors: Record<string, string>,
-  intensity: number
+  nodeMetrics: ComputedNodeMetrics | undefined,
+  config: VisualizationConfig,
+  allNodeMetrics: ComputedNodeMetrics[],
+  extensionColors: Record<string, string>
 ): string => {
-  let baseColor = '#aaaaaa';
-
+  // Special handling for non-file nodes
   if (node.type === 'directory') {
-    baseColor = '#7f8c8d';
+    return '#7f8c8d';
   } else if (node.type === 'class') {
-    baseColor = '#e67e22';
+    return '#e67e22';
   } else if (node.type === 'function') {
-    baseColor = '#3498db';
+    return '#3498db';
   } else if (node.type === 'method') {
-    baseColor = '#9b59b6';
-  } else if (node.extension && extensionColors[node.extension]) {
-    baseColor = extensionColors[node.extension];
+    return '#9b59b6';
   }
 
-  // If no intensity mapping is active, return base color
-  if (intensity === 0) {
-    return baseColor;
+  if (!nodeMetrics) {
+    return extensionColors[node.extension || 'unknown'] || '#aaaaaa';
   }
 
-  // Apply intensity as opacity or color variation
-  const intensityHex = Math.round(intensity * 255)
-    .toString(16)
-    .padStart(2, '0');
-  return baseColor + intensityHex;
+  const isCategorical = isColorMappingCategorical(config);
+
+  if (isCategorical) {
+    // Categorical coloring
+    const categoryValue = calculateCategoricalValue(nodeMetrics, config, 'node_color');
+
+    // If file_type is active, use extension colors
+    const mapping = getFeatureMapping(config, 'node_color');
+    if (mapping?.dataSourceWeights.file_type > 0) {
+      return extensionColors[node.extension || 'unknown'] || '#aaaaaa';
+    }
+
+    // For other categorical data, generate distributed colors
+    const allCategories = [
+      ...new Set(allNodeMetrics.map(m => calculateCategoricalValue(m, config, 'node_color'))),
+    ];
+    const categoricalColors = generateCategoricalColors(allCategories);
+    return categoricalColors[categoryValue] || '#aaaaaa';
+  } else {
+    // Continuous coloring (blue to red gradient)
+    const intensity = calculateNodeColorIntensity(nodeMetrics, config, allNodeMetrics);
+
+    // Blue to red gradient
+    const red = Math.round(255 * intensity);
+    const blue = Math.round(255 * (1 - intensity));
+    const green = Math.round(128 * (1 - Math.abs(intensity - 0.5) * 2)); // Peak at middle
+
+    return `rgb(${red}, ${green}, ${blue})`;
+  }
 };
 
 // Helper function to get link color based on type

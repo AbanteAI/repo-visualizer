@@ -9,6 +9,7 @@ export interface DataSource {
   color: string;
   defaultWeight: number;
   category: 'file' | 'relationship' | 'git' | 'semantic';
+  dataType: 'continuous' | 'categorical';
 }
 
 export interface VisualFeature {
@@ -32,12 +33,22 @@ export interface VisualizationConfig {
 // Available data sources
 export const DATA_SOURCES: DataSource[] = [
   {
+    id: 'file_type',
+    name: 'File Type',
+    description: 'File extension/type for categorical coloring',
+    color: '#6b7280',
+    defaultWeight: 100,
+    category: 'file',
+    dataType: 'categorical',
+  },
+  {
     id: 'file_size',
     name: 'File Size',
     description: 'Size of the file in bytes',
     color: '#8b5cf6',
     defaultWeight: 100,
     category: 'file',
+    dataType: 'continuous',
   },
   {
     id: 'commit_count',
@@ -46,6 +57,7 @@ export const DATA_SOURCES: DataSource[] = [
     color: '#f59e0b',
     defaultWeight: 0,
     category: 'git',
+    dataType: 'continuous',
   },
   {
     id: 'recency',
@@ -54,6 +66,7 @@ export const DATA_SOURCES: DataSource[] = [
     color: '#06b6d4',
     defaultWeight: 0,
     category: 'git',
+    dataType: 'continuous',
   },
   {
     id: 'identifiers',
@@ -62,6 +75,7 @@ export const DATA_SOURCES: DataSource[] = [
     color: '#ec4899',
     defaultWeight: 0,
     category: 'file',
+    dataType: 'continuous',
   },
   {
     id: 'references',
@@ -70,6 +84,7 @@ export const DATA_SOURCES: DataSource[] = [
     color: '#10b981',
     defaultWeight: 0,
     category: 'relationship',
+    dataType: 'continuous',
   },
   {
     id: 'semantic_similarity',
@@ -78,6 +93,7 @@ export const DATA_SOURCES: DataSource[] = [
     color: '#22c55e',
     defaultWeight: 30,
     category: 'semantic',
+    dataType: 'continuous',
   },
   {
     id: 'filesystem_proximity',
@@ -86,6 +102,7 @@ export const DATA_SOURCES: DataSource[] = [
     color: '#ef4444',
     defaultWeight: 30,
     category: 'file',
+    dataType: 'continuous',
   },
   {
     id: 'code_references',
@@ -94,6 +111,7 @@ export const DATA_SOURCES: DataSource[] = [
     color: '#3b82f6',
     defaultWeight: 70,
     category: 'relationship',
+    dataType: 'continuous',
   },
 ];
 
@@ -113,7 +131,7 @@ export const VISUAL_FEATURES: VisualFeature[] = [
     description: 'Color intensity of the nodes',
     icon: '🎨',
     category: 'node',
-    defaultDataSources: ['commit_count'],
+    defaultDataSources: ['file_type'],
   },
   {
     id: 'edge_strength',
@@ -139,6 +157,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
     {
       featureId: 'node_size',
       dataSourceWeights: {
+        file_type: 0,
         file_size: 100,
         commit_count: 0,
         recency: 0,
@@ -152,6 +171,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
     {
       featureId: 'node_color',
       dataSourceWeights: {
+        file_type: 100,
         file_size: 0,
         commit_count: 0,
         recency: 0,
@@ -165,6 +185,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
     {
       featureId: 'edge_strength',
       dataSourceWeights: {
+        file_type: 0,
         file_size: 0,
         commit_count: 0,
         recency: 0,
@@ -178,6 +199,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
     {
       featureId: 'edge_width',
       dataSourceWeights: {
+        file_type: 0,
         file_size: 0,
         commit_count: 0,
         recency: 0,

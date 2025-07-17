@@ -20,7 +20,7 @@ import {
   calculateNodeColorIntensity,
   calculateEdgeStrength,
   calculateEdgeWidth,
-  getNodeColorWithIntensity,
+  getNodeColor,
   getLinkColor,
 } from '../../utils/visualizationUtils';
 
@@ -488,10 +488,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .attr('fill', d => {
           const metrics = nodeMetrics.get(d.id);
-          if (!metrics) return getNodeColorWithIntensity(d, extensionColors, 0);
-
-          const intensity = calculateNodeColorIntensity(metrics, config, allNodeMetrics);
-          return getNodeColorWithIntensity(d, extensionColors, intensity);
+          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
         })
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
@@ -779,10 +776,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .attr('fill', (d: Node) => {
           const metrics = nodeMetrics.get(d.id);
-          if (!metrics) return getNodeColorWithIntensity(d, extensionColors, 0);
-
-          const intensity = calculateNodeColorIntensity(metrics, config, allNodeMetrics);
-          return getNodeColorWithIntensity(d, extensionColors, intensity);
+          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
         });
 
       // Update label positions to match new node sizes
@@ -803,12 +797,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         return calculateNodeSize(metrics, config, allNodeMetrics, d.type) + 5;
       });
 
-      // Update center force to maintain current centroid
-      const centerForce = simulation.force('center') as d3.ForceCenter<Node>;
-      centerForce.x(centroidBefore.x).y(centroidBefore.y);
+      // Don't update center force during config changes - preserve current zoom/pan
+      // The center force should remain at the original center (width/2, height/2)
 
-      // Restart simulation with smooth animation
-      simulation.alpha(0.3).restart();
+      // Restart simulation with gentle animation
+      simulation.alpha(0.1).restart();
     }, [config, data, nodeMetrics, linkMetrics]);
 
     // Create a drag behavior

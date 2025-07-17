@@ -232,7 +232,11 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
           <span className="text-xs text-gray-500">Total: {getTotalWeight()}%</span>
         </div>
 
-        {DATA_SOURCES.map(dataSource => {
+        {/* Active Data Sources */}
+        {DATA_SOURCES.filter(ds => {
+          const weight = currentMapping?.dataSourceWeights[ds.id] || 0;
+          return weight > 0;
+        }).map(dataSource => {
           const weight = currentMapping?.dataSourceWeights[dataSource.id] || 0;
           return (
             <div key={dataSource.id} className="space-y-2">
@@ -244,9 +248,18 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                   ></div>
                   <label className="text-sm font-medium text-gray-600">{dataSource.name}</label>
                 </div>
-                <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
-                  {weight}%
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
+                    {weight}%
+                  </span>
+                  <button
+                    onClick={() => handleWeightChange(dataSource.id, 0)}
+                    className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    aria-label={`Remove ${dataSource.name}`}
+                  >
+                    <span className="text-xs font-bold">×</span>
+                  </button>
+                </div>
               </div>
               <div className="relative">
                 <input
@@ -266,6 +279,31 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             </div>
           );
         })}
+
+        {/* Add Data Source */}
+        <div className="pt-2 border-t border-gray-100">
+          <select
+            value=""
+            onChange={e => {
+              if (e.target.value) {
+                handleWeightChange(e.target.value, 50);
+                e.target.value = '';
+              }
+            }}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            style={{ cursor: 'pointer' }}
+          >
+            <option value="">+ Add Data Source</option>
+            {DATA_SOURCES.filter(ds => {
+              const weight = currentMapping?.dataSourceWeights[ds.id] || 0;
+              return weight === 0;
+            }).map(dataSource => (
+              <option key={dataSource.id} value={dataSource.id}>
+                {dataSource.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Reset button */}
