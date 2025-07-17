@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { RepositoryData } from './types/schema';
+import { VisualizationConfig, DEFAULT_CONFIG } from './types/visualization';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import FileDetails from './components/FileDetails';
-import DraggableControls from './components/DraggableControls';
-import FloatingNodeSizing from './components/FloatingNodeSizing';
-import MenuDropdown from './components/MenuDropdown';
+import UnifiedVisualizationControls from './components/UnifiedVisualizationControls';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -14,22 +13,10 @@ const App: React.FC = () => {
   const [repositoryData, setRepositoryData] = useState<RepositoryData | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [referenceWeight, setReferenceWeight] = useState(70);
-  const [filesystemWeight, setFilesystemWeight] = useState(30);
-  const [semanticWeight, setSemanticWeight] = useState(30);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
-
-  // Menu visibility state
-  const [showConnectionWeights, setShowConnectionWeights] = useState(true);
-  const [showNodeSizing, setShowNodeSizing] = useState(true);
-
-  // Node sizing weights
-  const [fileSizeWeight, setFileSizeWeight] = useState(100);
-  const [commitCountWeight, setCommitCountWeight] = useState(0);
-  const [recencyWeight, setRecencyWeight] = useState(0);
-  const [identifiersWeight, setIdentifiersWeight] = useState(0);
-  const [referencesWeight, setReferencesWeight] = useState(0);
+  const [config, setConfig] = useState<VisualizationConfig>(DEFAULT_CONFIG);
+  const [showControls, setShowControls] = useState(true);
 
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
@@ -108,54 +95,12 @@ const App: React.FC = () => {
     graphRef.current?.resetView();
   };
 
-  const handleReferenceWeightChange = (weight: number) => {
-    setReferenceWeight(weight);
+  const handleConfigChange = (newConfig: VisualizationConfig) => {
+    setConfig(newConfig);
   };
 
-  const handleFilesystemWeightChange = (weight: number) => {
-    setFilesystemWeight(weight);
-  };
-
-  const handleSemanticWeightChange = (weight: number) => {
-    setSemanticWeight(weight);
-  };
-
-  // Node sizing weight handlers
-  const handleFileSizeWeightChange = (weight: number) => {
-    setFileSizeWeight(weight);
-  };
-
-  const handleCommitCountWeightChange = (weight: number) => {
-    setCommitCountWeight(weight);
-  };
-
-  const handleRecencyWeightChange = (weight: number) => {
-    setRecencyWeight(weight);
-  };
-
-  const handleIdentifiersWeightChange = (weight: number) => {
-    setIdentifiersWeight(weight);
-  };
-
-  const handleReferencesWeightChange = (weight: number) => {
-    setReferencesWeight(weight);
-  };
-
-  // Menu visibility handlers
-  const handleCloseConnectionWeights = () => {
-    setShowConnectionWeights(false);
-  };
-
-  const handleCloseNodeSizing = () => {
-    setShowNodeSizing(false);
-  };
-
-  const handleOpenConnectionWeights = () => {
-    setShowConnectionWeights(true);
-  };
-
-  const handleOpenNodeSizing = () => {
-    setShowNodeSizing(true);
+  const handleToggleControls = () => {
+    setShowControls(!showControls);
   };
 
   return (
@@ -205,12 +150,13 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Menu Controls */}
-                <MenuDropdown
-                  showConnectionWeights={showConnectionWeights}
-                  showNodeSizing={showNodeSizing}
-                  onOpenConnectionWeights={handleOpenConnectionWeights}
-                  onOpenNodeSizing={handleOpenNodeSizing}
-                />
+                <button
+                  onClick={handleToggleControls}
+                  className="flex items-center justify-center w-10 h-10 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 text-gray-600 hover:text-gray-800"
+                  aria-label="Toggle controls"
+                >
+                  <span className="text-lg font-bold">⚙</span>
+                </button>
               </div>
             )}
           </div>
@@ -253,42 +199,15 @@ const App: React.FC = () => {
                   data={repositoryData}
                   onSelectFile={handleFileSelect}
                   selectedFile={selectedFile}
-                  referenceWeight={referenceWeight}
-                  filesystemWeight={filesystemWeight}
-                  semanticWeight={semanticWeight}
-                  fileSizeWeight={fileSizeWeight}
-                  commitCountWeight={commitCountWeight}
-                  recencyWeight={recencyWeight}
-                  identifiersWeight={identifiersWeight}
-                  referencesWeight={referencesWeight}
+                  config={config}
                 />
 
-                {/* Floating Menus */}
-                {showConnectionWeights && (
-                  <DraggableControls
-                    referenceWeight={referenceWeight}
-                    filesystemWeight={filesystemWeight}
-                    semanticWeight={semanticWeight}
-                    onReferenceWeightChange={handleReferenceWeightChange}
-                    onFilesystemWeightChange={handleFilesystemWeightChange}
-                    onSemanticWeightChange={handleSemanticWeightChange}
-                    onClose={handleCloseConnectionWeights}
-                  />
-                )}
-
-                {showNodeSizing && (
-                  <FloatingNodeSizing
-                    fileSizeWeight={fileSizeWeight}
-                    commitCountWeight={commitCountWeight}
-                    recencyWeight={recencyWeight}
-                    identifiersWeight={identifiersWeight}
-                    referencesWeight={referencesWeight}
-                    onFileSizeWeightChange={handleFileSizeWeightChange}
-                    onCommitCountWeightChange={handleCommitCountWeightChange}
-                    onRecencyWeightChange={handleRecencyWeightChange}
-                    onIdentifiersWeightChange={handleIdentifiersWeightChange}
-                    onReferencesWeightChange={handleReferencesWeightChange}
-                    onClose={handleCloseNodeSizing}
+                {/* Visualization Controls */}
+                {showControls && (
+                  <UnifiedVisualizationControls
+                    config={config}
+                    onConfigChange={handleConfigChange}
+                    onClose={() => setShowControls(false)}
                   />
                 )}
 
