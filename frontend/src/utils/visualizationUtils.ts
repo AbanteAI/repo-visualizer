@@ -1,5 +1,5 @@
 import { RepositoryData } from '../types/schema';
-import { VisualizationConfig, getFeatureMapping, DATA_SOURCES } from '../types/visualization';
+import { VisualizationConfig, getFeatureMapping } from '../types/visualization';
 
 export interface NodeData {
   id: string;
@@ -140,8 +140,6 @@ export const calculateNodeSize = (
   if (nodeType === 'class' || nodeType === 'function' || nodeType === 'method') {
     return 6;
   }
-
-  const weightedValue = calculateWeightedValue(nodeMetrics, config, 'node_size');
 
   // Normalize across all nodes
   const allWeightedValues = allNodeMetrics.map(m => calculateWeightedValue(m, config, 'node_size'));
