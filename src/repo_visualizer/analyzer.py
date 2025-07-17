@@ -1935,7 +1935,7 @@ class RepositoryAnalyzer:
                 [
                     "git",
                     "diff-tree",
-                    "-r",  # Recursively show all file changes, not just directory changes
+                    "-r",  # Recursively show all file changes, not just directories
                     "--no-commit-id",
                     "--name-status",
                     commit_hash,
@@ -2096,7 +2096,7 @@ class RepositoryAnalyzer:
 
         Args:
             commit: The commit to get files for
-            commits_up_to_here: All commits up to and including this one (in chronological order, oldest first)
+            commits_up_to_here: All commits up to and including this one (chronologically)
 
         Returns:
             List of file objects that existed at this commit
@@ -2104,7 +2104,7 @@ class RepositoryAnalyzer:
         # Track file states by path - start with all files not existing
         file_states = {}
 
-        # Go through all commits up to this point to track file changes (oldest to newest)
+        # Go through all commits up to this point to track file changes
         for c in commits_up_to_here:
             for file_change in c["fileChanges"]:
                 file_path = file_change["fileId"]
@@ -2138,7 +2138,7 @@ class RepositoryAnalyzer:
                     extension = os.path.splitext(file_name)[1].lstrip(".")
                     depth = len(file_path.split("/")) - 1 if "/" in file_path else 0
 
-                    # Determine if it's a directory (heuristic: no extension and known to be a directory)
+                    # Determine if it's a directory (heuristic: no extension)
                     file_type = (
                         "directory"
                         if not extension

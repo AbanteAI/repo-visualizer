@@ -387,80 +387,92 @@ const App: React.FC = () => {
               )}
 
               {/* Timeline Controls */}
-              {repositoryData?.history?.timelinePoints && repositoryData.history.timelinePoints.length > 0 && (
-                <div className="flex-shrink-0 bg-white border-t p-4">
-                  <div className="flex flex-col gap-3">
-                    <h3 className="text-sm font-medium text-gray-700 text-center">Repository Timeline</h3>
+              {repositoryData?.history?.timelinePoints &&
+                repositoryData.history.timelinePoints.length > 0 && (
+                  <div className="flex-shrink-0 bg-white border-t p-4">
+                    <div className="flex flex-col gap-3">
+                      <h3 className="text-sm font-medium text-gray-700 text-center">
+                        Repository Timeline
+                      </h3>
 
-                    {/* Play Controls */}
-                    <div className="flex justify-center gap-2 items-center">
-                      <button
-                        onClick={handlePlayPause}
-                        className="bg-green-600 text-white py-1 px-3 rounded text-sm hover:bg-green-700 transition-colors"
-                      >
-                        {isPlaying ? 'Pause' : 'Play'}
-                      </button>
+                      {/* Play Controls */}
+                      <div className="flex justify-center gap-2 items-center">
+                        <button
+                          onClick={handlePlayPause}
+                          className="bg-green-600 text-white py-1 px-3 rounded text-sm hover:bg-green-700 transition-colors"
+                        >
+                          {isPlaying ? 'Pause' : 'Play'}
+                        </button>
 
-                      <select
-                        value={playbackSpeed}
-                        onChange={e => handlePlaybackSpeedChange(Number(e.target.value))}
-                        className="bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm"
-                      >
-                        <option value={0.5}>0.5x</option>
-                        <option value={1}>1x</option>
-                        <option value={2}>2x</option>
-                        <option value={3}>3x</option>
-                      </select>
+                        <select
+                          value={playbackSpeed}
+                          onChange={e => handlePlaybackSpeedChange(Number(e.target.value))}
+                          className="bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm"
+                        >
+                          <option value={0.5}>0.5x</option>
+                          <option value={1}>1x</option>
+                          <option value={2}>2x</option>
+                          <option value={3}>3x</option>
+                        </select>
 
-                      <button
-                        onClick={() => handleTimelineChange(-1)}
-                        disabled={currentTimelineIndex === -1}
-                        className="bg-gray-600 text-white py-1 px-3 rounded text-sm hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Current
-                      </button>
-                    </div>
+                        <button
+                          onClick={() => handleTimelineChange(-1)}
+                          disabled={currentTimelineIndex === -1}
+                          className="bg-gray-600 text-white py-1 px-3 rounded text-sm hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Current
+                        </button>
+                      </div>
 
-                    {/* Timeline Scrubber */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">First</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={repositoryData.history.timelinePoints.length - 1}
-                        value={currentTimelineIndex === -1 ? repositoryData.history.timelinePoints.length - 1 : currentTimelineIndex}
-                        onChange={e => handleTimelineChange(Number(e.target.value))}
-                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                      />
-                      <span className="text-xs text-gray-500">Latest</span>
-                    </div>
+                      {/* Timeline Scrubber */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">First</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={repositoryData.history.timelinePoints.length - 1}
+                          value={
+                            currentTimelineIndex === -1
+                              ? repositoryData.history.timelinePoints.length - 1
+                              : currentTimelineIndex
+                          }
+                          onChange={e => handleTimelineChange(Number(e.target.value))}
+                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-500">Latest</span>
+                      </div>
 
-                    {/* Timeline Info */}
-                    <div className="text-center text-xs text-gray-600">
-                      {currentTimelineIndex === -1 ? (
-                        <span>Current State</span>
-                      ) : getCurrentTimelineInfo() ? (
-                        <div className="flex flex-col gap-1">
+                      {/* Timeline Info */}
+                      <div className="text-center text-xs text-gray-600">
+                        {currentTimelineIndex === -1 ? (
+                          <span>Current State</span>
+                        ) : getCurrentTimelineInfo() ? (
+                          <div className="flex flex-col gap-1">
+                            <span>
+                              Commit {currentTimelineIndex + 1} of{' '}
+                              {repositoryData.history.timelinePoints.length}
+                            </span>
+                            <span className="font-mono text-xs">
+                              {getCurrentTimelineInfo()?.message?.substring(0, 50)}
+                              {getCurrentTimelineInfo()?.message?.length > 50 ? '...' : ''}
+                            </span>
+                            <span className="text-gray-500">
+                              {getCurrentTimelineInfo()?.author} •{' '}
+                              {getCurrentTimelineInfo()?.timestamp
+                                ? new Date(getCurrentTimelineInfo()?.timestamp).toLocaleDateString()
+                                : ''}
+                            </span>
+                          </div>
+                        ) : (
                           <span>
-                            Commit {currentTimelineIndex + 1} of {repositoryData.history.timelinePoints.length}
+                            Timeline point {currentTimelineIndex + 1} of{' '}
+                            {repositoryData.history.timelinePoints.length}
                           </span>
-                          <span className="font-mono text-xs">
-                            {getCurrentTimelineInfo()?.message?.substring(0, 50)}
-                            {getCurrentTimelineInfo()?.message?.length > 50 ? '...' : ''}
-                          </span>
-                          <span className="text-gray-500">
-                            {getCurrentTimelineInfo()?.author} • {getCurrentTimelineInfo()?.timestamp ? new Date(getCurrentTimelineInfo()?.timestamp).toLocaleDateString() : ''}
-                          </span>
-                        </div>
-                      ) : (
-                        <span>
-                          Timeline point {currentTimelineIndex + 1} of {repositoryData.history.timelinePoints.length}
-                        </span>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {selectedFile && (
                 <FileDetails
