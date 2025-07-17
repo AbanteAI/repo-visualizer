@@ -4,6 +4,7 @@ import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import Controls from './components/Controls';
 import FileDetails from './components/FileDetails';
+import DraggableControls from './components/DraggableControls';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -17,6 +18,14 @@ const App: React.FC = () => {
   const [semanticWeight, setSemanticWeight] = useState(30);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
+
+  // Node sizing weights
+  const [fileSizeWeight, setFileSizeWeight] = useState(100);
+  const [commitCountWeight, setCommitCountWeight] = useState(0);
+  const [recencyWeight, setRecencyWeight] = useState(0);
+  const [identifiersWeight, setIdentifiersWeight] = useState(0);
+  const [referencesWeight, setReferencesWeight] = useState(0);
+
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
   // Timeline state
@@ -46,11 +55,10 @@ const App: React.FC = () => {
             return;
           }
         }
-      } catch (err) {
-        console.warn('Could not auto-load repo_data.json:', err);
+      } catch (error) {
+        console.log('Failed to auto-load repo_data.json:', error);
       }
 
-      // Auto-load failed, show file upload interface
       setAutoLoadFailed(true);
       setIsAutoLoading(false);
     };
@@ -200,6 +208,27 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Node sizing weight handlers
+  const handleFileSizeWeightChange = (weight: number) => {
+    setFileSizeWeight(weight);
+  };
+
+  const handleCommitCountWeightChange = (weight: number) => {
+    setCommitCountWeight(weight);
+  };
+
+  const handleRecencyWeightChange = (weight: number) => {
+    setRecencyWeight(weight);
+  };
+
+  const handleIdentifiersWeightChange = (weight: number) => {
+    setIdentifiersWeight(weight);
+  };
+
+  const handleReferencesWeightChange = (weight: number) => {
+    setReferencesWeight(weight);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -234,39 +263,64 @@ const App: React.FC = () => {
             </div>
 
             <div
-              className={`bg-white shadow sm:rounded-lg relative ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
+              className={`flex-1 flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}
             >
-              <RepositoryGraph
-                ref={graphRef}
-                data={getCurrentData() || repositoryData}
-                onSelectFile={handleFileSelect}
-                selectedFile={selectedFile}
-                referenceWeight={referenceWeight}
-                filesystemWeight={filesystemWeight}
-                semanticWeight={semanticWeight}
-              />
+              <div
+                className="flex-1 min-h-0 relative"
+                style={{ display: 'flex', flexDirection: 'column' }}
+              >
+                <RepositoryGraph
+                  ref={graphRef}
+                  data={getCurrentData() || repositoryData}
+                  onSelectFile={handleFileSelect}
+                  selectedFile={selectedFile}
+                  referenceWeight={referenceWeight}
+                  filesystemWeight={filesystemWeight}
+                  semanticWeight={semanticWeight}
+                  fileSizeWeight={fileSizeWeight}
+                  commitCountWeight={commitCountWeight}
+                  recencyWeight={recencyWeight}
+                  identifiersWeight={identifiersWeight}
+                  referencesWeight={referencesWeight}
+                />
+              </div>
 
-              <Controls
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
-                onReset={handleReset}
-                onFullscreen={toggleFullscreen}
-                isFullscreen={isFullscreen}
+              <DraggableControls
                 referenceWeight={referenceWeight}
                 filesystemWeight={filesystemWeight}
                 semanticWeight={semanticWeight}
                 onReferenceWeightChange={handleReferenceWeightChange}
                 onFilesystemWeightChange={handleFilesystemWeightChange}
                 onSemanticWeightChange={handleSemanticWeightChange}
-                timelinePoints={repositoryData?.history?.timelinePoints || []}
-                currentTimelineIndex={currentTimelineIndex}
-                isPlaying={isPlaying}
-                playbackSpeed={playbackSpeed}
-                onTimelineChange={handleTimelineChange}
-                onPlayPause={handlePlayPause}
-                onPlaybackSpeedChange={handlePlaybackSpeedChange}
-                timelineInfo={getCurrentTimelineInfo()}
               />
+
+              <div className="flex-shrink-0 bg-white border-t">
+                <Controls
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onReset={handleReset}
+                  onFullscreen={toggleFullscreen}
+                  isFullscreen={isFullscreen}
+                  fileSizeWeight={fileSizeWeight}
+                  commitCountWeight={commitCountWeight}
+                  recencyWeight={recencyWeight}
+                  identifiersWeight={identifiersWeight}
+                  referencesWeight={referencesWeight}
+                  onFileSizeWeightChange={handleFileSizeWeightChange}
+                  onCommitCountWeightChange={handleCommitCountWeightChange}
+                  onRecencyWeightChange={handleRecencyWeightChange}
+                  onIdentifiersWeightChange={handleIdentifiersWeightChange}
+                  onReferencesWeightChange={handleReferencesWeightChange}
+                  timelinePoints={repositoryData?.history?.timelinePoints || []}
+                  currentTimelineIndex={currentTimelineIndex}
+                  isPlaying={isPlaying}
+                  playbackSpeed={playbackSpeed}
+                  onTimelineChange={handleTimelineChange}
+                  onPlayPause={handlePlayPause}
+                  onPlaybackSpeedChange={handlePlaybackSpeedChange}
+                  timelineInfo={getCurrentTimelineInfo()}
+                />
+              </div>
 
               {selectedFile && (
                 <FileDetails

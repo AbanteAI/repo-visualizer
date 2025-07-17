@@ -19,3 +19,70 @@ body {
   background-color: #f5f5f5;
   color: #333;
 }
+
+/* Custom slider styles - scoped to draggable controls */
+.draggable-controls input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.draggable-controls input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.draggable-controls input[type='range']::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.draggable-controls input[type='range']::-webkit-slider-thumb:hover,
+.draggable-controls input[type='range']::-moz-range-thumb:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transform: scale(1.1);
+}
+
+.draggable-controls input[type='range']:focus {
+  outline: none;
+}
+
+/* Color-specific thumb styles */
+.draggable-controls .slider-blue::-webkit-slider-thumb {
+  border-color: #3b82f6;
+}
+
+.draggable-controls .slider-blue::-moz-range-thumb {
+  border-color: #3b82f6;
+}
+
+.draggable-controls .slider-red::-webkit-slider-thumb {
+  border-color: #ef4444;
+}
+
+.draggable-controls .slider-red::-moz-range-thumb {
+  border-color: #ef4444;
+}
+
+.draggable-controls .slider-green::-webkit-slider-thumb {
+  border-color: #22c55e;
+}
+
+.draggable-controls .slider-green::-moz-range-thumb {
+  border-color: #22c55e;
+}
