@@ -463,6 +463,7 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                 onChange={e => {
                   if (e.target.value) {
                     handleTransposedWeightChange(e.target.value, selectedDataSource, 50);
+                    e.target.value = '';
                   }
                 }}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
