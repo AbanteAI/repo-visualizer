@@ -1,5 +1,10 @@
 import { RepositoryData } from '../types/schema';
-import { VisualizationConfig, getFeatureMapping, DATA_SOURCES } from '../types/visualization';
+import {
+  VisualizationConfig,
+  getFeatureMapping,
+  DATA_SOURCES,
+  LineType,
+} from '../types/visualization';
 
 export interface NodeData {
   id: string;
@@ -21,6 +26,7 @@ export interface LinkData {
   type: string;
   weight?: number;
   originalStrength?: number;
+  lineTypeId?: string; // Which line type this link belongs to
 }
 
 export interface ComputedNodeMetrics {
@@ -333,8 +339,149 @@ export const getNodeColor = (
   }
 };
 
-// Helper function to get link color based on type
-export const getLinkColor = (linkType: string): string => {
+// Generate links for each line type based on configuration
+export const generateLinksForLineTypes = (
+  data: RepositoryData,
+  config: VisualizationConfig,
+  nodeIds: Set<string>
+): LinkData[] => {
+  const linkMetrics = computeLinkMetrics(data);
+  const allLinks: LinkData[] = [];
+
+  // Generate links for each enabled line type
+  config.lineTypes.forEach(lineType => {
+    if (!lineType.enabled) return;
+
+    data.relationships
+      .filter(rel => nodeIds.has(rel.source) && nodeIds.has(rel.target))
+      .forEach(rel => {
+        const linkKey = `${rel.source}-${rel.target}`;
+        const linkMetric = linkMetrics.get(linkKey);
+
+        if (!linkMetric) return;
+
+        // Calculate how much this relationship contributes to this line type
+        const lineTypeStrength = calculateLineTypeStrength(linkMetric, lineType);
+
+        if (lineTypeStrength > 0) {
+          allLinks.push({
+            source: rel.source,
+            target: rel.target,
+            type: rel.type,
+            weight: lineTypeStrength,
+            originalStrength: rel.strength || 1,
+            lineTypeId: lineType.id,
+          });
+        }
+      });
+  });
+
+  // Add dynamic "contains" relationships for expanded nodes
+  const containsLineType = config.lineTypes.find(
+    lt => lt.enabled && lt.dataSourceWeights.code_references > 0
+  );
+
+  if (containsLineType) {
+    // Add contains relationships with the first applicable line type
+    // This is a simplified approach - in practice you might want more control
+    data.files.forEach(file => {
+      if (file.components) {
+        file.components.forEach(component => {
+          if (nodeIds.has(file.id) && nodeIds.has(component.id)) {
+            allLinks.push({
+              source: file.id,
+              target: component.id,
+              type: 'contains',
+              weight: 1,
+              originalStrength: 1,
+              lineTypeId: containsLineType.id,
+            });
+          }
+        });
+      }
+    });
+  }
+
+  return allLinks;
+};
+
+// Calculate how much a link metric contributes to a specific line type
+export const calculateLineTypeStrength = (
+  linkMetric: ComputedLinkMetrics,
+  lineType: LineType
+): number => {
+  let totalWeightedValue = 0;
+  let totalWeight = 0;
+
+  Object.entries(lineType.dataSourceWeights).forEach(([dataSourceId, weight]) => {
+    if (weight > 0 && typeof (linkMetric as any)[dataSourceId] === 'number') {
+      totalWeightedValue += ((linkMetric as any)[dataSourceId] * weight) / 100;
+      totalWeight += weight / 100;
+    }
+  });
+
+  return totalWeight > 0 ? totalWeightedValue / totalWeight : 0;
+};
+
+// Get link visual properties based on line type configuration
+export const getLinkVisualProperties = (
+  link: LinkData,
+  config: VisualizationConfig
+): { color: string; opacity: number; width: number } => {
+  const lineType = config.lineTypes.find(lt => lt.id === link.lineTypeId);
+
+  if (!lineType) {
+    // Fallback for legacy links without line types
+    return {
+      color: getLinkColorFallback(link.type),
+      opacity: 0.4,
+      width: 1.5,
+    };
+  }
+
+  const baseWidth = 1.5;
+  const weight = link.weight || 0;
+
+  return {
+    color: lineType.visualConfig.color,
+    opacity: lineType.visualConfig.opacity / 100,
+    width: baseWidth * (0.5 + (lineType.visualConfig.thickness / 100) * weight * 1.5),
+  };
+};
+
+// Get link force properties based on line type configuration
+export const getLinkForceProperties = (
+  link: LinkData,
+  config: VisualizationConfig
+): { distance: number; strength: number } => {
+  const lineType = config.lineTypes.find(lt => lt.id === link.lineTypeId);
+
+  if (!lineType || !lineType.forceConfig.enabled) {
+    // No force contribution if line type doesn't have force enabled
+    return {
+      distance: 200, // Large distance effectively removes force
+      strength: 0,
+    };
+  }
+
+  const baseDistance = lineType.forceConfig.distance;
+  const weight = link.weight || 0;
+  const strength = link.originalStrength || 1;
+
+  // Adjust distance based on weight (higher weight = closer together)
+  const distance = baseDistance * (1 - weight * 0.3) * (1 / strength);
+
+  // Adjust strength based on configuration and weight
+  const forceStrength = (lineType.forceConfig.strength / 100) * weight * strength;
+
+  return {
+    distance: Math.max(30, distance), // Minimum distance
+    strength: forceStrength,
+  };
+};
+
+// Helper function to get link color based on type (fallback for legacy support)
+export const getLinkColorFallback = (linkType: string): string => {
   switch (linkType) {
     case 'filesystem_proximity':
       return '#e74c3c';

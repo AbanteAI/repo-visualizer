@@ -12,6 +12,24 @@ export interface DataSource {
   dataType: 'continuous' | 'categorical';
 }
 
+export interface LineType {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  forceConfig: {
+    enabled: boolean;
+    strength: number; // 0-100, affects positioning
+    distance: number; // base distance for this line type
+  };
+  visualConfig: {
+    color: string;
+    opacity: number; // 0-100
+    thickness: number; // 0-100, affects line width
+  };
+  dataSourceWeights: Record<string, number>; // which relationships this line type uses
+}
+
 export interface VisualFeature {
   id: string;
   name: string;
@@ -28,6 +46,7 @@ export interface FeatureMapping {
 
 export interface VisualizationConfig {
   mappings: FeatureMapping[];
+  lineTypes: LineType[];
 }
 
 // Available data sources
@@ -151,6 +170,73 @@ export const VISUAL_FEATURES: VisualFeature[] = [
   },
 ];
 
+// Default line types
+export const DEFAULT_LINE_TYPES: LineType[] = [
+  {
+    id: 'code_connections',
+    name: 'Code Connections',
+    description: 'Direct code references like imports and function calls',
+    enabled: true,
+    forceConfig: {
+      enabled: true,
+      strength: 70,
+      distance: 100,
+    },
+    visualConfig: {
+      color: '#3498db',
+      opacity: 60,
+      thickness: 80,
+    },
+    dataSourceWeights: {
+      code_references: 100,
+      semantic_similarity: 0,
+      filesystem_proximity: 0,
+    },
+  },
+  {
+    id: 'semantic_clustering',
+    name: 'Semantic Clustering',
+    description: 'Groups semantically similar files together',
+    enabled: true,
+    forceConfig: {
+      enabled: true,
+      strength: 40,
+      distance: 120,
+    },
+    visualConfig: {
+      color: '#27ae60',
+      opacity: 0, // Invisible by default
+      thickness: 30,
+    },
+    dataSourceWeights: {
+      code_references: 0,
+      semantic_similarity: 100,
+      filesystem_proximity: 0,
+    },
+  },
+  {
+    id: 'filesystem_structure',
+    name: 'Filesystem Structure',
+    description: 'Connections based on file system proximity',
+    enabled: false,
+    forceConfig: {
+      enabled: false,
+      strength: 30,
+      distance: 80,
+    },
+    visualConfig: {
+      color: '#e74c3c',
+      opacity: 40,
+      thickness: 40,
+    },
+    dataSourceWeights: {
+      code_references: 0,
+      semantic_similarity: 0,
+      filesystem_proximity: 100,
+    },
+  },
+];
+
 // Default configuration
 export const DEFAULT_CONFIG: VisualizationConfig = {
   mappings: [
@@ -211,6 +297,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
       },
     },
   ],
+  lineTypes: [...DEFAULT_LINE_TYPES],
 };
 
 // Helper functions
@@ -251,5 +338,63 @@ export const updateFeatureMapping = (
   return {
     ...config,
     mappings: newMappings,
+  };
+};
+
+// Helper functions for line types
+export const getLineTypeById = (
+  config: VisualizationConfig,
+  lineTypeId: string
+): LineType | undefined => {
+  return config.lineTypes.find(lt => lt.id === lineTypeId);
+};
+
+export const updateLineType = (
+  config: VisualizationConfig,
+  lineTypeId: string,
+  updates: Partial<LineType>
+): VisualizationConfig => {
+  const newLineTypes = config.lineTypes.map(lineType => {
+    if (lineType.id === lineTypeId) {
+      return {
+        ...lineType,
+        ...updates,
+        forceConfig: updates.forceConfig
+          ? { ...lineType.forceConfig, ...updates.forceConfig }
+          : lineType.forceConfig,
+        visualConfig: updates.visualConfig
+          ? { ...lineType.visualConfig, ...updates.visualConfig }
+          : lineType.visualConfig,
+        dataSourceWeights: updates.dataSourceWeights
+          ? { ...lineType.dataSourceWeights, ...updates.dataSourceWeights }
+          : lineType.dataSourceWeights,
+      };
+    }
+    return lineType;
+  });
+
+  return {
+    ...config,
+    lineTypes: newLineTypes,
+  };
+};
+
+export const addLineType = (
+  config: VisualizationConfig,
+  lineType: LineType
+): VisualizationConfig => {
+  return {
+    ...config,
+    lineTypes: [...config.lineTypes, lineType],
+  };
+};
+
+export const removeLineType = (
+  config: VisualizationConfig,
+  lineTypeId: string
+): VisualizationConfig => {
+  return {
+    ...config,
+    lineTypes: config.lineTypes.filter(lt => lt.id !== lineTypeId),
   };
 };

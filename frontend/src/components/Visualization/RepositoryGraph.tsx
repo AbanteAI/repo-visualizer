@@ -20,7 +20,9 @@ import {
   calculateEdgeStrength,
   calculateEdgeWidth,
   getNodeColor,
-  getLinkColor,
+  generateLinksForLineTypes,
+  getLinkVisualProperties,
+  getLinkForceProperties,
 } from '../../utils/visualizationUtils';
 
 interface RepositoryGraphProps {
@@ -328,64 +330,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         }
       });
 
-      // Create initial links with current weights, but only for visible nodes
+      // Generate links using the new line type system
       const nodeIds = new Set(nodes.map(n => n.id));
-      const createLinks = () => {
-        const baseLinks = data.relationships
-          .filter(rel => nodeIds.has(rel.source) && nodeIds.has(rel.target))
-          .map(rel => {
-            const linkKey = `${rel.source}-${rel.target}`;
-            const linkMetric = linkMetrics.get(linkKey);
-
-            if (!linkMetric) {
-              return {
-                source: rel.source,
-                target: rel.target,
-                type: rel.type,
-                weight: 0,
-                originalStrength: rel.strength || 1,
-              };
-            }
-
-            const edgeStrength = calculateEdgeStrength(linkMetric, config);
-
-            return {
-              source: rel.source,
-              target: rel.target,
-              type: rel.type,
-              weight: edgeStrength,
-              originalStrength: rel.strength || 1,
-            };
-          })
-          .filter(link => link.weight > 0); // Only include links with non-zero weight
-
-        // Add dynamic "contains" relationships for expanded nodes
-        const dynamicLinks: Link[] = [];
-        nodes.forEach(node => {
-          if (node.parentId && nodeIds.has(node.parentId)) {
-            // Create a synthetic link metric for contains relationships
-            const containsMetric: ComputedLinkMetrics = {
-              semantic_similarity: 0,
-              filesystem_proximity: 0,
-              code_references: 1, // Contains relationships are code references
-            };
-
-            const edgeStrength = calculateEdgeStrength(containsMetric, config);
-
-            dynamicLinks.push({
-              source: node.parentId,
-              target: node.id,
-              type: 'contains',
-              weight: edgeStrength,
-              originalStrength: 1,
-            });
-          }
-        });
-
-        return [...baseLinks, ...dynamicLinks];
-      };
-
-      const links = createLinks();
+      const links = generateLinksForLineTypes(data, config, nodeIds);
 
       // Create a force simulation
       const simulation = d3
@@ -396,37 +343,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             .forceLink<Node, Link>(links)
             .id(d => d.id)
             .distance(d => {
-              // Adjust distance based on connection type and weight
-              const baseDistance = 100;
-              const weight = d.weight || 0;
-              const strength = d.originalStrength || 1;
-
-              if (d.type === 'filesystem_proximity') {
-                // Filesystem connections should be closer
-                return baseDistance * (1 - weight * 0.5) * (1 / strength);
-              } else if (d.type === 'semantic_similarity') {
-                // Semantic connections should be moderately close
-                return baseDistance * (1 - weight * 0.4) * (1 / strength);
-              } else if (d.type === 'contains') {
-                // Containment relationships should be very close for clear hierarchy
-                return 50; // Much shorter distance for parent-child relationships
-              } else {
-                // Reference connections
-                return baseDistance * (1 - weight * 0.3);
-              }
+              const forceProps = getLinkForceProperties(d, config);
+              return forceProps.distance;
             })
             .strength(d => {
-              // Adjust strength based on weight
-              const baseStrength = 1;
-              const weight = d.weight || 0;
-              const strength = d.originalStrength || 1;
-
-              if (d.type === 'contains') {
-                // Strong attraction for parent-child relationships
-                return 2; // Stronger force for containment
-              }
-
-              return baseStrength * weight * strength;
+              const forceProps = getLinkForceProperties(d, config);
+              return forceProps.strength;
             })
         )
         .force('charge', d3.forceManyBody().strength(-300))
@@ -451,16 +373,17 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .data(links)
         .enter()
         .append('line')
-        .attr('stroke', d => getLinkColor(d.type))
-        .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
+        .attr('stroke', d => {
+          const visualProps = getLinkVisualProperties(d, config);
+          return visualProps.color;
+        })
+        .attr('stroke-opacity', d => {
+          const visualProps = getLinkVisualProperties(d, config);
+          return visualProps.opacity;
+        })
         .attr('stroke-width', d => {
-          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-          const linkMetric = linkMetrics.get(linkKey) ?? {
-            semantic_similarity: 0,
-            filesystem_proximity: 0,
-            code_references: d.type === 'contains' ? 1 : 0,
-          };
-          return calculateEdgeWidth(linkMetric, config, d.type);
+          const visualProps = getLinkVisualProperties(d, config);
+          return visualProps.width;
         });
 
       // Create node groups (to hold both circles and expand/collapse indicators)
