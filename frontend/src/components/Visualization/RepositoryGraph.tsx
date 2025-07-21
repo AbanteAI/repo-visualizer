@@ -5,7 +5,6 @@ import React, {
   forwardRef,
   useState,
   useCallback,
-  useMemo,
 } from 'react';
 import * as d3 from 'd3';
 import { RepositoryData } from '../../types/schema';

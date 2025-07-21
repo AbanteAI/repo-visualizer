@@ -1,6 +1,7 @@
 import React from 'react';
-import { SearchMode } from '../App';
 import { useDraggable } from '../hooks/useDraggable';
+
+type SearchMode = 'exact' | 'semantic';
 
 interface FloatingSearchProps {
   searchQuery: string;

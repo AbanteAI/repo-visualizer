@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import type React from 'react';
 
 interface UseDraggableProps {
   initialPosition: { x: number | string; y: number | string };
