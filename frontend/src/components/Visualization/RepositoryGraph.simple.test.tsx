@@ -39,6 +39,7 @@ vi.mock('d3', () => {
     transform: vi.fn().mockReturnThis(),
     translate: vi.fn().mockReturnThis(),
     scale: vi.fn().mockReturnThis(),
+    join: vi.fn().mockReturnThis(),
   };
 
   return {

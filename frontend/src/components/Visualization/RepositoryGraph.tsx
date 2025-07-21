@@ -757,9 +757,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       if (!linkSelection || !nodeSelection) return;
 
-      // Check if linkSelection is a valid D3 selection
-      if (typeof linkSelection.data !== 'function') return;
-
       // Get current visible node IDs
       const nodes = simulation.nodes();
       const currentNodeIds = new Set(nodes.map(n => n.id));
