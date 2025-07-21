@@ -5,14 +5,8 @@ import {
   VISUAL_FEATURES,
   DATA_SOURCES,
   getFeatureMapping,
-  getDataSourceById,
+  DataSource,
 } from '../types/visualization';
-import {
-  ComputedNodeMetrics,
-  computeNodeMetrics,
-  calculateNodeSize,
-  getNodeColor,
-} from '../utils/visualizationUtils';
 
 interface DynamicLegendProps {
   data: RepositoryData;
@@ -132,7 +126,7 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
     }
   };
 
-  const renderColorLegend = (activeDataSources: typeof DATA_SOURCES) => {
+  const renderColorLegend = (activeDataSources: DataSource[]) => {
     // Check if file_type is the primary data source
     const fileTypeWeight = currentMapping?.dataSourceWeights['file_type'] || 0;
     const isFileTypePrimary = fileTypeWeight > 50;
@@ -210,7 +204,6 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
         <div className="space-y-3">
           {activeDataSources.map(dataSource => {
             const weight = currentMapping?.dataSourceWeights[dataSource.id] || 0;
-            if (weight === 0) return null;
 
             return (
               <div key={dataSource.id} className="space-y-1">
@@ -246,12 +239,11 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
     }
   };
 
-  const renderSizeLegend = (activeDataSources: typeof DATA_SOURCES) => {
+  const renderSizeLegend = (activeDataSources: DataSource[]) => {
     return (
       <div className="space-y-3">
         {activeDataSources.map(dataSource => {
           const weight = currentMapping?.dataSourceWeights[dataSource.id] || 0;
-          if (weight === 0) return null;
 
           return (
             <div key={dataSource.id} className="space-y-2">
@@ -298,14 +290,13 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
     );
   };
 
-  const renderEdgeLegend = (activeDataSources: typeof DATA_SOURCES, featureType: string) => {
+  const renderEdgeLegend = (activeDataSources: DataSource[], featureType: string) => {
     const isWidth = featureType === 'edge_width';
 
     return (
       <div className="space-y-3">
         {activeDataSources.map(dataSource => {
           const weight = currentMapping?.dataSourceWeights[dataSource.id] || 0;
-          if (weight === 0) return null;
 
           return (
             <div key={dataSource.id} className="space-y-2">

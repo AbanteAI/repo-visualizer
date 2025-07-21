@@ -306,7 +306,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* Dynamic Legend */}
-                {showLegend && (
+                {showLegend && repositoryData && (
                   <DynamicLegend
                     data={repositoryData}
                     config={config}
