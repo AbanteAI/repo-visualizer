@@ -69,7 +69,7 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       recency: recencyScore,
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
-      test_coverage_ratio: fileMetrics.testCoverageRatio || 0,
+      test_coverage_ratio: fileMetrics.testCoverageRatio,
     });
 
     // Add metrics for components (classes, functions, methods)
@@ -82,7 +82,7 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
           recency: recencyScore,
           identifiers: fileMetrics.topLevelIdentifiers || 0,
           references: incomingReferences.get(component.id) || 0,
-          test_coverage_ratio: fileMetrics.testCoverageRatio || 0,
+          test_coverage_ratio: fileMetrics.testCoverageRatio,
         });
       });
     }
@@ -367,6 +367,11 @@ export const calculatePieChartData = (
     0
   );
   if (totalWeight === 0) return null;
+
+  // Check if coverage data is actually available
+  if (nodeMetrics.test_coverage_ratio === undefined || nodeMetrics.test_coverage_ratio === null) {
+    return null; // No coverage data available, don't show pie chart
+  }
 
   // Calculate the coverage ratio
   const coverageRatio = calculateWeightedValue(nodeMetrics, config, 'pie_chart_ratio');
