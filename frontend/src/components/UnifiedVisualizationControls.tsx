@@ -195,13 +195,7 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
   };
 
   const getFeatureIcon = (feature: VisualFeature) => {
-    const iconMap: Record<string, string> = {
-      node_size: '●',
-      node_color: '🎨',
-      edge_strength: '━',
-      edge_width: '═',
-    };
-    return iconMap[feature.id] || '●';
+    return feature.icon;
   };
 
   return (
