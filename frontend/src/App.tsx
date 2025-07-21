@@ -4,13 +4,7 @@ import { VisualizationConfig, DEFAULT_CONFIG } from './types/visualization';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import FileDetails from './components/FileDetails';
-import DraggableControls from './components/DraggableControls';
-import FloatingNodeSizing from './components/FloatingNodeSizing';
-import FloatingSearch from './components/FloatingSearch';
-import MenuDropdown from './components/MenuDropdown';
 import UnifiedVisualizationControls from './components/UnifiedVisualizationControls';
-
-export type SearchMode = 'exact' | 'semantic';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -21,32 +15,8 @@ const App: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
-
-  // Visualization configuration
   const [config, setConfig] = useState<VisualizationConfig>(DEFAULT_CONFIG);
-
-  // Search functionality
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<SearchMode>('exact');
-  const [searchResults, setSearchResults] = useState<Map<string, number>>(new Map());
-
-  // Menu visibility state - supporting both old and new control systems
-  const [showConnectionWeights, setShowConnectionWeights] = useState(true);
-  const [showNodeSizing, setShowNodeSizing] = useState(true);
-  const [showSearch, setShowSearch] = useState(false);
-  const [showUnifiedControls, setShowUnifiedControls] = useState(false);
-
-  // Legacy node sizing weights for backward compatibility
-  const [fileSizeWeight, setFileSizeWeight] = useState(100);
-  const [commitCountWeight, setCommitCountWeight] = useState(0);
-  const [recencyWeight, setRecencyWeight] = useState(0);
-  const [identifiersWeight, setIdentifiersWeight] = useState(0);
-  const [referencesWeight, setReferencesWeight] = useState(0);
-
-  // Legacy connection weights for backward compatibility
-  const [referenceWeight, setReferenceWeight] = useState(70);
-  const [filesystemWeight, setFilesystemWeight] = useState(30);
-  const [semanticWeight, setSemanticWeight] = useState(30);
+  const [showControls, setShowControls] = useState(true);
 
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
@@ -129,89 +99,8 @@ const App: React.FC = () => {
     setConfig(newConfig);
   };
 
-  // Legacy connection weight handlers
-  const handleReferenceWeightChange = (weight: number) => {
-    setReferenceWeight(weight);
-  };
-
-  const handleFilesystemWeightChange = (weight: number) => {
-    setFilesystemWeight(weight);
-  };
-
-  const handleSemanticWeightChange = (weight: number) => {
-    setSemanticWeight(weight);
-  };
-
-  // Search handlers
-  const handleSearchQueryChange = (query: string) => {
-    setSearchQuery(query);
-  };
-
-  const handleSearchModeChange = (mode: SearchMode) => {
-    setSearchMode(mode);
-  };
-
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    setSearchResults(new Map());
-  };
-
-  // Node sizing weight handlers
-  const handleFileSizeWeightChange = (weight: number) => {
-    setFileSizeWeight(weight);
-  };
-
-  const handleCommitCountWeightChange = (weight: number) => {
-    setCommitCountWeight(weight);
-  };
-
-  const handleRecencyWeightChange = (weight: number) => {
-    setRecencyWeight(weight);
-  };
-
-  const handleIdentifiersWeightChange = (weight: number) => {
-    setIdentifiersWeight(weight);
-  };
-
-  const handleReferencesWeightChange = (weight: number) => {
-    setReferencesWeight(weight);
-  };
-
-  // Menu visibility handlers
-  const handleCloseConnectionWeights = () => {
-    setShowConnectionWeights(false);
-  };
-
-  const handleCloseNodeSizing = () => {
-    setShowNodeSizing(false);
-  };
-
-  const handleCloseSearch = () => {
-    setShowSearch(false);
-  };
-
-  const handleCloseUnifiedControls = () => {
-    setShowUnifiedControls(false);
-  };
-
-  const handleOpenConnectionWeights = () => {
-    setShowConnectionWeights(true);
-  };
-
-  const handleOpenNodeSizing = () => {
-    setShowNodeSizing(true);
-  };
-
-  const handleOpenSearch = () => {
-    setShowSearch(true);
-  };
-
-  const handleOpenUnifiedControls = () => {
-    setShowUnifiedControls(true);
-  };
-
   const handleToggleControls = () => {
-    setShowUnifiedControls(!showUnifiedControls);
+    setShowControls(!showControls);
   };
 
   return (
@@ -261,24 +150,13 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Menu Controls */}
-                <div className="flex items-center gap-2">
-                  <MenuDropdown
-                    showConnectionWeights={showConnectionWeights}
-                    showNodeSizing={showNodeSizing}
-                    showSearch={showSearch}
-                    onOpenConnectionWeights={handleOpenConnectionWeights}
-                    onOpenNodeSizing={handleOpenNodeSizing}
-                    onOpenSearch={handleOpenSearch}
-                  />
-                  <button
-                    onClick={handleToggleControls}
-                    className="flex items-center justify-center w-10 h-10 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 text-gray-600 hover:text-gray-800"
-                    aria-label="Toggle unified controls"
-                    title="Unified Controls"
-                  >
-                    <span className="text-lg font-bold">⚙</span>
-                  </button>
-                </div>
+                <button
+                  onClick={handleToggleControls}
+                  className="flex items-center justify-center w-10 h-10 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 text-gray-600 hover:text-gray-800"
+                  aria-label="Toggle controls"
+                >
+                  <span className="text-lg font-bold">⚙</span>
+                </button>
               </div>
             )}
           </div>
@@ -322,66 +200,14 @@ const App: React.FC = () => {
                   onSelectFile={handleFileSelect}
                   selectedFile={selectedFile}
                   config={config}
-                  referenceWeight={referenceWeight}
-                  filesystemWeight={filesystemWeight}
-                  semanticWeight={semanticWeight}
-                  searchQuery={searchQuery}
-                  searchMode={searchMode}
-                  searchResults={searchResults}
-                  onSearchResultsChange={setSearchResults}
-                  fileSizeWeight={fileSizeWeight}
-                  commitCountWeight={commitCountWeight}
-                  recencyWeight={recencyWeight}
-                  identifiersWeight={identifiersWeight}
-                  referencesWeight={referencesWeight}
                 />
 
-                {/* Floating Menus */}
-                {showConnectionWeights && (
-                  <DraggableControls
-                    referenceWeight={referenceWeight}
-                    filesystemWeight={filesystemWeight}
-                    semanticWeight={semanticWeight}
-                    onReferenceWeightChange={handleReferenceWeightChange}
-                    onFilesystemWeightChange={handleFilesystemWeightChange}
-                    onSemanticWeightChange={handleSemanticWeightChange}
-                    onClose={handleCloseConnectionWeights}
-                  />
-                )}
-
-                {showNodeSizing && (
-                  <FloatingNodeSizing
-                    fileSizeWeight={fileSizeWeight}
-                    commitCountWeight={commitCountWeight}
-                    recencyWeight={recencyWeight}
-                    identifiersWeight={identifiersWeight}
-                    referencesWeight={referencesWeight}
-                    onFileSizeWeightChange={handleFileSizeWeightChange}
-                    onCommitCountWeightChange={handleCommitCountWeightChange}
-                    onRecencyWeightChange={handleRecencyWeightChange}
-                    onIdentifiersWeightChange={handleIdentifiersWeightChange}
-                    onReferencesWeightChange={handleReferencesWeightChange}
-                    onClose={handleCloseNodeSizing}
-                  />
-                )}
-
-                {showSearch && (
-                  <FloatingSearch
-                    searchQuery={searchQuery}
-                    searchMode={searchMode}
-                    onSearchQueryChange={handleSearchQueryChange}
-                    onSearchModeChange={handleSearchModeChange}
-                    onClearSearch={handleClearSearch}
-                    onClose={handleCloseSearch}
-                  />
-                )}
-
-                {/* Unified Visualization Controls */}
-                {showUnifiedControls && (
+                {/* Visualization Controls */}
+                {showControls && (
                   <UnifiedVisualizationControls
                     config={config}
                     onConfigChange={handleConfigChange}
-                    onClose={handleCloseUnifiedControls}
+                    onClose={() => setShowControls(false)}
                   />
                 )}
 

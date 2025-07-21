@@ -9,15 +9,7 @@ import React, {
 } from 'react';
 import * as d3 from 'd3';
 import { RepositoryData } from '../../types/schema';
-import { SearchMode } from '../../App';
 import { VisualizationConfig } from '../../types/visualization';
-import {
-  createSearchIndex,
-  performExactSearch,
-  performSemanticSearch,
-  getNodeSizeMultiplier,
-  SearchIndex,
-} from '../../utils/search';
 import {
   NodeData,
   LinkData,
@@ -37,19 +29,6 @@ interface RepositoryGraphProps {
   onSelectFile: (fileId: string | null) => void;
   selectedFile: string | null;
   config: VisualizationConfig;
-  // Legacy props for backward compatibility
-  referenceWeight: number;
-  filesystemWeight: number;
-  semanticWeight: number;
-  searchQuery: string;
-  searchMode: SearchMode;
-  searchResults: Map<string, number>;
-  onSearchResultsChange: (results: Map<string, number>) => void;
-  fileSizeWeight: number;
-  commitCountWeight: number;
-  recencyWeight: number;
-  identifiersWeight: number;
-  referencesWeight: number;
 }
 
 export interface RepositoryGraphHandle {
@@ -66,27 +45,7 @@ interface Link extends d3.SimulationLinkDatum<Node>, LinkData {
 }
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
-  (
-    {
-      data,
-      onSelectFile,
-      selectedFile,
-      config,
-      referenceWeight,
-      filesystemWeight,
-      semanticWeight,
-      searchQuery,
-      searchMode,
-      searchResults,
-      onSearchResultsChange,
-      fileSizeWeight,
-      commitCountWeight,
-      recencyWeight,
-      identifiersWeight,
-      referencesWeight,
-    },
-    ref
-  ) => {
+  ({ data, onSelectFile, selectedFile, config }, ref) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
@@ -95,9 +54,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
     const [nodeMetrics, setNodeMetrics] = useState<Map<string, ComputedNodeMetrics>>(new Map());
     const [linkMetrics, setLinkMetrics] = useState<Map<string, ComputedLinkMetrics>>(new Map());
-
-    // Create search index when data changes
-    const searchIndex = useMemo(() => createSearchIndex(data), [data]);
 
     // Function to toggle node expansion
     const toggleNodeExpansion = useCallback((fileId: string) => {
@@ -119,167 +75,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         return file ? file.components && file.components.length > 0 : false;
       },
       [data.files]
-    );
-
-    // Perform search when query or mode changes
-    useEffect(() => {
-      const performSearch = async () => {
-        if (!searchQuery.trim()) {
-          onSearchResultsChange(new Map());
-          return;
-        }
-
-        try {
-          let results: Map<string, number>;
-
-          if (searchMode === 'exact') {
-            results = performExactSearch(searchQuery, searchIndex);
-          } else {
-            results = await performSemanticSearch(searchQuery, searchIndex);
-          }
-
-          onSearchResultsChange(results);
-        } catch (error) {
-          console.error('Search error:', error);
-          onSearchResultsChange(new Map());
-        }
-      };
-
-      performSearch();
-    }, [searchQuery, searchMode, searchIndex, onSearchResultsChange]);
-
-    // Helper functions
-    const getNodeRadius = useCallback(
-      (node: Node) => {
-        if (node.type === 'directory') {
-          return 10; // Fixed size for directories
-        }
-
-        // Set different size ranges for components vs files
-        let minRadius = 5;
-        let maxRadius = 25;
-
-        const isComponent =
-          node.type === 'class' || node.type === 'function' || node.type === 'method';
-        if (isComponent) {
-          minRadius = 3;
-          maxRadius = 12; // Components are smaller than files
-        }
-
-        // Get file data for additional metrics
-        // For components, use the parent file's metrics
-        let fileData = data.files.find(f => f.id === node.id);
-        if (!fileData && isComponent) {
-          // Component IDs are like "file.py:ClassName" - extract the file part
-          const fileId = node.id.split(':')[0];
-          fileData = data.files.find(f => f.id === fileId);
-        }
-
-        // Calculate normalized factors (0-1)
-        const factors = {
-          fileSize: 0,
-          commitCount: 0,
-          recency: 0,
-          identifiers: 0,
-          references: 0,
-        };
-
-        // File size factor
-        let sizeToUse = node.size;
-        // Components don't have file size, but we can use their line count as a proxy
-        if (isComponent && sizeToUse === 0) {
-          // Check if this component has line information
-          const component = fileData?.components?.find(c => c.id === node.id);
-          if (
-            component &&
-            (component.lineStart || (component as any).line_start) &&
-            (component.lineEnd || (component as any).line_end)
-          ) {
-            const lineStart = component.lineStart || (component as any).line_start || 0;
-            const lineEnd = component.lineEnd || (component as any).line_end || 0;
-            const lineCount = lineEnd - lineStart + 1;
-            // Convert line count to approximate byte size (assume ~50 characters per line)
-            sizeToUse = lineCount * 50;
-          } else if (fileData) {
-            // Fallback to using a fraction of parent file size
-            sizeToUse = fileData.size * 0.1; // Components are ~10% of parent file
-          }
-        }
-
-        if (sizeToUse && sizeToUse > 0) {
-          // Square root scale for better distribution across typical file sizes
-          // This gives more range to smaller files while still scaling large ones
-          factors.fileSize = Math.min(1, Math.sqrt(sizeToUse) / 500); // Normalize for ~250KB max
-        }
-
-        if (fileData?.metrics) {
-          // Commit count factor
-          if (fileData.metrics.commitCount !== undefined) {
-            factors.commitCount = Math.min(1, fileData.metrics.commitCount / 50); // Normalize to ~50 commits max
-          }
-
-          // Recency factor (invert days ago - more recent = larger)
-          if (fileData.metrics.lastCommitDaysAgo !== undefined) {
-            const daysAgo = fileData.metrics.lastCommitDaysAgo;
-            factors.recency = Math.max(0, 1 - daysAgo / 365); // Normalize to 1 year
-          }
-
-          // Top-level identifiers factor
-          if (fileData.metrics.topLevelIdentifiers !== undefined) {
-            factors.identifiers = Math.min(1, fileData.metrics.topLevelIdentifiers / 20); // Normalize to ~20 identifiers max
-          }
-        }
-
-        // References factor (count incoming references)
-        const incomingRefs = data.relationships.filter(
-          rel => rel.target === node.id && rel.type !== 'contains'
-        ).length;
-        factors.references = Math.min(1, incomingRefs / 10); // Normalize to ~10 references max
-
-        // Apply weights (convert from 0-100 to 0-1)
-        const weightedSum =
-          (factors.fileSize * fileSizeWeight) / 100 +
-          (factors.commitCount * commitCountWeight) / 100 +
-          (factors.recency * recencyWeight) / 100 +
-          (factors.identifiers * identifiersWeight) / 100 +
-          (factors.references * referencesWeight) / 100;
-
-        // Ensure we have some minimum size even if all weights are 0
-        const totalWeight =
-          (fileSizeWeight +
-            commitCountWeight +
-            recencyWeight +
-            identifiersWeight +
-            referencesWeight) /
-          100;
-        const normalizedSum = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
-
-        // Scale to radius range
-        let radius = minRadius + normalizedSum * (maxRadius - minRadius);
-        radius = Math.max(minRadius, Math.min(maxRadius, radius));
-
-        // Apply search result scaling if there are search results
-        if (searchResults.size > 0) {
-          const searchScore = searchResults.get(node.id) || 0;
-          const sizeMultiplier = getNodeSizeMultiplier(searchScore);
-          radius *= sizeMultiplier;
-
-          // Clamp radius after applying search multiplier
-          radius = Math.max(1, Math.min(30, radius));
-        }
-
-        return radius;
-      },
-      [
-        searchResults,
-        fileSizeWeight,
-        commitCountWeight,
-        recencyWeight,
-        identifiersWeight,
-        referencesWeight,
-        data.files,
-        data.relationships,
-      ]
     );
 
     // Extension colors mapping
@@ -657,7 +452,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .data(links)
         .enter()
         .append('line')
-        .attr('stroke', d => getLinkColorHelper(d))
+        .attr('stroke', d => getLinkColor(d.type))
         .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', d => {
           const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -829,54 +624,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }, [selectedFile, data, expandedFiles]);
 
-    // Lightweight effect to update node sizes when search results change
-    useEffect(() => {
-      if (!svgRef.current || !data) return;
-
-      const svg = d3.select(svgRef.current);
-      const circles = svg.selectAll('circle.node');
-      const labels = svg.selectAll('text');
-
-      if (circles.empty()) return;
-
-      // Update circle radii with smooth transition
-      circles
-        .transition()
-        .duration(300)
-        .attr('r', function (d: any) {
-          if (d && typeof d === 'object' && 'id' in d) {
-            return getNodeRadius(d);
-          }
-          return 5;
-        });
-
-      // Update label positions to match new radii - with null check
-      if (!labels.empty()) {
-        labels
-          .filter(function () {
-            return d3.select(this).attr('dx') !== null; // Only update position labels, not expand icons
-          })
-          .transition()
-          .duration(300)
-          .attr('dx', function (d: any) {
-            if (d && typeof d === 'object' && 'id' in d) {
-              return getNodeRadius(d) + 5;
-            }
-            return 10;
-          });
-      }
-
-      // Update collision force radius
-      if (simulationRef.current) {
-        const simulation = simulationRef.current;
-        const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
-        if (collisionForce) {
-          collisionForce.radius(d => getNodeRadius(d) + 5);
-          simulation.alpha(0.1).restart();
-        }
-      }
-    }, [searchResults, getNodeRadius]);
-
     // Config update effect - runs when visualization config changes
     useEffect(() => {
       if (!simulationRef.current || !data || nodeMetrics.size === 0) return;
@@ -985,7 +732,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           enter =>
             enter
               .append('line')
-              .attr('stroke', (d: Link) => getLinkColorHelper(d))
+              .attr('stroke', (d: Link) => getLinkColor(d.type))
               .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
               .attr('stroke-width', (d: Link) => {
                 const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -998,7 +745,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               }),
           update =>
             update
-              .attr('stroke', (d: Link) => getLinkColorHelper(d))
+              .attr('stroke', (d: Link) => getLinkColor(d.type))
               .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
               .attr('stroke-width', (d: Link) => {
                 const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -1074,100 +821,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         });
     };
 
-    // Helper functions using the new visualization utilities where available,
-    // but keeping legacy versions for backward compatibility
-
-    const getLinkWidth = (link: Link) => {
-      // Try to use the new utility function if link metrics are available
-      const linkKey = `${(link.source as any).id || link.source}-${(link.target as any).id || link.target}`;
-      if (linkMetrics.has(linkKey)) {
-        const metrics = linkMetrics.get(linkKey)!;
-        return calculateEdgeWidth(metrics, config, link.type);
-      }
-
-      // Fall back to legacy implementation
-      const baseWidth = (() => {
-        switch (link.type) {
-          case 'import':
-          case 'call':
-          case 'calls':
-            return 2;
-          case 'contains':
-            return 3; // Thicker lines for containment to make hierarchy clear
-          case 'filesystem_proximity':
-            return 1.5;
-          case 'semantic_similarity':
-            return 2;
-          default:
-            return 1.5;
-        }
-      })();
-
-      // Scale width by weight for non-containment links
-      if (link.type === 'contains') {
-        return baseWidth; // Fixed width for containment to keep hierarchy clear
-      }
-
-      const weight = link.weight || 0;
-      return baseWidth * (0.5 + weight * 0.5);
-    };
-
-    const getLinkColorHelper = (link: Link) => {
-      // Try to use the new utility function if link metrics are available
-      const linkKey = `${(link.source as any).id || link.source}-${(link.target as any).id || link.target}`;
-      if (linkMetrics.has(linkKey)) {
-        return getLinkColor(link.type);
-      }
-
-      // Fall back to legacy implementation
-      switch (link.type) {
-        case 'filesystem_proximity':
-          return '#e74c3c'; // Red for filesystem connections
-        case 'semantic_similarity':
-          return '#27ae60'; // Green for semantic connections
-        case 'import':
-        case 'call':
-          return '#3498db'; // Blue for reference connections
-        case 'contains':
-          return '#2c3e50'; // Dark blue-gray for containment - more visible
-        default:
-          return '#95a5a6';
-      }
-    };
-
-    const getNodeColorHelper = (node: Node, colors: Record<string, string>) => {
-      // Try to use the new utility function if node metrics are available
-      if (nodeMetrics.has(node.id)) {
-        const metrics = nodeMetrics.get(node.id)!;
-        const allNodeMetricsArray = Array.from(nodeMetrics.values());
-        return getNodeColor(node, metrics, config, allNodeMetricsArray, colors);
-      }
-
-      // Fall back to legacy implementation
-      // Directories have a different color
-      if (node.type === 'directory') {
-        return '#7f8c8d';
-      }
-
-      // Components have different colors based on type
-      if (node.type === 'class') {
-        return '#e67e22';
-      }
-      if (node.type === 'function') {
-        return '#3498db';
-      }
-      if (node.type === 'method') {
-        return '#9b59b6';
-      }
-
-      // Files are colored by extension
-      if (node.extension && colors[node.extension]) {
-        return colors[node.extension];
-      }
-
-      // Default color for unknown file types
-      return '#aaaaaa';
-    };
     const createLegend = (
       svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
       width: number,
