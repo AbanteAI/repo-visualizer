@@ -239,12 +239,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     useEffect(() => {
       if (!data) return;
 
-      const computedNodeMetrics = computeNodeMetrics(data);
+      const computedNodeMetrics = computeNodeMetrics(data, config.searchTerm);
       const computedLinkMetrics = computeLinkMetrics(data);
 
       setNodeMetrics(computedNodeMetrics);
       setLinkMetrics(computedLinkMetrics);
-    }, [data]);
+    }, [data, config.searchTerm]);
 
     // Initial setup effect - runs when data changes
     useEffect(() => {

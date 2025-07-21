@@ -28,6 +28,7 @@ export interface FeatureMapping {
 
 export interface VisualizationConfig {
   mappings: FeatureMapping[];
+  searchTerm?: string;
 }
 
 // Available data sources
