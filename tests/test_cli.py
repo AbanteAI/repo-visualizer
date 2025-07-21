@@ -24,6 +24,27 @@ class TestCli:
         assert args.repo_path == "/path/to/repo"
         assert args.output == "custom_output.json"
         assert args.verbose is True
+        assert args.branch is None  # default
+        assert args.history_sample == 10  # default
+        assert args.max_commits == 1000  # default
+
+    def test_parse_args_with_history_options(self):
+        """Test parsing command-line arguments with history options."""
+        args = parse_args(
+            [
+                "/path/to/repo",
+                "-b",
+                "main",
+                "--history-sample",
+                "5",
+                "--max-commits",
+                "100",
+            ]
+        )
+        assert args.repo_path == "/path/to/repo"
+        assert args.branch == "main"
+        assert args.history_sample == 5
+        assert args.max_commits == 100
 
     @patch("logging.basicConfig")
     def test_setup_logging(self, mock_basic_config):
@@ -40,17 +61,25 @@ class TestCli:
         assert kwargs["level"] == 10  # DEBUG level
 
     @patch("os.path.isdir")
-    @patch("repo_visualizer.cli.analyze_repository")
-    def test_main_success(self, mock_analyze, mock_isdir):
+    @patch("repo_visualizer.cli.RepositoryAnalyzer")
+    def test_main_success(self, mock_analyzer_class, mock_isdir):
         """Test successful execution of main function."""
         # Mock directory checks
         mock_isdir.return_value = True
 
+        # Mock analyzer instance and its methods
+        mock_analyzer = mock_analyzer_class.return_value
+        mock_analyzer.analyze.return_value = {"test": "data"}
+
         # Run main with test arguments
         exit_code = main(["/path/to/repo", "-o", "output.json"])
 
-        # Check that analyze_repository was called with expected args
-        mock_analyze.assert_called_once_with("/path/to/repo", "output.json")
+        # Check that RepositoryAnalyzer was called with expected args
+        mock_analyzer_class.assert_called_once_with(
+            "/path/to/repo", branch=None, history_sample=10, max_commits=1000
+        )
+        mock_analyzer.analyze.assert_called_once()
+        mock_analyzer.save_to_file.assert_called_once_with("output.json")
         assert exit_code == 0
 
     @patch("os.path.isdir")
@@ -78,14 +107,14 @@ class TestCli:
         assert exit_code == 1
 
     @patch("os.path.isdir")
-    @patch("repo_visualizer.cli.analyze_repository")
-    def test_main_exception(self, mock_analyze, mock_isdir):
+    @patch("repo_visualizer.cli.RepositoryAnalyzer")
+    def test_main_exception(self, mock_analyzer_class, mock_isdir):
         """Test main function with exception during analysis."""
         # Mock directory checks
         mock_isdir.return_value = True
 
-        # Mock exception during analysis
-        mock_analyze.side_effect = Exception("Test error")
+        # Mock exception during analyzer instantiation
+        mock_analyzer_class.side_effect = Exception("Test error")
 
         # Run main
         exit_code = main(["/path/to/repo"])
