@@ -571,8 +571,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         nodeGroups.attr('transform', d => `translate(${d.x || 0}, ${d.y || 0})`);
       });
 
-      // Create legend
-      createLegend(svg, width, data, extensionColors);
+      // Legend is now handled by DynamicLegend component
 
       // Store references for weight updates
       (simulation as any).__linkSelection = link;
@@ -818,108 +817,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d.fx = null;
           d.fy = null;
         });
-    };
-
-    const createLegend = (
-      svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
-      width: number,
-      data: RepositoryData,
-      colors: Record<string, string>
-    ) => {
-      // Only show extensions that were actually in the data
-      const usedExtensions = new Set<string>();
-      data.files.forEach(file => {
-        if (file.extension) {
-          usedExtensions.add(file.extension);
-        }
-      });
-
-      const legendGroup = svg.append('g').attr('transform', `translate(20, 20)`);
-
-      // Add directory type
-      legendGroup
-        .append('circle')
-        .attr('class', 'legend-item')
-        .attr('cx', 10)
-        .attr('cy', 10)
-        .attr('r', 6)
-        .attr('fill', '#7f8c8d');
-
-      legendGroup
-        .append('text')
-        .attr('x', 20)
-        .attr('y', 14)
-        .text('Directory')
-        .style('font-size', '12px')
-        .style('fill', '#333');
-
-      // Add file types
-      let index = 1;
-      for (const ext of usedExtensions) {
-        if (colors[ext]) {
-          legendGroup
-            .append('circle')
-            .attr('class', 'legend-item')
-            .attr('cx', 10 + Math.floor(index / 10) * 100)
-            .attr('cy', 10 + (index % 10) * 20)
-            .attr('r', 6)
-            .attr('fill', colors[ext]);
-
-          legendGroup
-            .append('text')
-            .attr('x', 20 + Math.floor(index / 10) * 100)
-            .attr('y', 14 + (index % 10) * 20)
-            .text(`.${ext}`)
-            .style('font-size', '12px')
-            .style('fill', '#333');
-
-          index++;
-        }
-      }
-
-      // Add "Other" type
-      legendGroup
-        .append('circle')
-        .attr('class', 'legend-item')
-        .attr('cx', 10 + Math.floor(index / 10) * 100)
-        .attr('cy', 10 + (index % 10) * 20)
-        .attr('r', 6)
-        .attr('fill', '#aaaaaa');
-
-      legendGroup
-        .append('text')
-        .attr('x', 20 + Math.floor(index / 10) * 100)
-        .attr('y', 14 + (index % 10) * 20)
-        .text('Other')
-        .style('font-size', '12px')
-        .style('fill', '#333');
-
-      // Add component types
-      index++;
-      const componentTypes = [
-        { type: 'class', color: '#e67e22' },
-        { type: 'function', color: '#3498db' },
-        { type: 'method', color: '#9b59b6' },
-      ];
-
-      componentTypes.forEach(({ type, color }) => {
-        legendGroup
-          .append('circle')
-          .attr('cx', 10 + Math.floor(index / 10) * 100)
-          .attr('cy', 10 + (index % 10) * 20)
-          .attr('r', 6)
-          .attr('fill', color);
-
-        legendGroup
-          .append('text')
-          .attr('x', 20 + Math.floor(index / 10) * 100)
-          .attr('y', 14 + (index % 10) * 20)
-          .text(type)
-          .style('font-size', '12px')
-          .style('fill', '#333');
-
-        index++;
-      });
     };
 
     return (
