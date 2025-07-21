@@ -69,10 +69,6 @@ const App: React.FC = () => {
     setSelectedFile(null);
   };
 
-  const handleReset = () => {
-    graphRef.current?.resetView();
-  };
-
   const handleConfigChange = (newConfig: VisualizationConfig) => {
     setConfig(newConfig);
   };
@@ -93,9 +89,6 @@ const App: React.FC = () => {
                     ? repositoryData.metadata.repoName.replace(/_/g, '/')
                     : 'Repo Visualizer'}
                 </h1>
-                <p className="text-sm text-gray-500">
-                  Visualize your repository structure interactively
-                </p>
               </div>
 
               {repositoryData && repositoryData.metadata.description && (
@@ -129,30 +122,6 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {repositoryData && (
-              <div className="flex items-center gap-4">
-                {/* Navigation Controls */}
-                <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
-                  <button
-                    onClick={handleReset}
-                    className="flex items-center justify-center w-10 h-10 rounded-md bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
-                    title="Reset View"
-                  >
-                    <span className="text-base font-bold">⌂</span>
-                  </button>
-                </div>
-
-                {/* Menu Controls */}
-                <button
-                  onClick={handleToggleControls}
-                  className="flex items-center justify-center w-10 h-10 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 text-gray-600 hover:text-gray-800"
-                  aria-label="Toggle controls"
-                >
-                  <span className="text-lg font-bold">⚙</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </header>
@@ -186,6 +155,17 @@ const App: React.FC = () => {
                   selectedFile={selectedFile}
                   config={config}
                 />
+
+                {/* Controls Toggle Button - positioned on canvas */}
+                {repositoryData && (
+                  <button
+                    onClick={handleToggleControls}
+                    className="absolute top-4 right-4 flex items-center justify-center w-10 h-10 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 text-gray-600 hover:text-gray-800 z-10"
+                    aria-label="Toggle controls"
+                  >
+                    <span className="text-lg font-bold">⚙</span>
+                  </button>
+                )}
 
                 {/* Visualization Controls */}
                 {showControls && (
