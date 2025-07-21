@@ -88,10 +88,17 @@ repo-visualizer -v
 You can also use Repo Visualizer as a Python library:
 
 ```python
-from src.repo_visualizer.analyzer import analyze_repository
+from repo_visualizer import RepositoryAnalyzer
 
 # Analyze a repository
-analyze_repository("/path/to/repository", "output.json")
+analyzer = RepositoryAnalyzer("/path/to/repository")
+data = analyzer.analyze()
+analyzer.save_to_file("output.json")
+
+# With history options
+analyzer = RepositoryAnalyzer("/path/to/repository", branch="main", history_sample=5, max_commits=100)
+data = analyzer.analyze()
+analyzer.save_to_file("output_with_history.json")
 ```
 
 #### Output
