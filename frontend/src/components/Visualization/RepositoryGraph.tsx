@@ -657,7 +657,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .data(links)
         .enter()
         .append('line')
-        .attr('stroke', d => getLinkColor(d.type))
+        .attr('stroke', d => getLinkColorHelper(d))
         .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', d => {
           const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -829,7 +829,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }, [selectedFile, data, expandedFiles]);
 
-<<<<<<< HEAD
     // Lightweight effect to update node sizes when search results change
     useEffect(() => {
       if (!svgRef.current || !data) return;
@@ -878,12 +877,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }, [searchResults, getNodeRadius]);
 
-    // Weight update effect - runs when weights change
-||||||| 11c1e58
-    // Weight update effect - runs when weights change
-=======
     // Config update effect - runs when visualization config changes
->>>>>>> origin/main
     useEffect(() => {
       if (!simulationRef.current || !data || nodeMetrics.size === 0) return;
 
@@ -991,7 +985,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           enter =>
             enter
               .append('line')
-              .attr('stroke', (d: Link) => getLinkColor(d.type))
+              .attr('stroke', (d: Link) => getLinkColorHelper(d))
               .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
               .attr('stroke-width', (d: Link) => {
                 const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -1004,7 +998,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               }),
           update =>
             update
-              .attr('stroke', (d: Link) => getLinkColor(d.type))
+              .attr('stroke', (d: Link) => getLinkColorHelper(d))
               .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
               .attr('stroke-width', (d: Link) => {
                 const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -1080,10 +1074,17 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         });
     };
 
-<<<<<<< HEAD
-    // Other helper functions - getNodeRadius is defined earlier with useCallback
+    // Helper functions using the new visualization utilities where available,
+    // but keeping legacy versions for backward compatibility
 
     const getLinkWidth = (link: Link) => {
+      // Try to use the new utility function if link metrics are available
+      if (linkMetrics.has(link.id || '')) {
+        const metrics = linkMetrics.get(link.id || '')!;
+        return calculateEdgeWidth(metrics);
+      }
+
+      // Fall back to legacy implementation
       const baseWidth = (() => {
         switch (link.type) {
           case 'import':
@@ -1110,7 +1111,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       return baseWidth * (0.5 + weight * 0.5);
     };
 
-    const getLinkColor = (link: Link) => {
+    const getLinkColorHelper = (link: Link) => {
+      // Try to use the new utility function if link metrics are available
+      if (linkMetrics.has(link.id || '')) {
+        const metrics = linkMetrics.get(link.id || '')!;
+        return getLinkColor(metrics);
+      }
+
+      // Fall back to legacy implementation
       switch (link.type) {
         case 'filesystem_proximity':
           return '#e74c3c'; // Red for filesystem connections
@@ -1126,7 +1134,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     };
 
-    const getNodeColor = (node: Node, colors: Record<string, string>) => {
+    const getNodeColorHelper = (node: Node, colors: Record<string, string>) => {
+      // Try to use the new utility function if node metrics are available
+      if (nodeMetrics.has(node.id)) {
+        const metrics = nodeMetrics.get(node.id)!;
+        return getNodeColor(metrics);
+      }
+
+      // Fall back to legacy implementation
       // Directories have a different color
       if (node.type === 'directory') {
         return '#7f8c8d';
@@ -1151,183 +1166,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Default color for unknown file types
       return '#aaaaaa';
     };
-
-||||||| 11c1e58
-    // Helper functions
-    const getNodeRadius = (node: Node) => {
-      if (node.type === 'directory') {
-        return 10; // Fixed size for directories
-      }
-
-      // Set different size ranges for components vs files
-      let minRadius = 5;
-      let maxRadius = 25;
-
-      const isComponent =
-        node.type === 'class' || node.type === 'function' || node.type === 'method';
-      if (isComponent) {
-        minRadius = 3;
-        maxRadius = 12; // Components are smaller than files
-      }
-
-      // Get file data for additional metrics
-      // For components, use the parent file's metrics
-      let fileData = data.files.find(f => f.id === node.id);
-      if (!fileData && isComponent) {
-        // Component IDs are like "file.py:ClassName" - extract the file part
-        const fileId = node.id.split(':')[0];
-        fileData = data.files.find(f => f.id === fileId);
-      }
-
-      // Calculate normalized factors (0-1)
-      const factors = {
-        fileSize: 0,
-        commitCount: 0,
-        recency: 0,
-        identifiers: 0,
-        references: 0,
-      };
-
-      // File size factor
-      let sizeToUse = node.size;
-      // Components don't have file size, but we can use their line count as a proxy
-      if (isComponent && sizeToUse === 0) {
-        // Check if this component has line information
-        const component = fileData?.components?.find(c => c.id === node.id);
-        if (component && component.lineStart && component.lineEnd) {
-          const lineCount = component.lineEnd - component.lineStart + 1;
-          // Convert line count to approximate byte size (assume ~50 characters per line)
-          sizeToUse = lineCount * 50;
-        } else if (fileData) {
-          // Fallback to using a fraction of parent file size
-          sizeToUse = fileData.size * 0.1; // Components are ~10% of parent file
-        }
-      }
-
-      if (sizeToUse && sizeToUse > 0) {
-        // Square root scale for better distribution across typical file sizes
-        // This gives more range to smaller files while still scaling large ones
-        factors.fileSize = Math.min(1, Math.sqrt(sizeToUse) / 500); // Normalize for ~250KB max
-      }
-
-      if (fileData?.metrics) {
-        // Commit count factor
-        if (fileData.metrics.commitCount !== undefined) {
-          factors.commitCount = Math.min(1, fileData.metrics.commitCount / 50); // Normalize to ~50 commits max
-        }
-
-        // Recency factor (invert days ago - more recent = larger)
-        if (fileData.metrics.lastCommitDaysAgo !== undefined) {
-          const daysAgo = fileData.metrics.lastCommitDaysAgo;
-          factors.recency = Math.max(0, 1 - daysAgo / 365); // Normalize to 1 year
-        }
-
-        // Top-level identifiers factor
-        if (fileData.metrics.topLevelIdentifiers !== undefined) {
-          factors.identifiers = Math.min(1, fileData.metrics.topLevelIdentifiers / 20); // Normalize to ~20 identifiers max
-        }
-      }
-
-      // References factor (count incoming references)
-      const incomingRefs = data.relationships.filter(
-        rel => rel.target === node.id && rel.type !== 'contains'
-      ).length;
-      factors.references = Math.min(1, incomingRefs / 10); // Normalize to ~10 references max
-
-      // Apply weights (convert from 0-100 to 0-1)
-      const weightedSum =
-        (factors.fileSize * fileSizeWeight) / 100 +
-        (factors.commitCount * commitCountWeight) / 100 +
-        (factors.recency * recencyWeight) / 100 +
-        (factors.identifiers * identifiersWeight) / 100 +
-        (factors.references * referencesWeight) / 100;
-
-      // Ensure we have some minimum size even if all weights are 0
-      const totalWeight =
-        (fileSizeWeight +
-          commitCountWeight +
-          recencyWeight +
-          identifiersWeight +
-          referencesWeight) /
-        100;
-      const normalizedSum = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
-
-      // Scale to radius range
-      const radius = minRadius + normalizedSum * (maxRadius - minRadius);
-      return Math.max(minRadius, Math.min(maxRadius, radius));
-    };
-
-    const getLinkWidth = (link: Link) => {
-      const baseWidth = (() => {
-        switch (link.type) {
-          case 'import':
-          case 'call':
-          case 'calls':
-            return 2;
-          case 'contains':
-            return 3; // Thicker lines for containment to make hierarchy clear
-          case 'filesystem_proximity':
-            return 1.5;
-          case 'semantic_similarity':
-            return 2;
-          default:
-            return 1.5;
-        }
-      })();
-
-      // Scale width by weight for non-containment links
-      if (link.type === 'contains') {
-        return baseWidth; // Fixed width for containment to keep hierarchy clear
-      }
-
-      const weight = link.weight || 0;
-      return baseWidth * (0.5 + weight * 0.5);
-    };
-
-    const getLinkColor = (link: Link) => {
-      switch (link.type) {
-        case 'filesystem_proximity':
-          return '#e74c3c'; // Red for filesystem connections
-        case 'semantic_similarity':
-          return '#27ae60'; // Green for semantic connections
-        case 'import':
-        case 'call':
-          return '#3498db'; // Blue for reference connections
-        case 'contains':
-          return '#2c3e50'; // Dark blue-gray for containment - more visible
-        default:
-          return '#95a5a6';
-      }
-    };
-
-    const getNodeColor = (node: Node, colors: Record<string, string>) => {
-      // Directories have a different color
-      if (node.type === 'directory') {
-        return '#7f8c8d';
-      }
-
-      // Components have different colors based on type
-      if (node.type === 'class') {
-        return '#e67e22';
-      }
-      if (node.type === 'function') {
-        return '#3498db';
-      }
-      if (node.type === 'method') {
-        return '#9b59b6';
-      }
-
-      // Files are colored by extension
-      if (node.extension && colors[node.extension]) {
-        return colors[node.extension];
-      }
-
-      // Default color for unknown file types
-      return '#aaaaaa';
-    };
-
-=======
->>>>>>> origin/main
     const createLegend = (
       svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
       width: number,
