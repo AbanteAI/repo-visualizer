@@ -55,7 +55,7 @@ class RepositoryAnalyzer:
         Args:
             repo_path: Path to the local git repository
             branch: Git branch to analyze (None for current branch)
-            history_sample: Sample every N commits for detailed history (1 for all commits)
+            history_sample: Sample every N commits for detailed history (1 for all)
             max_commits: Maximum number of commits to analyze
         """
         self.repo_path = os.path.abspath(repo_path)
@@ -248,7 +248,8 @@ class RepositoryAnalyzer:
 
             if result.returncode != 0:
                 print(
-                    f"Warning: Branch '{self.branch}' does not exist, using current branch"
+                    f"Warning: Branch '{self.branch}' does not exist, "
+                    f"using current branch"
                 )
                 return
 
@@ -263,7 +264,8 @@ class RepositoryAnalyzer:
 
             if result.returncode != 0:
                 print(
-                    f"Warning: Could not checkout branch '{self.branch}': {result.stderr}"
+                    f"Warning: Could not checkout branch '{self.branch}': "
+                    f"{result.stderr}"
                 )
 
         except Exception as e:
@@ -2125,7 +2127,8 @@ class RepositoryAnalyzer:
             commit_id = commit["id"]
 
             print(
-                f"  Processing timeline point {i + 1}/{len(sampled_indices)}: {commit_id[:8]}"
+                f"  Processing timeline point {i + 1}/{len(sampled_indices)}: "
+                f"{commit_id[:8]}"
             )
 
             # Create repository snapshot at this commit

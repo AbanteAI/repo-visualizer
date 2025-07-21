@@ -51,11 +51,11 @@ export const HistoryVisualization: React.FC<HistoryVisualizationProps> = ({
   const handleTimelineChange = useCallback(
     (newIndex: number) => {
       if (newIndex < 0 || newIndex >= timelinePoints.length) return;
-      
+
       if (newIndex !== currentTimelineIndex) {
         setIsTransitioning(true);
         setCurrentTimelineIndex(newIndex);
-        
+
         // Clear transition flag after a short delay
         setTimeout(() => setIsTransitioning(false), 300);
       }
@@ -94,7 +94,7 @@ export const HistoryVisualization: React.FC<HistoryVisualizationProps> = ({
   useEffect(() => {
     if (isPlaying && timelinePoints.length > 1) {
       animationIntervalRef.current = setInterval(() => {
-        setCurrentTimelineIndex((prevIndex) => {
+        setCurrentTimelineIndex(prevIndex => {
           if (prevIndex >= timelinePoints.length - 1) {
             // Animation complete, stop playing
             setIsPlaying(false);
@@ -154,19 +154,14 @@ export const HistoryVisualization: React.FC<HistoryVisualizationProps> = ({
         {isTransitioning && (
           <div className="absolute inset-0 bg-white bg-opacity-10 z-10 pointer-events-none transition-opacity duration-300" />
         )}
-        
-        <RepositoryGraph
-          ref={repositoryGraphRef}
-          {...graphProps}
-        />
-        
+
+        <RepositoryGraph ref={repositoryGraphRef} {...graphProps} />
+
         {/* Timeline indicator overlay */}
         {hasHistory && (
           <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white px-3 py-2 rounded-lg text-sm font-mono">
             {timelinePoints[currentTimelineIndex]?.commitId.substring(0, 8) || 'Unknown'}
-            {isPlaying && (
-              <span className="ml-2 animate-pulse">▶</span>
-            )}
+            {isPlaying && <span className="ml-2 animate-pulse">▶</span>}
           </div>
         )}
       </div>

@@ -20,9 +20,10 @@ const App: React.FC = () => {
   const [showControls, setShowControls] = useState(true);
 
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
-  
+
   // Check if repository has history data
-  const hasHistory = repositoryData?.history?.timelinePoints && repositoryData.history.timelinePoints.length > 0;
+  const hasHistory =
+    repositoryData?.history?.timelinePoints && repositoryData.history.timelinePoints.length > 0;
 
   // Auto-load repo_data.json on component mount
   useEffect(() => {
