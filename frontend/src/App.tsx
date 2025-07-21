@@ -21,10 +21,10 @@ const App: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
-  
+
   // Visualization configuration
   const [config, setConfig] = useState<VisualizationConfig>(DEFAULT_CONFIG);
-  
+
   // Search functionality
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState<SearchMode>('exact');
@@ -42,8 +42,8 @@ const App: React.FC = () => {
   const [recencyWeight, setRecencyWeight] = useState(0);
   const [identifiersWeight, setIdentifiersWeight] = useState(0);
   const [referencesWeight, setReferencesWeight] = useState(0);
-  
-  // Legacy connection weights for backward compatibility  
+
+  // Legacy connection weights for backward compatibility
   const [referenceWeight, setReferenceWeight] = useState(70);
   const [filesystemWeight, setFilesystemWeight] = useState(30);
   const [semanticWeight, setSemanticWeight] = useState(30);
