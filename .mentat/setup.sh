@@ -15,6 +15,26 @@ fi
 
 echo "Using Python command: $PYTHON_CMD"
 
+# Check if python3-venv is available and install if needed (Ubuntu/Debian systems)
+if ! $PYTHON_CMD -m venv --help > /dev/null 2>&1; then
+    echo "python3-venv not available, attempting to install..."
+    if command -v apt &> /dev/null; then
+        echo "Installing python3-venv using apt..."
+        apt update
+        if [[ $PYTHON_CMD == "python3" ]]; then
+            # Get Python version for specific venv package
+            PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+            apt install -y "python${PYTHON_VERSION}-venv"
+        else
+            apt install -y python3-venv
+        fi
+    else
+        echo "Error: Cannot install python3-venv - apt package manager not found"
+        echo "Please install python3-venv manually for your system"
+        exit 1
+    fi
+fi
+
 # Create virtual environment if it doesn't exist
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment..."
