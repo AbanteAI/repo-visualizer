@@ -30,6 +30,11 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
   const currentMapping = getFeatureMapping(config, selectedFeature);
   const [localSearchTerm, setLocalSearchTerm] = useState(config.searchTerm || '');
 
+  // Keep local search term in sync with config changes
+  useEffect(() => {
+    setLocalSearchTerm(config.searchTerm || '');
+  }, [config.searchTerm]);
+
   // Initialize position to upper right corner
   useEffect(() => {
     const initializePosition = () => {

@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { RepositoryData } from '../types/schema';
+import { calculateKeywordRelevance, calculateSemanticRelevance } from '../utils/visualizationUtils';
 
 interface FileUploadProps {
   onDataLoaded: (data: RepositoryData) => void;
@@ -193,47 +194,6 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onLoadExample }) 
       files: searchFiles,
       relationships,
     };
-  };
-
-  const calculateKeywordRelevance = (path: string, term: string): number => {
-    const lowerPath = path.toLowerCase();
-    const lowerTerm = term.toLowerCase();
-
-    if (lowerPath.includes(lowerTerm)) {
-      // Exact match gets high score
-      return 100;
-    }
-
-    // Partial matches get lower scores
-    const words = lowerTerm.split(/\s+/);
-    const matches = words.filter(word => lowerPath.includes(word)).length;
-    return (matches / words.length) * 80;
-  };
-
-  const calculateSemanticRelevance = (path: string, term: string): number => {
-    // Mock semantic similarity - in real implementation would use embeddings
-    const semanticPairs = {
-      user: ['auth', 'login', 'profile', 'account'],
-      data: ['database', 'model', 'schema', 'store'],
-      api: ['endpoint', 'route', 'service', 'client'],
-      ui: ['component', 'view', 'render', 'display'],
-      test: ['spec', 'mock', 'assert', 'verify'],
-    };
-
-    const lowerPath = path.toLowerCase();
-    const lowerTerm = term.toLowerCase();
-
-    for (const [concept, related] of Object.entries(semanticPairs)) {
-      if (lowerTerm.includes(concept)) {
-        for (const relatedWord of related) {
-          if (lowerPath.includes(relatedWord)) {
-            return Math.random() * 60 + 40; // 40-100 for semantic matches
-          }
-        }
-      }
-    }
-
-    return Math.random() * 30; // Low baseline semantic relevance
   };
 
   return (
