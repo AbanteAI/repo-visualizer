@@ -1079,9 +1079,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
     const getLinkWidth = (link: Link) => {
       // Try to use the new utility function if link metrics are available
-      if (linkMetrics.has(link.id || '')) {
-        const metrics = linkMetrics.get(link.id || '')!;
-        return calculateEdgeWidth(metrics);
+      const linkKey = `${(link.source as any).id || link.source}-${(link.target as any).id || link.target}`;
+      if (linkMetrics.has(linkKey)) {
+        const metrics = linkMetrics.get(linkKey)!;
+        return calculateEdgeWidth(metrics, config, link.type);
       }
 
       // Fall back to legacy implementation
@@ -1113,9 +1114,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
     const getLinkColorHelper = (link: Link) => {
       // Try to use the new utility function if link metrics are available
-      if (linkMetrics.has(link.id || '')) {
-        const metrics = linkMetrics.get(link.id || '')!;
-        return getLinkColor(metrics);
+      const linkKey = `${(link.source as any).id || link.source}-${(link.target as any).id || link.target}`;
+      if (linkMetrics.has(linkKey)) {
+        return getLinkColor(link.type);
       }
 
       // Fall back to legacy implementation
@@ -1138,7 +1139,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Try to use the new utility function if node metrics are available
       if (nodeMetrics.has(node.id)) {
         const metrics = nodeMetrics.get(node.id)!;
-        return getNodeColor(metrics);
+        const allNodeMetricsArray = Array.from(nodeMetrics.values());
+        return getNodeColor(node, metrics, config, allNodeMetricsArray, colors);
       }
 
       // Fall back to legacy implementation
