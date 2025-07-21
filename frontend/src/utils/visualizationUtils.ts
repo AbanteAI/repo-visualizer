@@ -30,6 +30,8 @@ export interface ComputedNodeMetrics {
   recency: number;
   identifiers: number;
   references: number;
+  keyword_search: number;
+  semantic_search: number;
 }
 
 export interface ComputedLinkMetrics {
@@ -68,6 +70,8 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       recency: recencyScore,
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
+      keyword_search: (fileMetrics.custom?.keywordRelevance as number) || 0,
+      semantic_search: (fileMetrics.custom?.semanticRelevance as number) || 0,
     });
 
     // Add metrics for components (classes, functions, methods)
@@ -80,6 +84,8 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
           recency: recencyScore,
           identifiers: fileMetrics.topLevelIdentifiers || 0,
           references: incomingReferences.get(component.id) || 0,
+          keyword_search: (fileMetrics.custom?.keywordRelevance as number) || 0,
+          semantic_search: (fileMetrics.custom?.semanticRelevance as number) || 0,
         });
       });
     }

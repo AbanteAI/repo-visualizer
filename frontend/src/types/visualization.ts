@@ -113,6 +113,24 @@ export const DATA_SOURCES: DataSource[] = [
     category: 'relationship',
     dataType: 'continuous',
   },
+  {
+    id: 'keyword_search',
+    name: 'Keyword Search',
+    description: 'Relevance based on keyword matching',
+    color: '#f97316',
+    defaultWeight: 0,
+    category: 'semantic',
+    dataType: 'continuous',
+  },
+  {
+    id: 'semantic_search',
+    name: 'Semantic Search',
+    description: 'Relevance based on semantic similarity to search term',
+    color: '#a855f7',
+    defaultWeight: 0,
+    category: 'semantic',
+    dataType: 'continuous',
+  },
 ];
 
 // Available visual features
@@ -166,6 +184,8 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
+        keyword_search: 0,
+        semantic_search: 0,
       },
     },
     {
@@ -180,6 +200,8 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
+        keyword_search: 0,
+        semantic_search: 0,
       },
     },
     {
@@ -194,6 +216,8 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 30,
         filesystem_proximity: 30,
         code_references: 70,
+        keyword_search: 0,
+        semantic_search: 0,
       },
     },
     {
@@ -208,6 +232,8 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 100,
+        keyword_search: 0,
+        semantic_search: 0,
       },
     },
   ],
