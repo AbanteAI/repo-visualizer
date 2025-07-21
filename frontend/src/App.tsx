@@ -3,6 +3,7 @@ import { RepositoryData } from './types/schema';
 import { VisualizationConfig, DEFAULT_CONFIG } from './types/visualization';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
+import HistoryVisualization from './components/HistoryVisualization';
 import FileDetails from './components/FileDetails';
 import UnifiedVisualizationControls from './components/UnifiedVisualizationControls';
 
@@ -19,6 +20,9 @@ const App: React.FC = () => {
   const [showControls, setShowControls] = useState(true);
 
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
+  
+  // Check if repository has history data
+  const hasHistory = repositoryData?.history?.timelinePoints && repositoryData.history.timelinePoints.length > 0;
 
   // Auto-load repo_data.json on component mount
   useEffect(() => {
@@ -184,7 +188,22 @@ const App: React.FC = () => {
               <h2 className="text-lg font-semibold">
                 {repositoryData.metadata.repoName}
                 {repositoryData.metadata.description && ` - ${repositoryData.metadata.description}`}
+                {hasHistory && (
+                  <span className="ml-2 text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                    History Available
+                  </span>
+                )}
               </h2>
+              {repositoryData.metadata.analyzedBranch && (
+                <p className="text-sm text-gray-600 mt-1">
+                  Branch: {repositoryData.metadata.analyzedBranch}
+                  {repositoryData.metadata.historyRange && (
+                    <span className="ml-2">
+                      ({repositoryData.metadata.historyRange.sampledCommits} timeline points)
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
 
             <div
@@ -194,16 +213,25 @@ const App: React.FC = () => {
                 className="flex-1 min-h-0 relative"
                 style={{ display: 'flex', flexDirection: 'column' }}
               >
-                <RepositoryGraph
-                  ref={graphRef}
-                  data={repositoryData}
-                  onSelectFile={handleFileSelect}
-                  selectedFile={selectedFile}
-                  config={config}
-                />
+                {hasHistory ? (
+                  <HistoryVisualization
+                    data={repositoryData}
+                    onSelectFile={handleFileSelect}
+                    selectedFile={selectedFile}
+                    config={config}
+                  />
+                ) : (
+                  <RepositoryGraph
+                    ref={graphRef}
+                    data={repositoryData}
+                    onSelectFile={handleFileSelect}
+                    selectedFile={selectedFile}
+                    config={config}
+                  />
+                )}
 
-                {/* Visualization Controls */}
-                {showControls && (
+                {/* Visualization Controls - only show for regular graph view */}
+                {!hasHistory && showControls && (
                   <UnifiedVisualizationControls
                     config={config}
                     onConfigChange={handleConfigChange}

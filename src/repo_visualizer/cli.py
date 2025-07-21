@@ -12,7 +12,7 @@ import os
 import sys
 from typing import List, Optional
 
-from .analyzer import analyze_repository
+from .analyzer import RepositoryAnalyzer
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -65,6 +65,27 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
     )
 
+    parser.add_argument(
+        "-b",
+        "--branch",
+        help="Branch to analyze (defaults to current branch)",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--history-sample",
+        type=int,
+        help="Sample every N commits for history (default: 10, 1 for all commits)",
+        default=10,
+    )
+
+    parser.add_argument(
+        "--max-commits",
+        type=int,
+        help="Maximum number of commits to analyze (default: 1000)",
+        default=1000,
+    )
+
     return parser.parse_args(args)
 
 
@@ -104,7 +125,15 @@ def main(args: Optional[List[str]] = None) -> int:
 
         # Analyze repository
         logger.info(f"Analyzing repository at {repo_path}")
-        analyze_repository(repo_path, output_path)
+
+        analyzer = RepositoryAnalyzer(
+            repo_path,
+            branch=parsed_args.branch,
+            history_sample=parsed_args.history_sample,
+            max_commits=parsed_args.max_commits,
+        )
+        analyzer.analyze()
+        analyzer.save_to_file(output_path)
 
         logger.info(f"Analysis complete. Output saved to {output_path}")
         return 0
