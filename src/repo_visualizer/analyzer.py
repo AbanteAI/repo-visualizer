@@ -2154,7 +2154,7 @@ class RepositoryAnalyzer:
                         if analysis:
                             statements = analysis[1]  # executable statements
                             missing = analysis[
-                                2
+                                3
                             ]  # missing statements (corrected index)
                             if statements:
                                 covered = len(statements) - len(missing)
