@@ -17,8 +17,6 @@ import {
   computeNodeMetrics,
   computeLinkMetrics,
   calculateNodeSize,
-  calculateEdgeStrength,
-  calculateEdgeWidth,
   getNodeColor,
   generateLinksForLineTypes,
   getLinkVisualProperties,
@@ -580,7 +578,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const newLinkSelection = linkSelection
         .data(
           updatedLinks,
-          (d: Link) => `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`
+          (d: Link) =>
+            `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}-${d.lineTypeId || 'legacy'}`
         )
         .join(
           enter =>
