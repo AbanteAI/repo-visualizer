@@ -30,6 +30,7 @@ export interface ComputedNodeMetrics {
   recency: number;
   identifiers: number;
   references: number;
+  test_coverage_ratio?: number;
 }
 
 export interface ComputedLinkMetrics {
@@ -68,6 +69,7 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       recency: recencyScore,
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
+      test_coverage_ratio: fileMetrics.testCoverageRatio || 0,
     });
 
     // Add metrics for components (classes, functions, methods)
@@ -348,4 +350,43 @@ export const getLinkColor = (linkType: string): string => {
     default:
       return '#95a5a6';
   }
+};
+
+// Calculate pie chart data for a node based on weighted metrics
+export const calculatePieChartData = (
+  nodeMetrics: ComputedNodeMetrics,
+  config: VisualizationConfig
+): { covered: number; uncovered: number } | null => {
+  const mapping = getFeatureMapping(config, 'pie_chart_ratio');
+  if (!mapping) return null;
+
+  // Check if pie chart ratio feature is active
+  const totalWeight = Object.values(mapping.dataSourceWeights).reduce(
+    (sum, weight) => sum + weight,
+    0
+  );
+  if (totalWeight === 0) return null;
+
+  // Calculate the coverage ratio
+  const coverageRatio = calculateWeightedValue(nodeMetrics, config, 'pie_chart_ratio');
+
+  // Ensure coverage ratio is between 0 and 1
+  const normalizedCoverage = Math.max(0, Math.min(1, coverageRatio));
+
+  return {
+    covered: normalizedCoverage,
+    uncovered: 1 - normalizedCoverage,
+  };
+};
+
+// Check if pie chart rendering is enabled for a node
+export const isPieChartEnabled = (config: VisualizationConfig): boolean => {
+  const mapping = getFeatureMapping(config, 'pie_chart_ratio');
+  if (!mapping) return false;
+
+  const totalWeight = Object.values(mapping.dataSourceWeights).reduce(
+    (sum, weight) => sum + weight,
+    0
+  );
+  return totalWeight > 0;
 };

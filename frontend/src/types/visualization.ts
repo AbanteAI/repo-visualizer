@@ -113,6 +113,15 @@ export const DATA_SOURCES: DataSource[] = [
     category: 'relationship',
     dataType: 'continuous',
   },
+  {
+    id: 'test_coverage_ratio',
+    name: 'Test Coverage Ratio',
+    description: 'Percentage of code covered by tests',
+    color: '#16a34a',
+    defaultWeight: 0,
+    category: 'file',
+    dataType: 'continuous',
+  },
 ];
 
 // Available visual features
@@ -149,6 +158,14 @@ export const VISUAL_FEATURES: VisualFeature[] = [
     category: 'edge',
     defaultDataSources: ['code_references'],
   },
+  {
+    id: 'pie_chart_ratio',
+    name: 'Pie Chart Ratio',
+    description: 'Display nodes as pie charts showing data ratios',
+    icon: '◐',
+    category: 'node',
+    defaultDataSources: ['test_coverage_ratio'],
+  },
 ];
 
 // Default configuration
@@ -166,6 +183,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
+        test_coverage_ratio: 0,
       },
     },
     {
@@ -180,6 +198,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
+        test_coverage_ratio: 0,
       },
     },
     {
@@ -194,6 +213,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 30,
         filesystem_proximity: 30,
         code_references: 70,
+        test_coverage_ratio: 0,
       },
     },
     {
@@ -208,6 +228,22 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 100,
+        test_coverage_ratio: 0,
+      },
+    },
+    {
+      featureId: 'pie_chart_ratio',
+      dataSourceWeights: {
+        file_type: 0,
+        file_size: 0,
+        commit_count: 0,
+        recency: 0,
+        identifiers: 0,
+        references: 0,
+        semantic_similarity: 0,
+        filesystem_proximity: 0,
+        code_references: 0,
+        test_coverage_ratio: 100,
       },
     },
   ],

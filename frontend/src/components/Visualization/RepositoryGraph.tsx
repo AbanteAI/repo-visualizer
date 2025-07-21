@@ -21,6 +21,8 @@ import {
   calculateEdgeWidth,
   getNodeColor,
   getLinkColor,
+  calculatePieChartData,
+  isPieChartEnabled,
 } from '../../utils/visualizationUtils';
 
 interface RepositoryGraphProps {
@@ -42,6 +44,101 @@ interface Link extends d3.SimulationLinkDatum<Node>, LinkData {
   source: string | Node;
   target: string | Node;
 }
+
+// Helper function to create pie chart nodes
+const createPieChartNodes = (
+  nodeGroups: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>,
+  nodeMetrics: Map<string, ComputedNodeMetrics>,
+  config: VisualizationConfig,
+  allNodeMetrics: ComputedNodeMetrics[],
+  extensionColors: Record<string, string>,
+  onSelectFile: (fileId: string | null) => void
+): d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown> => {
+  // Create a group for each pie chart
+  const pieGroups = nodeGroups.append('g').attr('class', 'pie-node');
+
+  pieGroups.each(function (d) {
+    const group = d3.select(this);
+    const metrics = nodeMetrics.get(d.id);
+
+    if (!metrics) {
+      // Fallback to regular circle if no metrics
+      group
+        .append('circle')
+        .attr('r', 5)
+        .attr('fill', '#ccc')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5);
+      return;
+    }
+
+    const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
+    const pieData = calculatePieChartData(metrics, config);
+
+    if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
+      // No coverage data available, show regular circle
+      group
+        .append('circle')
+        .attr('r', radius)
+        .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, extensionColors))
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5);
+      return;
+    }
+
+    // Create pie generator
+    const pie = d3
+      .pie<{ label: string; value: number }>()
+      .value(d => d.value)
+      .sort(null);
+
+    const arc = d3
+      .arc<d3.PieArcDatum<{ label: string; value: number }>>()
+      .innerRadius(0)
+      .outerRadius(radius);
+
+    const pieChartData = pie([
+      { label: 'covered', value: pieData.covered },
+      { label: 'uncovered', value: pieData.uncovered },
+    ]);
+
+    // Add pie chart segments
+    group
+      .selectAll('.pie-segment')
+      .data(pieChartData)
+      .enter()
+      .append('path')
+      .attr('class', 'pie-segment')
+      .attr('d', arc)
+      .attr('fill', (_, i) => {
+        if (i === 0) {
+          // Covered portion - use green
+          return '#22c55e';
+        } else {
+          // Uncovered portion - use the node's regular color or red
+          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+        }
+      })
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1);
+  });
+
+  // Add event handlers to the pie groups
+  pieGroups
+    .style('cursor', 'pointer')
+    .on('mouseover', function () {
+      d3.select(this).selectAll('.pie-segment').attr('stroke-width', 2);
+    })
+    .on('mouseout', function () {
+      d3.select(this).selectAll('.pie-segment').attr('stroke-width', 1);
+    })
+    .on('click', (event, d) => {
+      event.stopPropagation();
+      onSelectFile(d.id);
+    });
+
+  return pieGroups;
+};
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
   ({ data, onSelectFile, selectedFile, config }, ref) => {
@@ -477,32 +574,49 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Get all node metrics for normalization (compute once per render)
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
-      // Create circles for nodes
-      const node = nodeGroups
-        .append('circle')
-        .attr('class', 'node')
-        .attr('r', d => {
-          const metrics = nodeMetrics.get(d.id);
-          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-        })
-        .attr('fill', d => {
-          const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
-        })
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5)
-        .on('mouseover', function (_event, _d) {
-          d3.select(this).attr('stroke-width', 3);
-        })
-        .on('mouseout', function (_event, _d) {
-          // Reset to default hover state, but preserve selection highlighting
-          const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
-          d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
-        })
-        .on('click', (event, d) => {
-          event.stopPropagation();
-          onSelectFile(d.id);
-        });
+      // Check if pie chart mode is enabled
+      const pieChartMode = isPieChartEnabled(config);
+
+      let node: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>;
+
+      if (pieChartMode) {
+        // Create pie chart nodes
+        node = createPieChartNodes(
+          nodeGroups,
+          nodeMetrics,
+          config,
+          allNodeMetrics,
+          extensionColors,
+          onSelectFile
+        );
+      } else {
+        // Create regular circle nodes
+        node = nodeGroups
+          .append('circle')
+          .attr('class', 'node')
+          .attr('r', d => {
+            const metrics = nodeMetrics.get(d.id);
+            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          })
+          .attr('fill', d => {
+            const metrics = nodeMetrics.get(d.id);
+            return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+          })
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 1.5)
+          .on('mouseover', function (_event, _d) {
+            d3.select(this).attr('stroke-width', 3);
+          })
+          .on('mouseout', function (_event, _d) {
+            // Reset to default hover state, but preserve selection highlighting
+            const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
+            d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
+          })
+          .on('click', (event, d) => {
+            event.stopPropagation();
+            onSelectFile(d.id);
+          });
+      }
 
       // Add expand/collapse indicators for files with components
       nodeGroups
