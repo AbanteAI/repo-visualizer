@@ -2087,7 +2087,9 @@ class RepositoryAnalyzer:
                     print(f"Error parsing commit: {e}")
                     continue
 
-            return commits
+            # Reverse commits so timeline flows forward chronologically
+            # (oldest to newest instead of git log's newest to oldest)
+            return list(reversed(commits))
         except Exception as e:
             print(f"Error extracting commits: {e}")
             return []
@@ -2133,9 +2135,7 @@ class RepositoryAnalyzer:
             )
 
             # Create repository snapshot at this commit
-            snapshot = self._create_repository_snapshot(
-                commit_id, commits[: commit_idx + 1]
-            )
+            snapshot = self._create_repository_snapshot(commit_id)
 
             # Determine file lifecycle changes for this commit
             file_lifecycle = self._determine_file_lifecycle(commit)
@@ -2366,41 +2366,3 @@ class RepositoryAnalyzer:
             json.dump(self.data, f, indent=2, cls=DateTimeEncoder)
 
         print(f"Repository data saved to {output_path}")
-
-
-def analyze_repository(repo_path: str, output_path: str) -> None:
-    """
-    Analyze a repository and generate visualization data.
-
-    Args:
-        repo_path: Path to the local git repository
-        output_path: Path to output JSON file
-    """
-    analyzer = RepositoryAnalyzer(repo_path)
-    analyzer.analyze()
-    analyzer.save_to_file(output_path)
-
-    print(f"Repository analysis complete. Data saved to {output_path}")
-
-
-def main() -> None:
-    """Command-line entry point."""
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Analyze a git repository for visualization"
-    )
-    parser.add_argument("repo_path", help="Path to the local git repository")
-    parser.add_argument(
-        "--output",
-        "-o",
-        default="repo_data.json",
-        help="Output JSON file path (default: repo_data.json)",
-    )
-
-    args = parser.parse_args()
-    analyze_repository(args.repo_path, args.output)
-
-
-if __name__ == "__main__":
-    main()
