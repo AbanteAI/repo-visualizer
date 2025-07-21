@@ -560,88 +560,20 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const nodes = simulation.nodes();
       const currentNodeIds = new Set(nodes.map(n => n.id));
 
-      // Recreate links with new weights, but only for visible nodes
-      const baseUpdatedLinks = data.relationships
-        .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
-        .map(rel => {
-          const linkKey = `${rel.source}-${rel.target}`;
-          const linkMetric = linkMetrics.get(linkKey);
-
-          if (!linkMetric) {
-            return {
-              source: rel.source,
-              target: rel.target,
-              type: rel.type,
-              weight: 0,
-              originalStrength: rel.strength || 1,
-            };
-          }
-
-          const edgeStrength = calculateEdgeStrength(linkMetric, config);
-
-          return {
-            source: rel.source,
-            target: rel.target,
-            type: rel.type,
-            weight: edgeStrength,
-            originalStrength: rel.strength || 1,
-          };
-        })
-        .filter(link => link.weight > 0);
-
-      // Add dynamic "contains" relationships for expanded nodes
-      const dynamicUpdatedLinks: Link[] = [];
-      nodes.forEach(node => {
-        if (node.parentId && currentNodeIds.has(node.parentId)) {
-          const containsMetric: ComputedLinkMetrics = {
-            semantic_similarity: 0,
-            filesystem_proximity: 0,
-            code_references: 1,
-          };
-
-          const edgeStrength = calculateEdgeStrength(containsMetric, config);
-
-          dynamicUpdatedLinks.push({
-            source: node.parentId,
-            target: node.id,
-            type: 'contains',
-            weight: edgeStrength,
-            originalStrength: 1,
-          });
-        }
-      });
-
-      const updatedLinks = [...baseUpdatedLinks, ...dynamicUpdatedLinks];
+      // Recreate links using the new line type system
+      const updatedLinks = generateLinksForLineTypes(data, config, currentNodeIds);
 
       // Update the force simulation with new link data
       const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
       linkForce
         .links(updatedLinks)
         .distance(d => {
-          const baseDistance = 100;
-          const weight = d.weight || 0;
-          const strength = d.originalStrength || 1;
-
-          if (d.type === 'filesystem_proximity') {
-            return baseDistance * (1 - weight * 0.5) * (1 / strength);
-          } else if (d.type === 'semantic_similarity') {
-            return baseDistance * (1 - weight * 0.4) * (1 / strength);
-          } else if (d.type === 'contains') {
-            return 50;
-          } else {
-            return baseDistance * (1 - weight * 0.3);
-          }
+          const forceProps = getLinkForceProperties(d, config);
+          return forceProps.distance;
         })
         .strength(d => {
-          const baseStrength = 1;
-          const weight = d.weight || 0;
-          const strength = d.originalStrength || 1;
-
-          if (d.type === 'contains') {
-            return 2;
-          }
-
-          return baseStrength * weight * strength;
+          const forceProps = getLinkForceProperties(d, config);
+          return forceProps.strength;
         });
 
       // Update link visual properties with proper enter/update/exit handling
@@ -654,29 +586,31 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           enter =>
             enter
               .append('line')
-              .attr('stroke', (d: Link) => getLinkColor(d.type))
-              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
+              .attr('stroke', (d: Link) => {
+                const visualProps = getLinkVisualProperties(d, config);
+                return visualProps.color;
+              })
+              .attr('stroke-opacity', (d: Link) => {
+                const visualProps = getLinkVisualProperties(d, config);
+                return visualProps.opacity;
+              })
               .attr('stroke-width', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeWidth(linkMetric, config, d.type);
+                const visualProps = getLinkVisualProperties(d, config);
+                return visualProps.width;
               }),
           update =>
             update
-              .attr('stroke', (d: Link) => getLinkColor(d.type))
-              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
+              .attr('stroke', (d: Link) => {
+                const visualProps = getLinkVisualProperties(d, config);
+                return visualProps.color;
+              })
+              .attr('stroke-opacity', (d: Link) => {
+                const visualProps = getLinkVisualProperties(d, config);
+                return visualProps.opacity;
+              })
               .attr('stroke-width', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeWidth(linkMetric, config, d.type);
+                const visualProps = getLinkVisualProperties(d, config);
+                return visualProps.width;
               }),
           exit => exit.remove()
         );
