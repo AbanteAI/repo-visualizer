@@ -170,7 +170,8 @@ class RepositoryAnalyzer:
                 check=False,
             )
             if result.returncode == 0:
-                # Extract branch name from refs/remotes/origin/HEAD -> refs/remotes/origin/main
+                # Extract branch name from refs/remotes/origin/HEAD
+                # -> refs/remotes/origin/main
                 branch_ref = result.stdout.strip()
                 return branch_ref.split("/")[-1]
 
