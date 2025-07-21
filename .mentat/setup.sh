@@ -15,8 +15,10 @@ fi
 
 echo "Using Python command: $PYTHON_CMD"
 
-# Install python3-venv (no-op if already installed)
-apt update && apt install -y python3-venv
+# Install python3-venv (no-op if already installed, only on apt-based systems)
+if command -v apt >/dev/null 2>&1; then
+    apt update && apt install -y python3-venv
+fi
 
 # Create virtual environment if it doesn't exist
 if [ ! -d ".venv" ]; then
