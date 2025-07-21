@@ -2168,7 +2168,6 @@ class RepositoryAnalyzer:
 
         Args:
             commit_id: The commit SHA to create snapshot for
-            commits_up_to_this_point: All commits from latest to this commit
 
         Returns:
             Dictionary with files and relationships at this commit
@@ -2267,7 +2266,6 @@ class RepositoryAnalyzer:
         """
         added = []
         removed = []
-        renamed = []
 
         for change in commit.get("fileChanges", []):
             file_id = change["fileId"]
@@ -2282,7 +2280,7 @@ class RepositoryAnalyzer:
         return {
             "added": added,
             "removed": removed,
-            "renamed": renamed,  # TODO: Implement proper rename detection
+            "renamed": [],  # TODO: Implement proper rename detection
         }
 
     def _extract_file_git_metrics(self, file_path: str) -> Dict[str, Any]:
