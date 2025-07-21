@@ -446,7 +446,7 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                       }
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                       style={{
-                        background: `linear-gradient(to right, ${selectedDataSourceData?.color} 0%, ${selectedDataSourceData?.color} ${weight}%, #e5e7eb ${weight}%, #e5e7eb 100%)`,
+                        background: `linear-gradient(to right, ${selectedDataSourceData?.color ?? '#6b7280'} 0%, ${selectedDataSourceData?.color ?? '#6b7280'} ${weight}%, #e5e7eb ${weight}%, #e5e7eb 100%)`,
                       }}
                       aria-label={`${feature.name} weight`}
                     />
