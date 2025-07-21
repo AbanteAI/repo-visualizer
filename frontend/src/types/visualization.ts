@@ -259,9 +259,10 @@ export const getVisualFeatureById = (id: string): VisualFeature | undefined => {
 };
 
 export const getFeatureMapping = (
-  config: VisualizationConfig,
+  config: VisualizationConfig | undefined,
   featureId: string
 ): FeatureMapping | undefined => {
+  if (!config) return undefined;
   return config.mappings.find(m => m.featureId === featureId);
 };
 

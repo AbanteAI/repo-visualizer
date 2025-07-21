@@ -356,8 +356,10 @@ export const getLinkColor = (linkType: string): string => {
 // Calculate pie chart data for a node based on weighted metrics
 export const calculatePieChartData = (
   nodeMetrics: ComputedNodeMetrics,
-  config: VisualizationConfig
+  config: VisualizationConfig | undefined
 ): { covered: number; uncovered: number } | null => {
+  if (!config) return null;
+
   const mapping = getFeatureMapping(config, 'pie_chart_ratio');
   if (!mapping) return null;
 
@@ -386,7 +388,9 @@ export const calculatePieChartData = (
 };
 
 // Check if pie chart rendering is enabled for a node
-export const isPieChartEnabled = (config: VisualizationConfig): boolean => {
+export const isPieChartEnabled = (config: VisualizationConfig | undefined): boolean => {
+  if (!config) return false;
+
   const mapping = getFeatureMapping(config, 'pie_chart_ratio');
   if (!mapping) return false;
 

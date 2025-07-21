@@ -49,7 +49,7 @@ interface Link extends d3.SimulationLinkDatum<Node>, LinkData {
 const createPieChartNodes = (
   nodeGroups: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>,
   nodeMetrics: Map<string, ComputedNodeMetrics>,
-  config: VisualizationConfig,
+  config: VisualizationConfig | undefined,
   allNodeMetrics: ComputedNodeMetrics[],
   extensionColors: Record<string, string>,
   onSelectFile: (fileId: string | null) => void

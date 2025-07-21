@@ -2174,6 +2174,10 @@ class RepositoryAnalyzer:
         """Parse JavaScript/TypeScript coverage data and return file mapping."""
         coverage_data: Dict[str, float] = {}
 
+        # Check for vitest v8 coverage format first
+        v8_coverage = self._parse_v8_coverage()
+        coverage_data.update(v8_coverage)
+
         # Check for lcov.info file (common format)
         lcov_path = os.path.join(self.repo_path, "coverage", "lcov.info")
         if os.path.exists(lcov_path):
@@ -2242,6 +2246,68 @@ class RepositoryAnalyzer:
 
             except Exception as e:
                 print(f"Error parsing coverage-summary.json: {e}")
+
+        return coverage_data
+
+    def _parse_v8_coverage(self) -> Dict[str, float]:
+        """Parse v8 coverage data from vitest (stored in frontend/coverage/.tmp/)."""
+        coverage_data: Dict[str, float] = {}
+
+        # Look for v8 coverage files in frontend/coverage/.tmp/
+        v8_coverage_dir = os.path.join(self.repo_path, "frontend", "coverage", ".tmp")
+        if not os.path.exists(v8_coverage_dir):
+            return coverage_data
+
+        try:
+            import glob
+            import json
+
+            # Process all coverage-*.json files
+            coverage_files = glob.glob(os.path.join(v8_coverage_dir, "coverage-*.json"))
+
+            for coverage_file in coverage_files:
+                try:
+                    with open(coverage_file) as f:
+                        data = json.load(f)
+
+                    # Parse v8 coverage format
+                    result = data.get("result", [])
+                    for script_data in result:
+                        script_url = script_data.get("url", "")
+
+                        # Extract relative path from file:// URL
+                        if script_url.startswith("file://"):
+                            abs_path = script_url[7:]  # Remove file://
+                            if abs_path.startswith(self.repo_path):
+                                rel_path = os.path.relpath(abs_path, self.repo_path)
+                                rel_path = rel_path.replace(os.path.sep, "/")
+
+                                # Only process frontend files we care about
+                                if rel_path.startswith(
+                                    "frontend/src/"
+                                ) and rel_path.endswith((".ts", ".tsx", ".js", ".jsx")):
+                                    # Calculate coverage from function data
+                                    functions = script_data.get("functions", [])
+                                    total_ranges = 0
+                                    covered_ranges = 0
+
+                                    for func in functions:
+                                        ranges = func.get("ranges", [])
+                                        for range_data in ranges:
+                                            total_ranges += 1
+                                            if range_data.get("count", 0) > 0:
+                                                covered_ranges += 1
+
+                                    if total_ranges > 0:
+                                        coverage_ratio = covered_ranges / total_ranges
+                                        coverage_data[rel_path] = coverage_ratio
+
+                except Exception as e:
+                    print(f"Error parsing v8 coverage file {coverage_file}: {e}")
+                    continue
+
+        except Exception as e:
+            print(f"Error parsing v8 coverage: {e}")
 
         return coverage_data
 
