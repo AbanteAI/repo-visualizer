@@ -24,10 +24,27 @@ fi
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment..."
     $PYTHON_CMD -m venv .venv
+    if [ ! -d ".venv" ]; then
+        echo "Error: Failed to create virtual environment"
+        echo "Please ensure python3-venv is installed:"
+        echo "  Ubuntu/Debian: sudo apt install python3-venv"
+        echo "  macOS: Virtual environment support should be built-in"
+        exit 1
+    fi
 fi
 
 # Activate virtual environment
 echo "Activating virtual environment..."
+if [ ! -f ".venv/bin/activate" ]; then
+    echo "Error: Virtual environment activation script not found"
+    echo "Removing corrupted .venv directory and trying again..."
+    rm -rf .venv
+    $PYTHON_CMD -m venv .venv
+    if [ ! -f ".venv/bin/activate" ]; then
+        echo "Error: Still unable to create working virtual environment"
+        exit 1
+    fi
+fi
 source .venv/bin/activate
 
 # Install package with dev dependencies

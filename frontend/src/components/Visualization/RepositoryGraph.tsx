@@ -76,7 +76,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       [data.files]
     );
 
-    // Extension colors mapping
+    // Extension colors mapping - moved outside useEffect so it's available to all effects
     const extensionColors: Record<string, string> = {
       py: '#3572A5', // Python
       js: '#f7df1e', // JavaScript
