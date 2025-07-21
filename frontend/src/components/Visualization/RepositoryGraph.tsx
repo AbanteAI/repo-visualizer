@@ -53,6 +53,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
     const [nodeMetrics, setNodeMetrics] = useState<Map<string, ComputedNodeMetrics>>(new Map());
     const [linkMetrics, setLinkMetrics] = useState<Map<string, ComputedLinkMetrics>>(new Map());
+    const [nodePositions, setNodePositions] = useState<Map<string, { x: number; y: number }>>(
+      new Map()
+    );
 
     // Function to toggle node expansion
     const toggleNodeExpansion = useCallback((fileId: string) => {
@@ -328,6 +331,19 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         }
       });
 
+      // Initialize node positions from previous state if available
+      nodes.forEach(node => {
+        const prevPosition = nodePositions.get(node.id);
+        if (prevPosition) {
+          node.x = prevPosition.x;
+          node.y = prevPosition.y;
+        } else {
+          // For new nodes, start them near the center with slight randomization
+          node.x = width / 2 + (Math.random() - 0.5) * 100;
+          node.y = height / 2 + (Math.random() - 0.5) * 100;
+        }
+      });
+
       // Create initial links with current weights, but only for visible nodes
       const nodeIds = new Set(nodes.map(n => n.id));
       const createLinks = () => {
@@ -569,6 +585,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('y2', d => (d.target as Node).y || 0);
 
         nodeGroups.attr('transform', d => `translate(${d.x || 0}, ${d.y || 0})`);
+
+        // Save node positions for smooth transitions between timeline points
+        const positions = new Map<string, { x: number; y: number }>();
+        nodes.forEach(node => {
+          if (node.x !== undefined && node.y !== undefined) {
+            positions.set(node.id, { x: node.x, y: node.y });
+          }
+        });
+        setNodePositions(positions);
       });
 
       // Create legend

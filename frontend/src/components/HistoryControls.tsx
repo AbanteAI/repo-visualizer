@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TimelinePoint, RepositoryData } from '../types/schema';
+import { RepositoryData } from '../types/schema';
 
 interface HistoryControlsProps {
   data: RepositoryData;
@@ -24,8 +24,6 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({
   animationSpeed = 1000,
   onSpeedChange,
 }) => {
-  const [isDragging, setIsDragging] = useState(false);
-
   const timelinePoints = data.history?.timelinePoints || [];
   const branches = data.metadata.branches || [];
   const currentBranch = data.metadata.analyzedBranch || 'main';
@@ -200,10 +198,6 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({
                 value={currentTimelineIndex}
                 onChange={handleSliderChange}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                onMouseDown={() => setIsDragging(true)}
-                onMouseUp={() => setIsDragging(false)}
-                onTouchStart={() => setIsDragging(true)}
-                onTouchEnd={() => setIsDragging(false)}
               />
               <div
                 className="absolute top-0 left-0 h-2 bg-blue-600 rounded-lg pointer-events-none"

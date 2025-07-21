@@ -28,6 +28,7 @@ export interface FeatureMapping {
 
 export interface VisualizationConfig {
   mappings: FeatureMapping[];
+  enableTransitions?: boolean;
 }
 
 // Available data sources

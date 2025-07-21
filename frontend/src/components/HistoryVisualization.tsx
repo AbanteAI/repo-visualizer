@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { RepositoryData, TimelinePoint } from '../types/schema';
+import { RepositoryData } from '../types/schema';
 import { VisualizationConfig } from '../types/visualization';
 import RepositoryGraph, { RepositoryGraphHandle } from './Visualization/RepositoryGraph';
 import HistoryControls from './HistoryControls';
