@@ -2160,9 +2160,7 @@ class RepositoryAnalyzer:
 
         return timeline_points
 
-    def _create_repository_snapshot(
-        self, commit_id: str, commits_up_to_this_point: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def _create_repository_snapshot(self, commit_id: str) -> Dict[str, Any]:
         """
         Create a repository snapshot at a specific commit.
 

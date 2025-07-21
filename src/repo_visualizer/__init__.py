@@ -4,6 +4,6 @@ This package provides tools for analyzing git repositories and
 generating structured visualization data.
 """
 
-from .analyzer import RepositoryAnalyzer, analyze_repository
+from .analyzer import RepositoryAnalyzer
 
-__all__ = ["RepositoryAnalyzer", "analyze_repository"]
+__all__ = ["RepositoryAnalyzer"]
