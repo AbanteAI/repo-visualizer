@@ -718,24 +718,34 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       if (!svgRef.current || !data) return;
 
       const svg = d3.select(svgRef.current);
-      const nodes = svg.selectAll('circle.node');
+      const pieChartMode = isPieChartEnabled(config);
+
+      // Select appropriate node elements based on mode
+      const nodes = pieChartMode ? svg.selectAll('g.pie-node') : svg.selectAll('circle.node');
 
       // Only proceed if nodes exist
       if (nodes.empty()) return;
 
       // Reset all nodes to default stroke
-      nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+      if (pieChartMode) {
+        nodes.selectAll('.pie-segment').attr('stroke', '#fff').attr('stroke-width', 1);
+      } else {
+        nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+      }
 
       // Highlight selected file
       if (selectedFile) {
-        nodes
-          .filter(function (d) {
-            return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
-          })
-          .attr('stroke', '#e74c3c')
-          .attr('stroke-width', 3);
+        const selectedNodes = nodes.filter(function (d) {
+          return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
+        });
+
+        if (pieChartMode) {
+          selectedNodes.selectAll('.pie-segment').attr('stroke', '#e74c3c').attr('stroke-width', 2);
+        } else {
+          selectedNodes.attr('stroke', '#e74c3c').attr('stroke-width', 3);
+        }
       }
-    }, [selectedFile, data, expandedFiles]);
+    }, [selectedFile, data, expandedFiles, config]);
 
     // Config update effect - runs when visualization config changes
     useEffect(() => {
@@ -878,16 +888,80 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Get all node metrics for normalization (compute once)
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
-      // Update node visual properties
-      nodeSelection
-        .attr('r', (d: Node) => {
+      // Update node visual properties based on mode
+      const pieChartMode = isPieChartEnabled(config);
+
+      if (pieChartMode) {
+        // In pie chart mode, nodeSelection refers to the pie groups
+        // We need to recreate the pie charts with updated data
+        nodeSelection.each(function (d: Node) {
+          const group = d3.select(this);
           const metrics = nodeMetrics.get(d.id);
-          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-        })
-        .attr('fill', (d: Node) => {
-          const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+
+          if (!metrics) return;
+
+          const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
+          const pieData = calculatePieChartData(metrics, config);
+
+          // Remove old segments
+          group.selectAll('.pie-segment').remove();
+          group.selectAll('circle').remove();
+
+          if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
+            // No coverage data, show regular circle
+            group
+              .append('circle')
+              .attr('r', radius)
+              .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, extensionColors))
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1.5);
+          } else {
+            // Recreate pie chart
+            const pie = d3
+              .pie<{ label: string; value: number }>()
+              .value(d => d.value)
+              .sort(null);
+
+            const arc = d3
+              .arc<d3.PieArcDatum<{ label: string; value: number }>>()
+              .innerRadius(0)
+              .outerRadius(radius);
+
+            const pieChartData = pie([
+              { label: 'covered', value: pieData.covered },
+              { label: 'uncovered', value: pieData.uncovered },
+            ]);
+
+            group
+              .selectAll('.pie-segment')
+              .data(pieChartData)
+              .enter()
+              .append('path')
+              .attr('class', 'pie-segment')
+              .attr('d', arc)
+              .attr('fill', (_, i) => {
+                if (i === 0) {
+                  return '#22c55e'; // Covered portion - green
+                } else {
+                  return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+                }
+              })
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1);
+          }
         });
+      } else {
+        // Regular circle mode
+        nodeSelection
+          .attr('r', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          })
+          .attr('fill', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+          });
+      }
 
       // Update label positions to match new node sizes
       const labelSelection = (simulation as any).__labelSelection;

@@ -82,6 +82,7 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
           recency: recencyScore,
           identifiers: fileMetrics.topLevelIdentifiers || 0,
           references: incomingReferences.get(component.id) || 0,
+          test_coverage_ratio: fileMetrics.testCoverageRatio || 0,
         });
       });
     }

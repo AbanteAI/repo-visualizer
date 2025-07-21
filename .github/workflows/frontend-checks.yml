@@ -36,13 +36,4 @@ jobs:
       run: npm run lint
       
     - name: Run tests with coverage
-      run: npm run test:coverage -- --run --reporter=verbose
-      
-    - name: Check coverage threshold  
-      run: |
-        # Run coverage and capture output
-        npm run test:coverage -- --run --reporter=json > coverage-report.json || true
-        # Extract coverage percentage from v8 coverage report
-        # For now, set threshold to 10% since many tests are failing
-        echo "Coverage report generated. Setting minimum threshold to 10% due to current test issues."
-        echo "TODO: Increase threshold once tests are fixed"
+      run: npm run test:coverage -- --run
