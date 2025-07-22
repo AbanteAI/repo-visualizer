@@ -1,5 +1,11 @@
 import { RepositoryData } from '../types/schema';
-import { VisualizationConfig, getFeatureMapping, DATA_SOURCES } from '../types/visualization';
+import {
+  VisualizationConfig,
+  getFeatureMapping,
+  DATA_SOURCES,
+  VisualFeature,
+  VISUAL_FEATURES,
+} from '../types/visualization';
 
 export interface NodeData {
   id: string;
@@ -368,5 +374,139 @@ export const getLinkColor = (linkType: string): string => {
       return '#2c3e50';
     default:
       return '#95a5a6';
+  }
+};
+
+// Check if a node should be visible based on its metrics and configured thresholds
+export const isNodeVisible = (
+  nodeMetrics: ComputedNodeMetrics,
+  config: VisualizationConfig,
+  allNodeMetrics: ComputedNodeMetrics[],
+  nodeType: string
+): boolean => {
+  // Always show special node types (directories, components)
+  if (
+    nodeType === 'directory' ||
+    nodeType === 'class' ||
+    nodeType === 'function' ||
+    nodeType === 'method'
+  ) {
+    return true;
+  }
+
+  // Check global node threshold
+  if (config.nodeThreshold && config.nodeThreshold > 0) {
+    const nodeFeatures = VISUAL_FEATURES.filter(f => f.category === 'node');
+    for (const feature of nodeFeatures) {
+      const mapping = getFeatureMapping(config, feature.id);
+      if (mapping && Object.values(mapping.dataSourceWeights).some(w => w > 0)) {
+        const normalizedValue = getNormalizedFeatureValue(
+          nodeMetrics,
+          config,
+          allNodeMetrics,
+          feature.id
+        );
+        if (normalizedValue < config.nodeThreshold) {
+          return false;
+        }
+      }
+    }
+  }
+
+  // Check individual feature thresholds
+  const nodeFeatures = VISUAL_FEATURES.filter(f => f.category === 'node');
+  for (const feature of nodeFeatures) {
+    const mapping = getFeatureMapping(config, feature.id);
+    if (mapping && mapping.threshold && mapping.threshold > 0) {
+      // Only apply threshold if this feature is actually being used (has active weights)
+      const hasActiveWeights = Object.values(mapping.dataSourceWeights).some(w => w > 0);
+      if (hasActiveWeights) {
+        const normalizedValue = getNormalizedFeatureValue(
+          nodeMetrics,
+          config,
+          allNodeMetrics,
+          feature.id
+        );
+        if (normalizedValue < mapping.threshold) {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+};
+
+// Check if an edge should be visible based on its metrics and configured thresholds
+export const isEdgeVisible = (
+  linkMetrics: ComputedLinkMetrics,
+  config: VisualizationConfig,
+  linkType: string
+): boolean => {
+  // Always show contains relationships
+  if (linkType === 'contains') {
+    return true;
+  }
+
+  // Check if edge has any non-zero weight (existing logic)
+  const edgeStrength = calculateEdgeStrength(linkMetrics, config);
+  if (edgeStrength <= 0) {
+    return false;
+  }
+
+  // Check global edge threshold
+  if (config.edgeThreshold && config.edgeThreshold > 0) {
+    const normalizedStrength = Math.min(1, edgeStrength / 2); // Normalize to 0-1
+    if (normalizedStrength < config.edgeThreshold) {
+      return false;
+    }
+  }
+
+  // Check individual feature thresholds
+  const edgeFeatures = VISUAL_FEATURES.filter(f => f.category === 'edge');
+  for (const feature of edgeFeatures) {
+    const mapping = getFeatureMapping(config, feature.id);
+    if (mapping && mapping.threshold && mapping.threshold > 0) {
+      // Only apply threshold if this feature is actually being used (has active weights)
+      const hasActiveWeights = Object.values(mapping.dataSourceWeights).some(w => w > 0);
+      if (hasActiveWeights) {
+        let featureValue = 0;
+
+        if (feature.id === 'edge_strength') {
+          featureValue = Math.min(1, edgeStrength / 2);
+        } else {
+          // For other edge features, use the weighted value normalized to 0-1
+          featureValue = Math.min(1, calculateWeightedValue(linkMetrics, config, feature.id));
+        }
+
+        if (featureValue < mapping.threshold) {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+};
+
+// Helper function to get normalized feature value for nodes (0-1 range)
+export const getNormalizedFeatureValue = (
+  nodeMetrics: ComputedNodeMetrics,
+  config: VisualizationConfig,
+  allNodeMetrics: ComputedNodeMetrics[],
+  featureId: string
+): number => {
+  if (featureId === 'node_size') {
+    // For node size, normalize based on all nodes
+    const allWeightedValues = allNodeMetrics.map(m => calculateWeightedValue(m, config, featureId));
+    const normalizedValues = normalizeValues(allWeightedValues);
+    const nodeIndex = allNodeMetrics.indexOf(nodeMetrics);
+    return normalizedValues[nodeIndex] || 0;
+  } else if (featureId === 'node_color') {
+    // For node color, get the intensity value
+    return calculateNodeColorIntensity(nodeMetrics, config, allNodeMetrics);
+  } else {
+    // For other features, use the weighted value normalized to 0-1
+    return Math.min(1, calculateWeightedValue(nodeMetrics, config, featureId));
   }
 };

@@ -25,10 +25,13 @@ export interface VisualFeature {
 export interface FeatureMapping {
   featureId: string;
   dataSourceWeights: Record<string, number>; // dataSourceId -> weight (0-100)
+  threshold?: number; // Optional threshold (0-1) for this feature - elements below this are hidden
 }
 
 export interface VisualizationConfig {
   mappings: FeatureMapping[];
+  nodeThreshold?: number; // Global node threshold (0-1)
+  edgeThreshold?: number; // Global edge threshold (0-1)
 }
 
 // Available data sources
@@ -185,6 +188,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 0,
       },
+      threshold: 0,
     },
     {
       featureId: 'node_color',
@@ -199,6 +203,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 0,
       },
+      threshold: 0,
     },
     {
       featureId: 'edge_strength',
@@ -213,6 +218,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 30,
         code_references: 70,
       },
+      threshold: 0,
     },
     {
       featureId: 'edge_width',
@@ -227,6 +233,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 100,
       },
+      threshold: 0,
     },
     {
       featureId: 'edge_color',
@@ -241,8 +248,11 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 100,
       },
+      threshold: 0,
     },
   ],
+  nodeThreshold: 0,
+  edgeThreshold: 0,
 };
 
 // Helper functions
@@ -283,5 +293,37 @@ export const updateFeatureMapping = (
   return {
     ...config,
     mappings: newMappings,
+  };
+};
+
+export const updateFeatureThreshold = (
+  config: VisualizationConfig,
+  featureId: string,
+  threshold: number
+): VisualizationConfig => {
+  const newMappings = config.mappings.map(mapping => {
+    if (mapping.featureId === featureId) {
+      return {
+        ...mapping,
+        threshold,
+      };
+    }
+    return mapping;
+  });
+
+  return {
+    ...config,
+    mappings: newMappings,
+  };
+};
+
+export const updateGlobalThreshold = (
+  config: VisualizationConfig,
+  type: 'node' | 'edge',
+  threshold: number
+): VisualizationConfig => {
+  return {
+    ...config,
+    [type === 'node' ? 'nodeThreshold' : 'edgeThreshold']: threshold,
   };
 };

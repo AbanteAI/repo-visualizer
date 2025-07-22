@@ -22,6 +22,8 @@ import {
   calculateEdgeColor,
   getNodeColor,
   getLinkColor,
+  isNodeVisible,
+  isEdgeVisible,
 } from '../../utils/visualizationUtils';
 
 interface RepositoryGraphProps {
@@ -274,13 +276,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const g = svg.append('g');
 
       // Extract nodes from files and their components
-      const nodes: Node[] = [];
+      const allNodes: Node[] = [];
 
       // Add file and directory nodes
       data.files.forEach(file => {
         // Only add file-level nodes (not components as separate nodes)
         if (file.type === 'file' || file.type === 'directory') {
-          nodes.push({
+          allNodes.push({
             id: file.id,
             name: file.name,
             path: file.path,
@@ -294,7 +296,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           // Add component nodes only if file is expanded
           if (expandedFiles.has(file.id) && file.components) {
             file.components.forEach(component => {
-              nodes.push({
+              allNodes.push({
                 id: component.id,
                 name: component.name,
                 path: file.path,
@@ -309,7 +311,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               const addNestedComponents = (comp: any, currentDepth: number, parentId: string) => {
                 if (comp.components) {
                   comp.components.forEach((nestedComp: any) => {
-                    nodes.push({
+                    allNodes.push({
                       id: nestedComp.id,
                       name: nestedComp.name,
                       path: file.path,
@@ -327,6 +329,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             });
           }
         }
+      });
+
+      // Get all node metrics for threshold calculations
+      const allNodeMetrics = Array.from(nodeMetrics.values());
+
+      // Apply node thresholding - filter out nodes that don't meet the threshold criteria
+      const nodes = allNodes.filter(node => {
+        const nodeMetric = nodeMetrics.get(node.id);
+        if (!nodeMetric) return true; // Keep nodes without metrics
+        return isNodeVisible(nodeMetric, config, allNodeMetrics, node.type);
       });
 
       // Create initial links with current weights, but only for visible nodes
@@ -358,7 +370,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               originalStrength: rel.strength || 1,
             };
           })
-          .filter(link => link.weight > 0); // Only include links with non-zero weight
+          .filter(link => {
+            // Apply both existing weight check and new threshold check
+            if (link.weight <= 0) return false;
+
+            const linkKey = `${link.source}-${link.target}`;
+            const linkMetric = linkMetrics.get(linkKey);
+            if (!linkMetric) return false;
+
+            return isEdgeVisible(linkMetric, config, link.type);
+          });
 
         // Add dynamic "contains" relationships for expanded nodes
         const dynamicLinks: Link[] = [];
@@ -673,7 +694,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             originalStrength: rel.strength || 1,
           };
         })
-        .filter(link => link.weight > 0);
+        .filter(link => {
+          // Apply both existing weight check and new threshold check
+          if (link.weight <= 0) return false;
+
+          const linkKey = `${link.source}-${link.target}`;
+          const linkMetric = linkMetrics.get(linkKey);
+          if (!linkMetric) return false;
+
+          return isEdgeVisible(linkMetric, config, link.type);
+        });
 
       // Add dynamic "contains" relationships for expanded nodes
       const dynamicUpdatedLinks: Link[] = [];
