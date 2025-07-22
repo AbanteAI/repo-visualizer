@@ -23,6 +23,7 @@ import {
   getNodeColor,
   getLinkColor,
 } from '../../utils/visualizationUtils';
+import { getSkeletonConfig } from '../../types/visualization';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
@@ -445,32 +446,55 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Save simulation to ref for potential future interactions
       simulationRef.current = simulation;
 
-      // Create links
-      const link = g
-        .append('g')
-        .selectAll('line')
-        .data(links)
-        .enter()
-        .append('line')
-        .attr('stroke', d => {
-          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-          const linkMetric = linkMetrics.get(linkKey) ?? {
-            semantic_similarity: 0,
-            filesystem_proximity: 0,
-            code_references: d.type === 'contains' ? 1 : 0,
-          };
-          return calculateEdgeColor(linkMetric, config, d.type);
-        })
-        .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
-        .attr('stroke-width', d => {
-          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-          const linkMetric = linkMetrics.get(linkKey) ?? {
-            semantic_similarity: 0,
-            filesystem_proximity: 0,
-            code_references: d.type === 'contains' ? 1 : 0,
-          };
-          return calculateEdgeWidth(linkMetric, config, d.type);
-        });
+      // Create links grouped by skeleton
+      const linkGroups = new Map();
+      const allLinkElements: d3.Selection<SVGLineElement, Link, SVGGElement, unknown>[] = [];
+
+      // Group links by skeleton
+      config.skeletons.forEach(skeleton => {
+        if (!skeleton.enabled) return;
+
+        const skeletonLinks = links.filter(link => skeleton.relationshipTypes.includes(link.type));
+
+        if (skeletonLinks.length === 0) return;
+
+        const linkGroup = g.append('g').attr('class', `skeleton-${skeleton.id}`);
+
+        const linkSelection = linkGroup
+          .selectAll('line')
+          .data(skeletonLinks)
+          .enter()
+          .append('line')
+          .attr('stroke', skeleton.color)
+          .attr('stroke-opacity', skeleton.opacity)
+          .attr('stroke-width', d => {
+            const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+            const linkMetric = linkMetrics.get(linkKey) ?? {
+              semantic_similarity: 0,
+              filesystem_proximity: 0,
+              code_references: d.type === 'contains' ? 1 : 0,
+            };
+
+            // Use skeleton-specific width calculation
+            if (d.type === 'contains') {
+              return 3;
+            } else if (skeleton.id === 'code_references') {
+              return 1.5 + (linkMetric.code_references || 0) * 1.5;
+            } else if (skeleton.id === 'semantic_similarity') {
+              return 1 + (linkMetric.semantic_similarity || 0) * 2;
+            } else if (skeleton.id === 'filesystem_proximity') {
+              return 1 + (linkMetric.filesystem_proximity || 0) * 1.5;
+            }
+            return 1.5;
+          });
+
+        linkGroups.set(skeleton.id, linkSelection);
+        allLinkElements.push(linkSelection);
+      });
+
+      // Combine all link selections for simulation updates
+      const link =
+        allLinkElements.length > 0 ? allLinkElements[0] : g.append('g').selectAll('line').data([]);
 
       // Create node groups (to hold both circles and expand/collapse indicators)
       const nodeGroups = g
@@ -571,11 +595,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Update positions on each tick
       simulation.on('tick', () => {
-        link
-          .attr('x1', d => (d.source as Node).x || 0)
-          .attr('y1', d => (d.source as Node).y || 0)
-          .attr('x2', d => (d.target as Node).x || 0)
-          .attr('y2', d => (d.target as Node).y || 0);
+        // Update all skeleton link groups
+        allLinkElements.forEach(linkSelection => {
+          linkSelection
+            .attr('x1', d => (d.source as Node).x || 0)
+            .attr('y1', d => (d.source as Node).y || 0)
+            .attr('x2', d => (d.target as Node).x || 0)
+            .attr('y2', d => (d.target as Node).y || 0);
+        });
 
         nodeGroups.attr('transform', d => `translate(${d.x || 0}, ${d.y || 0})`);
       });
@@ -631,199 +658,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('stroke-width', 3);
       }
     }, [selectedFile, data, expandedFiles]);
-
-    // Config update effect - runs when visualization config changes
-    useEffect(() => {
-      if (!simulationRef.current || !data || nodeMetrics.size === 0) return;
-
-      const simulation = simulationRef.current;
-      const linkSelection = (simulation as any).__linkSelection;
-      const nodeSelection = (simulation as any).__nodeSelection;
-
-      if (!linkSelection || !nodeSelection) return;
-
-      // Get current visible node IDs
-      const nodes = simulation.nodes();
-      const currentNodeIds = new Set(nodes.map(n => n.id));
-
-      // Recreate links with new weights, but only for visible nodes
-      const baseUpdatedLinks = data.relationships
-        .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
-        .map(rel => {
-          const linkKey = `${rel.source}-${rel.target}`;
-          const linkMetric = linkMetrics.get(linkKey);
-
-          if (!linkMetric) {
-            return {
-              source: rel.source,
-              target: rel.target,
-              type: rel.type,
-              weight: 0,
-              originalStrength: rel.strength || 1,
-            };
-          }
-
-          const edgeStrength = calculateEdgeStrength(linkMetric, config);
-
-          return {
-            source: rel.source,
-            target: rel.target,
-            type: rel.type,
-            weight: edgeStrength,
-            originalStrength: rel.strength || 1,
-          };
-        })
-        .filter(link => link.weight > 0);
-
-      // Add dynamic "contains" relationships for expanded nodes
-      const dynamicUpdatedLinks: Link[] = [];
-      nodes.forEach(node => {
-        if (node.parentId && currentNodeIds.has(node.parentId)) {
-          const containsMetric: ComputedLinkMetrics = {
-            semantic_similarity: 0,
-            filesystem_proximity: 0,
-            code_references: 1,
-          };
-
-          const edgeStrength = calculateEdgeStrength(containsMetric, config);
-
-          dynamicUpdatedLinks.push({
-            source: node.parentId,
-            target: node.id,
-            type: 'contains',
-            weight: edgeStrength,
-            originalStrength: 1,
-          });
-        }
-      });
-
-      const updatedLinks = [...baseUpdatedLinks, ...dynamicUpdatedLinks];
-
-      // Update the force simulation with new link data
-      const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
-      linkForce
-        .links(updatedLinks)
-        .distance(d => {
-          const baseDistance = 100;
-          const weight = d.weight || 0;
-          const strength = d.originalStrength || 1;
-
-          if (d.type === 'filesystem_proximity') {
-            return baseDistance * (1 - weight * 0.5) * (1 / strength);
-          } else if (d.type === 'semantic_similarity') {
-            return baseDistance * (1 - weight * 0.4) * (1 / strength);
-          } else if (d.type === 'contains') {
-            return 50;
-          } else {
-            return baseDistance * (1 - weight * 0.3);
-          }
-        })
-        .strength(d => {
-          const baseStrength = 1;
-          const weight = d.weight || 0;
-          const strength = d.originalStrength || 1;
-
-          if (d.type === 'contains') {
-            return 2;
-          }
-
-          return baseStrength * weight * strength;
-        });
-
-      // Update link visual properties with proper enter/update/exit handling
-      const newLinkSelection = linkSelection
-        .data(
-          updatedLinks,
-          (d: Link) => `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`
-        )
-        .join(
-          enter =>
-            enter
-              .append('line')
-              .attr('stroke', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeColor(linkMetric, config, d.type);
-              })
-              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
-              .attr('stroke-width', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeWidth(linkMetric, config, d.type);
-              }),
-          update =>
-            update
-              .attr('stroke', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeColor(linkMetric, config, d.type);
-              })
-              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
-              .attr('stroke-width', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeWidth(linkMetric, config, d.type);
-              }),
-          exit => exit.remove()
-        );
-
-      // Store the new selection for future updates
-      (simulation as any).__linkSelection = newLinkSelection;
-
-      // Get all node metrics for normalization (compute once)
-      const allNodeMetrics = Array.from(nodeMetrics.values());
-
-      // Update node visual properties
-      nodeSelection
-        .attr('r', (d: Node) => {
-          const metrics = nodeMetrics.get(d.id);
-          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-        })
-        .attr('fill', (d: Node) => {
-          const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
-        });
-
-      // Update label positions to match new node sizes
-      const labelSelection = (simulation as any).__labelSelection;
-      if (labelSelection) {
-        labelSelection.attr('dx', (d: Node) => {
-          const metrics = nodeMetrics.get(d.id);
-          const radius = metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-          return radius + 5;
-        });
-      }
-
-      // Update collision force with new node sizes
-      const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
-      collisionForce.radius((d: Node) => {
-        const metrics = nodeMetrics.get(d.id);
-        if (!metrics) return 10;
-        return calculateNodeSize(metrics, config, allNodeMetrics, d.type) + 5;
-      });
-
-      // Don't update center force during config changes - preserve current zoom/pan
-      // The center force should remain at the original center (width/2, height/2)
-
-      // Restart simulation with gentle animation
-      simulation.alpha(0.1).restart();
-    }, [config, data, nodeMetrics, linkMetrics]);
 
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {

@@ -27,8 +27,19 @@ export interface FeatureMapping {
   dataSourceWeights: Record<string, number>; // dataSourceId -> weight (0-100)
 }
 
+export interface RelationshipSkeleton {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  enabled: boolean;
+  opacity: number;
+  relationshipTypes: string[];
+}
+
 export interface VisualizationConfig {
   mappings: FeatureMapping[];
+  skeletons: RelationshipSkeleton[];
 }
 
 // Available data sources
@@ -169,8 +180,40 @@ export const VISUAL_FEATURES: VisualFeature[] = [
   },
 ];
 
+// Available relationship skeletons
+export const RELATIONSHIP_SKELETONS: RelationshipSkeleton[] = [
+  {
+    id: 'code_references',
+    name: 'Code References',
+    description: 'Direct code dependencies like imports, calls, and inheritance',
+    color: '#3498db',
+    enabled: true,
+    opacity: 0.6,
+    relationshipTypes: ['import', 'call', 'calls', 'inheritance', 'contains'],
+  },
+  {
+    id: 'semantic_similarity',
+    name: 'Semantic Similarity',
+    description: 'Files that are conceptually similar based on semantic analysis',
+    color: '#27ae60',
+    enabled: true,
+    opacity: 0.6,
+    relationshipTypes: ['semantic_similarity'],
+  },
+  {
+    id: 'filesystem_proximity',
+    name: 'Filesystem Proximity',
+    description: 'Files that are close to each other in the directory structure',
+    color: '#e74c3c',
+    enabled: true,
+    opacity: 0.6,
+    relationshipTypes: ['filesystem_proximity'],
+  },
+];
+
 // Default configuration
 export const DEFAULT_CONFIG: VisualizationConfig = {
+  skeletons: [...RELATIONSHIP_SKELETONS],
   mappings: [
     {
       featureId: 'node_size',
@@ -284,4 +327,33 @@ export const updateFeatureMapping = (
     ...config,
     mappings: newMappings,
   };
+};
+
+export const getRelationshipSkeletonById = (id: string): RelationshipSkeleton | undefined => {
+  return RELATIONSHIP_SKELETONS.find(s => s.id === id);
+};
+
+export const updateSkeletonConfig = (
+  config: VisualizationConfig,
+  skeletonId: string,
+  updates: Partial<RelationshipSkeleton>
+): VisualizationConfig => {
+  const newSkeletons = config.skeletons.map(skeleton => {
+    if (skeleton.id === skeletonId) {
+      return { ...skeleton, ...updates };
+    }
+    return skeleton;
+  });
+
+  return {
+    ...config,
+    skeletons: newSkeletons,
+  };
+};
+
+export const getSkeletonConfig = (
+  config: VisualizationConfig,
+  skeletonId: string
+): RelationshipSkeleton | undefined => {
+  return config.skeletons.find(s => s.id === skeletonId);
 };

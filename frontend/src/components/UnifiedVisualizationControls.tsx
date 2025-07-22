@@ -6,6 +6,9 @@ import {
   DATA_SOURCES,
   getFeatureMapping,
   updateFeatureMapping,
+  RELATIONSHIP_SKELETONS,
+  updateSkeletonConfig,
+  getSkeletonConfig,
 } from '../types/visualization';
 
 interface UnifiedVisualizationControlsProps {
@@ -238,6 +241,79 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
         <h3 className="text-xl font-bold text-gray-900 border-b-2 border-indigo-500 pb-1">
           Visualization Controls
         </h3>
+      </div>
+
+      {/* Relationship Skeletons */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          🔗 Relationship Skeletons
+        </h4>
+        <p className="text-xs text-gray-600 mb-4">
+          Show different types of connections as separate colored skeletons
+        </p>
+        <div className="space-y-3">
+          {config.skeletons.map(skeleton => (
+            <div key={skeleton.id} className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id={`skeleton-${skeleton.id}`}
+                    checked={skeleton.enabled}
+                    onChange={e => {
+                      const updatedConfig = updateSkeletonConfig(config, skeleton.id, {
+                        enabled: e.target.checked,
+                      });
+                      onConfigChange(updatedConfig);
+                    }}
+                    className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
+                  />
+                  <div
+                    className="w-4 h-4 rounded-full ml-2 mr-3"
+                    style={{ backgroundColor: skeleton.color }}
+                  ></div>
+                </div>
+                <div className="flex-1">
+                  <label
+                    htmlFor={`skeleton-${skeleton.id}`}
+                    className="text-sm font-medium text-gray-700 cursor-pointer"
+                  >
+                    {skeleton.name}
+                  </label>
+                  <p className="text-xs text-gray-500">{skeleton.description}</p>
+                </div>
+                <div className="text-xs text-gray-500 font-mono min-w-[3rem] text-right">
+                  {Math.round(skeleton.opacity * 100)}%
+                </div>
+              </div>
+              {skeleton.enabled && (
+                <div className="ml-6 pl-4 border-l-2 border-gray-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs text-gray-600 font-medium">Opacity</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1"
+                    step="0.1"
+                    value={skeleton.opacity}
+                    onChange={e => {
+                      const updatedConfig = updateSkeletonConfig(config, skeleton.id, {
+                        opacity: parseFloat(e.target.value),
+                      });
+                      onConfigChange(updatedConfig);
+                    }}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, ${skeleton.color} 0%, ${skeleton.color} ${skeleton.opacity * 100}%, #e5e7eb ${skeleton.opacity * 100}%, #e5e7eb 100%)`,
+                    }}
+                    aria-label={`${skeleton.name} opacity`}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Mode Toggle */}
