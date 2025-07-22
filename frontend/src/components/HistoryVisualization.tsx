@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { RepositoryData } from '../types/schema';
 import { VisualizationConfig } from '../types/visualization';
 import RepositoryGraph, { RepositoryGraphHandle } from './Visualization/RepositoryGraph';
-import HistoryControls from './HistoryControls';
+import FloatingHistoryControls from './FloatingHistoryControls';
 
 interface HistoryVisualizationProps {
   data: RepositoryData;
@@ -21,6 +21,10 @@ export const HistoryVisualization: React.FC<HistoryVisualizationProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(1000);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showHistoryControls, setShowHistoryControls] = useState(true);
+  const [currentBranch, setCurrentBranch] = useState(
+    data.metadata.analyzedBranch || data.metadata.defaultBranch || 'main'
+  );
 
   const repositoryGraphRef = React.useRef<RepositoryGraphHandle>(null);
   const animationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -85,8 +89,8 @@ export const HistoryVisualization: React.FC<HistoryVisualizationProps> = ({
   }, []);
 
   const handleBranchChange = useCallback((branch: string) => {
-    // For now, just log - would need to re-analyze with different branch
     console.log('Branch change requested:', branch);
+    setCurrentBranch(branch);
     // TODO: Implement branch switching by re-running analyzer
   }, []);
 
@@ -164,20 +168,35 @@ export const HistoryVisualization: React.FC<HistoryVisualizationProps> = ({
             {isPlaying && <span className="ml-2 animate-pulse">▶</span>}
           </div>
         )}
-      </div>
 
-      {/* History Controls */}
-      <HistoryControls
-        data={data}
-        currentTimelineIndex={currentTimelineIndex}
-        onTimelineChange={handleTimelineChange}
-        onPlay={handlePlay}
-        onPause={handlePause}
-        onBranchChange={handleBranchChange}
-        isPlaying={isPlaying}
-        animationSpeed={animationSpeed}
-        onSpeedChange={handleSpeedChange}
-      />
+        {/* History Controls Toggle Button */}
+        {hasHistory && !showHistoryControls && (
+          <button
+            onClick={() => setShowHistoryControls(true)}
+            className="absolute bottom-4 left-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg font-medium text-sm"
+            title="Show History Controls"
+          >
+            🕰️ History Controls
+          </button>
+        )}
+
+        {/* Floating History Controls */}
+        {hasHistory && showHistoryControls && (
+          <FloatingHistoryControls
+            data={data}
+            currentTimelineIndex={currentTimelineIndex}
+            onTimelineChange={handleTimelineChange}
+            isPlaying={isPlaying}
+            onPlay={handlePlay}
+            onPause={handlePause}
+            animationSpeed={animationSpeed}
+            onSpeedChange={setAnimationSpeed}
+            onBranchChange={handleBranchChange}
+            currentBranch={currentBranch}
+            onClose={() => setShowHistoryControls(false)}
+          />
+        )}
+      </div>
     </div>
   );
 };

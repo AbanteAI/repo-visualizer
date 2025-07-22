@@ -136,40 +136,18 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({
           <button
             onClick={() => onTimelineChange(Math.max(0, currentTimelineIndex - 1))}
             disabled={currentTimelineIndex === 0}
-            className="p-2 text-gray-600 hover:text-gray-800 disabled:text-gray-300"
+            className="p-2 text-gray-600 hover:text-gray-800 disabled:text-gray-300 font-bold text-lg"
             title="Previous commit (←)"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
+            ←
           </button>
 
           <button
             onClick={isPlaying ? onPause : onPlay}
-            className="p-2 text-blue-600 hover:text-blue-800"
+            className="p-2 text-blue-600 hover:text-blue-800 font-bold text-lg"
             title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
           >
-            {isPlaying ? (
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            )}
+            {isPlaying ? '⏸' : '▶'}
           </button>
 
           <button
@@ -177,16 +155,10 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({
               onTimelineChange(Math.min(timelinePoints.length - 1, currentTimelineIndex + 1))
             }
             disabled={currentTimelineIndex === timelinePoints.length - 1}
-            className="p-2 text-gray-600 hover:text-gray-800 disabled:text-gray-300"
+            className="p-2 text-gray-600 hover:text-gray-800 disabled:text-gray-300 font-bold text-lg"
             title="Next commit (→)"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
+            →
           </button>
 
           <div className="flex-1 px-4">
