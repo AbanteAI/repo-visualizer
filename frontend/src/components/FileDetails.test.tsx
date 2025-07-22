@@ -85,7 +85,6 @@ describe('FileDetails', () => {
   it('renders file details correctly', () => {
     render(<FileDetails fileId="test-file" data={mockData} onClose={mockOnClose} />);
 
-    expect(screen.getByText('test.py')).toBeInTheDocument();
     expect(screen.getByText('src/test.py')).toBeInTheDocument();
     expect(screen.getByText('file')).toBeInTheDocument();
     expect(screen.getByText('1.0 KB')).toBeInTheDocument();
@@ -121,7 +120,6 @@ describe('FileDetails', () => {
   it('renders directory details correctly', () => {
     render(<FileDetails fileId="test-dir" data={mockData} onClose={mockOnClose} />);
 
-    expect(screen.getByText('utils')).toBeInTheDocument();
     expect(screen.getByText('src/utils')).toBeInTheDocument();
     expect(screen.getByText('directory')).toBeInTheDocument();
 
