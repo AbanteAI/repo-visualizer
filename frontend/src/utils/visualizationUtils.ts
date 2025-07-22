@@ -236,7 +236,7 @@ export const calculateNodeSize = (
 
   const normalizedValues = normalizeValues(valuesForNormalization);
   const nodeIndex = metricsForLookup.indexOf(nodeMetrics);
-  const normalizedValue = normalizedValues[nodeIndex] || 0;
+  const normalizedValue = nodeIndex >= 0 ? normalizedValues[nodeIndex] || 0 : 0;
 
   // Directories get a larger size range to make them more prominent
   if (nodeType === 'directory') {
@@ -283,7 +283,7 @@ export const calculateNodeColorIntensity = (
   const normalizedValues = normalizeValues(valuesForNormalization);
   const nodeIndex = metricsForLookup.indexOf(nodeMetrics);
 
-  return normalizedValues[nodeIndex] || 0;
+  return nodeIndex >= 0 ? normalizedValues[nodeIndex] || 0 : 0;
 };
 
 // Calculate edge strength based on weighted metrics
