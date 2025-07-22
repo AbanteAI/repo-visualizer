@@ -354,8 +354,7 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                   : 0;
               });
 
-              // Get default directory inclusion from DEFAULT_CONFIG
-              const defaultMapping = config.mappings.find(m => m.featureId === selectedFeature);
+              // Get default directory inclusion based on feature type
               const defaultIncludeDirectories = (() => {
                 // Set sensible defaults based on feature type
                 switch (selectedFeature) {

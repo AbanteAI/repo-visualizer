@@ -215,21 +215,25 @@ export const calculateNodeSize = (
     return 12; // Fixed reasonable size for directories when excluded
   }
 
-  // Filter metrics for normalization based on directory inclusion setting
-  const metricsForNormalization = includeDirectoriesInSize
-    ? allNodeMetrics
-    : allNodeMetrics.filter((_, index) => {
-        // We need to know which metrics correspond to directories
-        // This is a bit tricky - we'd need the node type information
-        // For now, we'll include all metrics and handle the directory case separately
-        return true; // We'll normalize across all nodes but handle directories specially
-      });
+  // Calculate weighted values for all nodes
+  const allWeightedValues = allNodeMetrics.map(m => calculateWeightedValue(m, config, 'node_size'));
 
-  const allWeightedValues = metricsForNormalization.map(m =>
-    calculateWeightedValue(m, config, 'node_size')
-  );
-  const normalizedValues = normalizeValues(allWeightedValues);
-  const nodeIndex = allNodeMetrics.indexOf(nodeMetrics);
+  // Filter values for normalization if directories are excluded
+  let valuesForNormalization = allWeightedValues;
+  let metricsForLookup = allNodeMetrics;
+
+  if (!includeDirectoriesInSize) {
+    // Filter out directory metrics and their corresponding weighted values
+    const filteredData = allNodeMetrics
+      .map((metric, index) => ({ metric, value: allWeightedValues[index], index }))
+      .filter(item => item.metric.file_type !== 'directory');
+
+    valuesForNormalization = filteredData.map(item => item.value);
+    metricsForLookup = filteredData.map(item => item.metric);
+  }
+
+  const normalizedValues = normalizeValues(valuesForNormalization);
+  const nodeIndex = metricsForLookup.indexOf(nodeMetrics);
   const normalizedValue = normalizedValues[nodeIndex] || 0;
 
   // Directories get a larger size range to make them more prominent
@@ -251,12 +255,31 @@ export const calculateNodeColorIntensity = (
   config: VisualizationConfig,
   allNodeMetrics: ComputedNodeMetrics[]
 ): number => {
-  // Normalize across all nodes
+  // Check if directories should participate in color calculations
+  const colorMapping = getFeatureMapping(config, 'node_color');
+  const includeDirectoriesInColor = colorMapping?.includeDirectories ?? true;
+
+  // Calculate weighted values for all nodes
   const allWeightedValues = allNodeMetrics.map(m =>
     calculateWeightedValue(m, config, 'node_color')
   );
-  const normalizedValues = normalizeValues(allWeightedValues);
-  const nodeIndex = allNodeMetrics.indexOf(nodeMetrics);
+
+  // Filter values for normalization if directories are excluded
+  let valuesForNormalization = allWeightedValues;
+  let metricsForLookup = allNodeMetrics;
+
+  if (!includeDirectoriesInColor) {
+    // Filter out directory metrics and their corresponding weighted values
+    const filteredData = allNodeMetrics
+      .map((metric, index) => ({ metric, value: allWeightedValues[index], index }))
+      .filter(item => item.metric.file_type !== 'directory');
+
+    valuesForNormalization = filteredData.map(item => item.value);
+    metricsForLookup = filteredData.map(item => item.metric);
+  }
+
+  const normalizedValues = normalizeValues(valuesForNormalization);
+  const nodeIndex = metricsForLookup.indexOf(nodeMetrics);
 
   return normalizedValues[nodeIndex] || 0;
 };
