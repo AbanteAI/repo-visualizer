@@ -22,6 +22,7 @@ import {
   getNodeColor,
   getLinkColor,
 } from '../../utils/visualizationUtils';
+import { EXTENSION_COLORS } from '../../utils/extensionColors';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
@@ -75,31 +76,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       },
       [data.files]
     );
-
-    // Extension colors mapping
-    const extensionColors: Record<string, string> = {
-      py: '#3572A5', // Python
-      js: '#f7df1e', // JavaScript
-      html: '#e34c26', // HTML
-      css: '#563d7c', // CSS
-      md: '#083fa1', // Markdown
-      json: '#292929', // JSON
-      java: '#b07219', // Java
-      cpp: '#f34b7d', // C++
-      c: '#555555', // C
-      rb: '#701516', // Ruby
-      php: '#4F5D95', // PHP
-      ts: '#2b7489', // TypeScript
-      sh: '#89e051', // Shell
-      go: '#00ADD8', // Go
-      rs: '#dea584', // Rust
-      swift: '#ffac45', // Swift
-      kt: '#F18E33', // Kotlin
-      scala: '#c22d40', // Scala
-      pl: '#0298c3', // Perl
-      lua: '#000080', // Lua
-      r: '#198CE7', // R
-    };
 
     // Expose methods to parent components
     useImperativeHandle(ref, () => ({
@@ -487,7 +463,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .attr('fill', d => {
           const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+          return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
         })
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
@@ -771,7 +747,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         })
         .attr('fill', (d: Node) => {
           const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+          return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
         });
 
       // Update label positions to match new node sizes

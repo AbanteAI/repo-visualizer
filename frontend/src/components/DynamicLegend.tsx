@@ -13,10 +13,8 @@ import {
   isColorMappingCategorical,
   calculateCategoricalValue,
   generateCategoricalColors,
-  calculateNodeColorIntensity,
-  normalizeValues,
-  calculateWeightedValue,
 } from '../utils/visualizationUtils';
+import { EXTENSION_COLORS } from '../utils/extensionColors';
 
 interface DynamicLegendProps {
   data: RepositoryData;
@@ -149,29 +147,6 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
 
       if (fileTypeWeight > 0) {
         // Show extension colors
-        const extensionColors: Record<string, string> = {
-          py: '#3572A5',
-          js: '#f7df1e',
-          html: '#e34c26',
-          css: '#563d7c',
-          md: '#083fa1',
-          json: '#292929',
-          java: '#b07219',
-          cpp: '#f34b7d',
-          c: '#555555',
-          rb: '#701516',
-          php: '#4F5D95',
-          ts: '#2b7489',
-          sh: '#89e051',
-          go: '#00ADD8',
-          rs: '#dea584',
-          swift: '#ffac45',
-          kt: '#F18E33',
-          scala: '#c22d40',
-          pl: '#0298c3',
-          lua: '#000080',
-          r: '#198CE7',
-        };
 
         const usedExtensions = new Set<string>();
         data.files.forEach(file => {
@@ -188,7 +163,7 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
               <div key={ext} className="flex items-center gap-2">
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: extensionColors[ext] || '#aaaaaa' }}
+                  style={{ backgroundColor: EXTENSION_COLORS[ext] || '#aaaaaa' }}
                 ></div>
                 <span className="text-xs">.{ext}</span>
               </div>
