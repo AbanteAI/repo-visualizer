@@ -24,6 +24,7 @@ export interface VisualFeature {
 export interface FeatureMapping {
   featureId: string;
   dataSourceWeights: Record<string, number>; // dataSourceId -> weight (0-100)
+  includeDirectories: boolean; // Whether directories should participate in this feature
 }
 
 export interface VisualizationConfig {
@@ -167,6 +168,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 0,
       },
+      includeDirectories: false, // Directories excluded by default to prevent crowding
     },
     {
       featureId: 'node_color',
@@ -181,6 +183,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 0,
       },
+      includeDirectories: false, // Keep directories with consistent gray color by default
     },
     {
       featureId: 'edge_strength',
@@ -195,6 +198,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 30,
         code_references: 70,
       },
+      includeDirectories: true, // Directories can participate in edge relationships
     },
     {
       featureId: 'edge_width',
@@ -209,6 +213,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 100,
       },
+      includeDirectories: true, // Directories can participate in edge relationships
     },
   ],
 };
@@ -243,6 +248,27 @@ export const updateFeatureMapping = (
           ...mapping.dataSourceWeights,
           [dataSourceId]: weight,
         },
+      };
+    }
+    return mapping;
+  });
+
+  return {
+    ...config,
+    mappings: newMappings,
+  };
+};
+
+export const updateDirectoryInclusion = (
+  config: VisualizationConfig,
+  featureId: string,
+  includeDirectories: boolean
+): VisualizationConfig => {
+  const newMappings = config.mappings.map(mapping => {
+    if (mapping.featureId === featureId) {
+      return {
+        ...mapping,
+        includeDirectories,
       };
     }
     return mapping;

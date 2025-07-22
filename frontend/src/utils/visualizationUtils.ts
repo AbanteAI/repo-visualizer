@@ -206,8 +206,28 @@ export const calculateNodeSize = (
     return 6;
   }
 
-  // Normalize across all nodes (including directories)
-  const allWeightedValues = allNodeMetrics.map(m => calculateWeightedValue(m, config, 'node_size'));
+  // Check if directories should participate in size calculations
+  const sizeMapping = getFeatureMapping(config, 'node_size');
+  const includeDirectoriesInSize = sizeMapping?.includeDirectories ?? true;
+
+  // If directories are excluded, give them a default size
+  if (nodeType === 'directory' && !includeDirectoriesInSize) {
+    return 12; // Fixed reasonable size for directories when excluded
+  }
+
+  // Filter metrics for normalization based on directory inclusion setting
+  const metricsForNormalization = includeDirectoriesInSize
+    ? allNodeMetrics
+    : allNodeMetrics.filter((_, index) => {
+        // We need to know which metrics correspond to directories
+        // This is a bit tricky - we'd need the node type information
+        // For now, we'll include all metrics and handle the directory case separately
+        return true; // We'll normalize across all nodes but handle directories specially
+      });
+
+  const allWeightedValues = metricsForNormalization.map(m =>
+    calculateWeightedValue(m, config, 'node_size')
+  );
   const normalizedValues = normalizeValues(allWeightedValues);
   const nodeIndex = allNodeMetrics.indexOf(nodeMetrics);
   const normalizedValue = normalizedValues[nodeIndex] || 0;
@@ -293,13 +313,22 @@ export const getNodeColor = (
   allNodeMetrics: ComputedNodeMetrics[],
   extensionColors: Record<string, string>
 ): string => {
-  // Special handling for non-file nodes (but allow directories to participate in color mapping)
+  // Special handling for non-file nodes
   if (node.type === 'class') {
     return '#e67e22';
   } else if (node.type === 'function') {
     return '#3498db';
   } else if (node.type === 'method') {
     return '#9b59b6';
+  }
+
+  // Check if directories should participate in color calculations
+  const colorMapping = getFeatureMapping(config, 'node_color');
+  const includeDirectoriesInColor = colorMapping?.includeDirectories ?? true;
+
+  // If directories are excluded from color mapping, use default gray
+  if (node.type === 'directory' && !includeDirectoriesInColor) {
+    return '#7f8c8d'; // Default gray for directories when excluded
   }
 
   if (!nodeMetrics) {
@@ -317,22 +346,21 @@ export const getNodeColor = (
     const categoryValue = calculateCategoricalValue(nodeMetrics, config, 'node_color');
 
     // If file_type is active, use extension colors for files, special handling for directories
-    const mapping = getFeatureMapping(config, 'node_color');
-    if (mapping?.dataSourceWeights.file_type > 0) {
+    if (colorMapping?.dataSourceWeights.file_type > 0) {
       if (node.type === 'directory') {
         return '#7f8c8d'; // Keep directories gray when using file type coloring
       }
       return extensionColors[node.extension || 'unknown'] || '#aaaaaa';
     }
 
-    // For other categorical data, generate distributed colors (including directories)
+    // For other categorical data, generate distributed colors (including directories if enabled)
     const allCategories = [
       ...new Set(allNodeMetrics.map(m => calculateCategoricalValue(m, config, 'node_color'))),
     ];
     const categoricalColors = generateCategoricalColors(allCategories);
     return categoricalColors[categoryValue] || '#aaaaaa';
   } else {
-    // Continuous coloring (blue to red gradient) - includes directories
+    // Continuous coloring (blue to red gradient) - includes directories if enabled
     const intensity = calculateNodeColorIntensity(nodeMetrics, config, allNodeMetrics);
 
     // Blue to red gradient

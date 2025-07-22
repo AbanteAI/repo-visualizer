@@ -6,6 +6,7 @@ import {
   DATA_SOURCES,
   getFeatureMapping,
   updateFeatureMapping,
+  updateDirectoryInclusion,
 } from '../types/visualization';
 
 interface UnifiedVisualizationControlsProps {
@@ -148,6 +149,11 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
     setSelectedFeature(featureId);
   };
 
+  const handleDirectoryInclusionChange = (includeDirectories: boolean) => {
+    const newConfig = updateDirectoryInclusion(config, selectedFeature, includeDirectories);
+    onConfigChange(newConfig);
+  };
+
   const getTotalWeight = () => {
     if (!currentMapping) return 0;
     return Object.values(currentMapping.dataSourceWeights).reduce((sum, weight) => sum + weight, 0);
@@ -224,6 +230,34 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
           <p className="text-xs text-gray-500 mt-1">{selectedFeatureData.description}</p>
         )}
       </div>
+
+      {/* Directory Inclusion Toggle - only for node features */}
+      {selectedFeatureData?.category === 'node' && (
+        <div className="mb-6 p-3 bg-gray-50 rounded-md border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <label className="text-sm font-medium text-gray-700">Include Directories</label>
+              <p className="text-xs text-gray-500 mt-1">
+                Whether directories should participate in this visual feature or use default values
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={currentMapping?.includeDirectories ?? true}
+                onChange={e => handleDirectoryInclusionChange(e.target.checked)}
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+            </label>
+          </div>
+          {!currentMapping?.includeDirectories && (
+            <div className="mt-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+              ⚠️ Directories will use default values to prevent crowding out files
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Data Source Weights */}
       <div className="space-y-4">
@@ -320,11 +354,28 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                   : 0;
               });
 
+              // Get default directory inclusion from DEFAULT_CONFIG
+              const defaultMapping = config.mappings.find(m => m.featureId === selectedFeature);
+              const defaultIncludeDirectories = (() => {
+                // Set sensible defaults based on feature type
+                switch (selectedFeature) {
+                  case 'node_size':
+                  case 'node_color':
+                    return false; // Exclude directories by default to prevent crowding
+                  default:
+                    return true;
+                }
+              })();
+
               const newConfig = {
                 ...config,
                 mappings: config.mappings.map(mapping =>
                   mapping.featureId === selectedFeature
-                    ? { ...mapping, dataSourceWeights: resetWeights }
+                    ? {
+                        ...mapping,
+                        dataSourceWeights: resetWeights,
+                        includeDirectories: defaultIncludeDirectories,
+                      }
                     : mapping
                 ),
               };
