@@ -130,15 +130,11 @@ describe('FileUpload', () => {
   });
 
   it('processes server file correctly', async () => {
-    (global.fetch as any)
-      .mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve('{}'),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(JSON.stringify(mockValidData)),
-      });
+    // Mock the server file fetch - component makes two calls: one for checking file existence, one for fetching content
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve(JSON.stringify(mockValidData)),
+    });
 
     render(<FileUpload onDataLoaded={mockOnDataLoaded} onLoadExample={mockOnLoadExample} />);
 
@@ -233,7 +229,12 @@ describe('FileUpload', () => {
     expect(mockOnLoadExample).toHaveBeenCalledTimes(1);
   });
 
-  it('clears selections when switching between upload types', () => {
+  it('clears selections when switching between upload types', async () => {
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve('{}'),
+    });
+
     render(<FileUpload onDataLoaded={mockOnDataLoaded} onLoadExample={mockOnLoadExample} />);
 
     // Select a file
@@ -244,11 +245,17 @@ describe('FileUpload', () => {
     expect(screen.getByText('test.json')).toBeInTheDocument();
 
     // Then select a server file
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: 'repo_data.json' } });
+    await waitFor(() => {
+      const select = screen.getByRole('combobox');
+      fireEvent.change(select, { target: { value: 'repo_data.json' } });
+    });
 
-    // File selection should be cleared
-    expect(screen.getByText('No file selected')).toBeInTheDocument();
+    // Local file selection should be cleared, server file should be selected
+    expect(screen.getByText('Selected: repo_data.json')).toBeInTheDocument();
+
+    // Check that the local file section shows "No file selected"
+    const uploadSection = screen.getByText('Upload from Computer').closest('div');
+    expect(uploadSection).toHaveTextContent('No file selected');
   });
 
   it('handles server fetch errors gracefully', async () => {
@@ -261,15 +268,21 @@ describe('FileUpload', () => {
   });
 
   it('handles server file fetch errors', async () => {
-    (global.fetch as any)
-      .mockResolvedValueOnce({
+    // Mock the initial file list fetch to succeed, but the actual file fetch to fail
+    (global.fetch as any).mockImplementation(url => {
+      if (url === '/repo_data.json' && (global.fetch as any).mock.calls.length > 1) {
+        // Second call (actual file fetch) - return error
+        return Promise.resolve({
+          ok: false,
+          statusText: 'Not Found',
+        });
+      }
+      // First call (file existence check) - return success
+      return Promise.resolve({
         ok: true,
         text: () => Promise.resolve('{}'),
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Not Found',
       });
+    });
 
     render(<FileUpload onDataLoaded={mockOnDataLoaded} onLoadExample={mockOnLoadExample} />);
 
@@ -282,7 +295,9 @@ describe('FileUpload', () => {
     fireEvent.click(visualizeButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to fetch server file/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Error processing file.*Failed to fetch server file/)
+      ).toBeInTheDocument();
     });
   });
 
