@@ -6,9 +6,7 @@ import {
   DATA_SOURCES,
   getFeatureMapping,
   updateFeatureMapping,
-  RELATIONSHIP_SKELETONS,
   updateSkeletonConfig,
-  getSkeletonConfig,
 } from '../types/visualization';
 
 interface UnifiedVisualizationControlsProps {

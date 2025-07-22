@@ -446,7 +446,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       simulationRef.current = simulation;
 
       // Create links grouped by skeleton
-      const linkGroups = new Map();
       const allLinkElements: d3.Selection<SVGLineElement, Link, SVGGElement, unknown>[] = [];
 
       // Group links by skeleton
@@ -487,13 +486,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             return 1.5;
           });
 
-        linkGroups.set(skeleton.id, linkSelection);
         allLinkElements.push(linkSelection);
       });
-
-      // Combine all link selections for simulation updates
-      const link =
-        allLinkElements.length > 0 ? allLinkElements[0] : g.append('g').selectAll('line').data([]);
 
       // Create node groups (to hold both circles and expand/collapse indicators)
       const nodeGroups = g
