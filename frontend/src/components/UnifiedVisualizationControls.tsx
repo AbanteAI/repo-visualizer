@@ -19,15 +19,25 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
   onConfigChange,
   onClose,
 }) => {
-  const [selectedFeature, setSelectedFeature] = useState<string>(VISUAL_FEATURES[0].id);
+  const [selectedNodeFeature, setSelectedNodeFeature] = useState<string>(
+    VISUAL_FEATURES.find(f => f.category === 'node')?.id || VISUAL_FEATURES[0].id
+  );
+  const [selectedEdgeFeature, setSelectedEdgeFeature] = useState<string>(
+    VISUAL_FEATURES.find(f => f.category === 'edge')?.id || VISUAL_FEATURES[0].id
+  );
   const [selectedDataSource, setSelectedDataSource] = useState<string>(DATA_SOURCES[0].id);
   const [isTransposed, setIsTransposed] = useState<boolean>(false);
+  const [activeSection, setActiveSection] = useState<'node' | 'edge'>('node');
   const [position, setPosition] = useState({ x: 0, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, elementX: 0, elementY: 0 });
   const [isInitialized, setIsInitialized] = useState(false);
   const controlsRef = useRef<HTMLDivElement>(null);
 
+  const nodeFeatures = VISUAL_FEATURES.filter(f => f.category === 'node');
+  const edgeFeatures = VISUAL_FEATURES.filter(f => f.category === 'edge');
+
+  const selectedFeature = activeSection === 'node' ? selectedNodeFeature : selectedEdgeFeature;
   const selectedFeatureData = VISUAL_FEATURES.find(f => f.id === selectedFeature);
   const selectedDataSourceData = DATA_SOURCES.find(ds => ds.id === selectedDataSource);
   const currentMapping = getFeatureMapping(config, selectedFeature);
@@ -169,8 +179,14 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
     onConfigChange(newConfig);
   };
 
-  const handleFeatureSelect = (featureId: string) => {
-    setSelectedFeature(featureId);
+  const handleNodeFeatureSelect = (featureId: string) => {
+    setSelectedNodeFeature(featureId);
+    setActiveSection('node');
+  };
+
+  const handleEdgeFeatureSelect = (featureId: string) => {
+    setSelectedEdgeFeature(featureId);
+    setActiveSection('edge');
   };
 
   const getTotalWeight = () => {
@@ -179,13 +195,7 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
   };
 
   const getFeatureIcon = (feature: VisualFeature) => {
-    const iconMap: Record<string, string> = {
-      node_size: '●',
-      node_color: '🎨',
-      edge_strength: '━',
-      edge_width: '═',
-    };
-    return iconMap[feature.id] || '●';
+    return feature.icon;
   };
 
   return (
@@ -264,24 +274,67 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
       {!isTransposed ? (
         // Feature-First Mode (Original)
         <>
-          {/* Feature Selection */}
+          {/* Feature Category Tabs */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Graph Feature</label>
-            <select
-              value={selectedFeature}
-              onChange={e => handleFeatureSelect(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              style={{ cursor: 'pointer' }}
-            >
-              {VISUAL_FEATURES.map(feature => (
-                <option key={feature.id} value={feature.id}>
-                  {getFeatureIcon(feature)} {feature.name}
-                </option>
-              ))}
-            </select>
-            {selectedFeatureData && (
-              <p className="text-xs text-gray-500 mt-1">{selectedFeatureData.description}</p>
-            )}
+            <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg mb-3">
+              <button
+                onClick={() => setActiveSection('node')}
+                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  activeSection === 'node'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                🟢 Node Features
+              </button>
+              <button
+                onClick={() => setActiveSection('edge')}
+                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  activeSection === 'edge'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                🔗 Edge Features
+              </button>
+            </div>
+
+            {/* Feature Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {activeSection === 'node' ? 'Node Feature' : 'Edge Feature'}
+              </label>
+              {activeSection === 'node' ? (
+                <select
+                  value={selectedNodeFeature}
+                  onChange={e => handleNodeFeatureSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  style={{ cursor: 'pointer' }}
+                >
+                  {nodeFeatures.map(feature => (
+                    <option key={feature.id} value={feature.id}>
+                      {getFeatureIcon(feature)} {feature.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={selectedEdgeFeature}
+                  onChange={e => handleEdgeFeatureSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  style={{ cursor: 'pointer' }}
+                >
+                  {edgeFeatures.map(feature => (
+                    <option key={feature.id} value={feature.id}>
+                      {getFeatureIcon(feature)} {feature.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {selectedFeatureData && (
+                <p className="text-xs text-gray-500 mt-1">{selectedFeatureData.description}</p>
+              )}
+            </div>
           </div>
 
           {/* Data Source Weights */}
@@ -294,7 +347,10 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             {/* Active Data Sources */}
             {DATA_SOURCES.filter(ds => {
               const weight = currentMapping?.dataSourceWeights[ds.id] || 0;
-              return weight > 0;
+              const isApplicable = selectedFeatureData
+                ? ds.applicableTo === 'both' || ds.applicableTo === selectedFeatureData.category
+                : true;
+              return weight > 0 && isApplicable;
             }).map(dataSource => {
               const weight = currentMapping?.dataSourceWeights[dataSource.id] || 0;
               return (
@@ -355,7 +411,10 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                 <option value="">+ Add Data Source</option>
                 {DATA_SOURCES.filter(ds => {
                   const weight = currentMapping?.dataSourceWeights[ds.id] || 0;
-                  return weight === 0;
+                  const isApplicable = selectedFeatureData
+                    ? ds.applicableTo === 'both' || ds.applicableTo === selectedFeatureData.category
+                    : true;
+                  return weight === 0 && isApplicable;
                 }).map(dataSource => (
                   <option key={dataSource.id} value={dataSource.id}>
                     {dataSource.name}
@@ -394,69 +453,81 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             )}
           </div>
 
-          {/* Visual Feature Assignments */}
-          <div className="space-y-4">
+          {/* Node Features Section */}
+          <div className="space-y-4 mb-6">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-medium text-gray-700">Visual Features</h4>
+              <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                🟢 Node Features
+              </h4>
               <span className="text-xs text-gray-500">
-                Active: {getDataSourceFeatures(selectedDataSource).length}
+                Active:{' '}
+                {
+                  getDataSourceFeatures(selectedDataSource).filter(f => f.category === 'node')
+                    .length
+                }
               </span>
             </div>
 
-            {/* Active Visual Features */}
-            {VISUAL_FEATURES.filter(feature => {
-              const weight = getDataSourceWeight(feature.id, selectedDataSource);
-              return weight > 0;
-            }).map(feature => {
-              const weight = getDataSourceWeight(feature.id, selectedDataSource);
-              return (
-                <div key={feature.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">{getFeatureIcon(feature)}</span>
-                      <label className="text-sm font-medium text-gray-600">{feature.name}</label>
+            {/* Active Node Features */}
+            {nodeFeatures
+              .filter(feature => {
+                const weight = getDataSourceWeight(feature.id, selectedDataSource);
+                const dataSource = selectedDataSourceData;
+                const isApplicable = dataSource
+                  ? dataSource.applicableTo === 'both' || dataSource.applicableTo === 'node'
+                  : true;
+                return weight > 0 && isApplicable;
+              })
+              .map(feature => {
+                const weight = getDataSourceWeight(feature.id, selectedDataSource);
+                return (
+                  <div key={feature.id} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{getFeatureIcon(feature)}</span>
+                        <label className="text-sm font-medium text-gray-600">{feature.name}</label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
+                          {weight}%
+                        </span>
+                        <button
+                          onClick={() =>
+                            handleTransposedWeightChange(feature.id, selectedDataSource, 0)
+                          }
+                          className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          aria-label={`Remove from ${feature.name}`}
+                        >
+                          <span className="text-xs font-bold">×</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
-                        {weight}%
-                      </span>
-                      <button
-                        onClick={() =>
-                          handleTransposedWeightChange(feature.id, selectedDataSource, 0)
+                    <div className="relative">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={weight}
+                        onChange={e =>
+                          handleTransposedWeightChange(
+                            feature.id,
+                            selectedDataSource,
+                            Number(e.target.value)
+                          )
                         }
-                        className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        aria-label={`Remove from ${feature.name}`}
-                      >
-                        <span className="text-xs font-bold">×</span>
-                      </button>
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        style={{
+                          background: `linear-gradient(to right, ${selectedDataSourceData?.color ?? '#6b7280'} 0%, ${selectedDataSourceData?.color ?? '#6b7280'} ${weight}%, #e5e7eb ${weight}%, #e5e7eb 100%)`,
+                        }}
+                        aria-label={`${feature.name} weight`}
+                      />
                     </div>
+                    <p className="text-xs text-gray-400 leading-tight">{feature.description}</p>
                   </div>
-                  <div className="relative">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={weight}
-                      onChange={e =>
-                        handleTransposedWeightChange(
-                          feature.id,
-                          selectedDataSource,
-                          Number(e.target.value)
-                        )
-                      }
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                      style={{
-                        background: `linear-gradient(to right, ${selectedDataSourceData?.color ?? '#6b7280'} 0%, ${selectedDataSourceData?.color ?? '#6b7280'} ${weight}%, #e5e7eb ${weight}%, #e5e7eb 100%)`,
-                      }}
-                      aria-label={`${feature.name} weight`}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400 leading-tight">{feature.description}</p>
-                </div>
-              );
-            })}
+                );
+              })}
 
-            {/* Add Visual Feature */}
+            {/* Add Node Feature */}
             <div className="pt-2 border-t border-gray-100">
               <select
                 value=""
@@ -469,15 +540,127 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 style={{ cursor: 'pointer' }}
               >
-                <option value="">+ Add Visual Feature</option>
-                {VISUAL_FEATURES.filter(feature => {
-                  const weight = getDataSourceWeight(feature.id, selectedDataSource);
-                  return weight === 0;
-                }).map(feature => (
-                  <option key={feature.id} value={feature.id}>
-                    {getFeatureIcon(feature)} {feature.name}
-                  </option>
-                ))}
+                <option value="">+ Add Node Feature</option>
+                {nodeFeatures
+                  .filter(feature => {
+                    const weight = getDataSourceWeight(feature.id, selectedDataSource);
+                    const dataSource = selectedDataSourceData;
+                    const isApplicable = dataSource
+                      ? dataSource.applicableTo === 'both' || dataSource.applicableTo === 'node'
+                      : true;
+                    return weight === 0 && isApplicable;
+                  })
+                  .map(feature => (
+                    <option key={feature.id} value={feature.id}>
+                      {getFeatureIcon(feature)} {feature.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Edge Features Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                🔗 Edge Features
+              </h4>
+              <span className="text-xs text-gray-500">
+                Active:{' '}
+                {
+                  getDataSourceFeatures(selectedDataSource).filter(f => f.category === 'edge')
+                    .length
+                }
+              </span>
+            </div>
+
+            {/* Active Edge Features */}
+            {edgeFeatures
+              .filter(feature => {
+                const weight = getDataSourceWeight(feature.id, selectedDataSource);
+                const dataSource = selectedDataSourceData;
+                const isApplicable = dataSource
+                  ? dataSource.applicableTo === 'both' || dataSource.applicableTo === 'edge'
+                  : true;
+                return weight > 0 && isApplicable;
+              })
+              .map(feature => {
+                const weight = getDataSourceWeight(feature.id, selectedDataSource);
+                return (
+                  <div key={feature.id} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{getFeatureIcon(feature)}</span>
+                        <label className="text-sm font-medium text-gray-600">{feature.name}</label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600 font-mono min-w-[3rem] text-right">
+                          {weight}%
+                        </span>
+                        <button
+                          onClick={() =>
+                            handleTransposedWeightChange(feature.id, selectedDataSource, 0)
+                          }
+                          className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          aria-label={`Remove from ${feature.name}`}
+                        >
+                          <span className="text-xs font-bold">×</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={weight}
+                        onChange={e =>
+                          handleTransposedWeightChange(
+                            feature.id,
+                            selectedDataSource,
+                            Number(e.target.value)
+                          )
+                        }
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        style={{
+                          background: `linear-gradient(to right, ${selectedDataSourceData?.color ?? '#6b7280'} 0%, ${selectedDataSourceData?.color ?? '#6b7280'} ${weight}%, #e5e7eb ${weight}%, #e5e7eb 100%)`,
+                        }}
+                        aria-label={`${feature.name} weight`}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 leading-tight">{feature.description}</p>
+                  </div>
+                );
+              })}
+
+            {/* Add Edge Feature */}
+            <div className="pt-2 border-t border-gray-100">
+              <select
+                value=""
+                onChange={e => {
+                  if (e.target.value) {
+                    handleTransposedWeightChange(e.target.value, selectedDataSource, 50);
+                    e.target.value = '';
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                style={{ cursor: 'pointer' }}
+              >
+                <option value="">+ Add Edge Feature</option>
+                {edgeFeatures
+                  .filter(feature => {
+                    const weight = getDataSourceWeight(feature.id, selectedDataSource);
+                    const dataSource = selectedDataSourceData;
+                    const isApplicable = dataSource
+                      ? dataSource.applicableTo === 'both' || dataSource.applicableTo === 'edge'
+                      : true;
+                    return weight === 0 && isApplicable;
+                  })
+                  .map(feature => (
+                    <option key={feature.id} value={feature.id}>
+                      {getFeatureIcon(feature)} {feature.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>
@@ -539,7 +722,9 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
           }}
           className="w-full px-4 py-2 text-sm text-gray-600 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md transition-colors duration-200"
         >
-          {isTransposed ? 'Reset Data Source' : 'Reset to Defaults'}
+          {isTransposed
+            ? 'Reset Data Source'
+            : `Reset ${activeSection === 'node' ? 'Node' : 'Edge'} Feature`}
         </button>
       </div>
     </div>
