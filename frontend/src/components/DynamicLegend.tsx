@@ -7,6 +7,16 @@ import {
   getFeatureMapping,
   DataSource,
 } from '../types/visualization';
+import {
+  ComputedNodeMetrics,
+  computeNodeMetrics,
+  isColorMappingCategorical,
+  calculateCategoricalValue,
+  generateCategoricalColors,
+  calculateNodeColorIntensity,
+  normalizeValues,
+  calculateWeightedValue,
+} from '../utils/visualizationUtils';
 
 interface DynamicLegendProps {
   data: RepositoryData;
@@ -98,6 +108,10 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
   const selectedFeatureData = VISUAL_FEATURES.find(f => f.id === selectedFeature);
   const currentMapping = getFeatureMapping(config, selectedFeature);
 
+  // Compute node metrics for accurate color calculation
+  const nodeMetrics = computeNodeMetrics(data);
+  const allNodeMetrics = Array.from(nodeMetrics.values());
+
   const renderLegendContent = () => {
     if (!selectedFeatureData || !currentMapping) return null;
 
@@ -127,113 +141,131 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
   };
 
   const renderColorLegend = (activeDataSources: DataSource[]) => {
-    // Check if file_type is the primary data source
-    const fileTypeWeight = currentMapping?.dataSourceWeights['file_type'] || 0;
-    const isFileTypePrimary = fileTypeWeight > 50;
+    const isCategorical = isColorMappingCategorical(config);
 
-    if (isFileTypePrimary) {
-      // Show extension colors
-      const extensionColors: Record<string, string> = {
-        py: '#3572A5',
-        js: '#f7df1e',
-        html: '#e34c26',
-        css: '#563d7c',
-        md: '#083fa1',
-        json: '#292929',
-        java: '#b07219',
-        cpp: '#f34b7d',
-        c: '#555555',
-        rb: '#701516',
-        php: '#4F5D95',
-        ts: '#2b7489',
-        sh: '#89e051',
-        go: '#00ADD8',
-        rs: '#dea584',
-        swift: '#ffac45',
-        kt: '#F18E33',
-        scala: '#c22d40',
-        pl: '#0298c3',
-        lua: '#000080',
-        r: '#198CE7',
-      };
+    if (isCategorical) {
+      // Check if file_type is active
+      const fileTypeWeight = currentMapping?.dataSourceWeights['file_type'] || 0;
 
-      const usedExtensions = new Set<string>();
-      data.files.forEach(file => {
-        if (file.extension) usedExtensions.add(file.extension);
-      });
+      if (fileTypeWeight > 0) {
+        // Show extension colors
+        const extensionColors: Record<string, string> = {
+          py: '#3572A5',
+          js: '#f7df1e',
+          html: '#e34c26',
+          css: '#563d7c',
+          md: '#083fa1',
+          json: '#292929',
+          java: '#b07219',
+          cpp: '#f34b7d',
+          c: '#555555',
+          rb: '#701516',
+          php: '#4F5D95',
+          ts: '#2b7489',
+          sh: '#89e051',
+          go: '#00ADD8',
+          rs: '#dea584',
+          swift: '#ffac45',
+          kt: '#F18E33',
+          scala: '#c22d40',
+          pl: '#0298c3',
+          lua: '#000080',
+          r: '#198CE7',
+        };
 
-      return (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-gray-500"></div>
-            <span className="text-xs">Directory</span>
-          </div>
-          {Array.from(usedExtensions).map(ext => (
-            <div key={ext} className="flex items-center gap-2">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: extensionColors[ext] || '#aaaaaa' }}
-              ></div>
-              <span className="text-xs">.{ext}</span>
-            </div>
-          ))}
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-            <span className="text-xs">Other</span>
-          </div>
-          {/* Component types */}
-          <div className="pt-2 border-t border-gray-200">
+        const usedExtensions = new Set<string>();
+        data.files.forEach(file => {
+          if (file.extension) usedExtensions.add(file.extension);
+        });
+
+        return (
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#e67e22' }}></div>
-              <span className="text-xs">class</span>
+              <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+              <span className="text-xs">Directory</span>
             </div>
+            {Array.from(usedExtensions).map(ext => (
+              <div key={ext} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: extensionColors[ext] || '#aaaaaa' }}
+                ></div>
+                <span className="text-xs">.{ext}</span>
+              </div>
+            ))}
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3498db' }}></div>
-              <span className="text-xs">function</span>
+              <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+              <span className="text-xs">Other</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#9b59b6' }}></div>
-              <span className="text-xs">method</span>
+            {/* Component types */}
+            <div className="pt-2 border-t border-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#e67e22' }}></div>
+                <span className="text-xs">class</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3498db' }}></div>
+                <span className="text-xs">function</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#9b59b6' }}></div>
+                <span className="text-xs">method</span>
+              </div>
             </div>
           </div>
-        </div>
-      );
+        );
+      } else {
+        // Other categorical data sources - use generated categorical colors
+        const allCategories = [
+          ...new Set(allNodeMetrics.map(m => calculateCategoricalValue(m, config, 'node_color'))),
+        ];
+        const categoricalColors = generateCategoricalColors(allCategories);
+
+        return (
+          <div className="space-y-2">
+            {allCategories.map(category => (
+              <div key={category} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: categoricalColors[category] || '#aaaaaa' }}
+                ></div>
+                <span className="text-xs">{category}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
     } else {
-      // Show intensity/gradient legend for continuous data
+      // Continuous data - show blue to red gradient
       return (
         <div className="space-y-3">
-          {activeDataSources.map(dataSource => {
-            const weight = currentMapping?.dataSourceWeights[dataSource.id] || 0;
-
-            return (
-              <div key={dataSource.id} className="space-y-1">
-                <div className="text-xs font-medium">
-                  {dataSource.name} ({weight}%)
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-4 h-3 rounded-sm opacity-30"
-                    style={{ backgroundColor: dataSource.color }}
-                  ></div>
-                  <span className="text-xs text-gray-500">Low</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-4 h-3 rounded-sm opacity-70"
-                    style={{ backgroundColor: dataSource.color }}
-                  ></div>
-                  <span className="text-xs text-gray-500">Medium</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-4 h-3 rounded-sm"
-                    style={{ backgroundColor: dataSource.color }}
-                  ></div>
-                  <span className="text-xs text-gray-500">High</span>
-                </div>
-              </div>
-            );
-          })}
+          <div className="text-xs font-medium mb-2">Intensity Scale</div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-4 h-3 rounded-sm"
+                style={{ backgroundColor: 'rgb(0, 64, 255)' }} // Low intensity (blue)
+              ></div>
+              <span className="text-xs text-gray-500">Low</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div
+                className="w-4 h-3 rounded-sm"
+                style={{ backgroundColor: 'rgb(128, 128, 128)' }} // Medium intensity (gray)
+              ></div>
+              <span className="text-xs text-gray-500">Medium</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div
+                className="w-4 h-3 rounded-sm"
+                style={{ backgroundColor: 'rgb(255, 64, 0)' }} // High intensity (red)
+              ></div>
+              <span className="text-xs text-gray-500">High</span>
+            </div>
+          </div>
+          <div className="text-xs text-gray-400 mt-2">
+            Data sources: {activeDataSources.map(ds => ds.name).join(', ')}
+          </div>
         </div>
       );
     }
@@ -242,108 +274,97 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
   const renderSizeLegend = (activeDataSources: DataSource[]) => {
     return (
       <div className="space-y-3">
-        {activeDataSources.map(dataSource => {
-          const weight = currentMapping?.dataSourceWeights[dataSource.id] || 0;
-
-          return (
-            <div key={dataSource.id} className="space-y-2">
-              <div className="text-xs font-medium">
-                {dataSource.name} ({weight}%)
-              </div>
-              <div className="flex items-center gap-3">
-                <div
-                  className="rounded-full border border-gray-300"
-                  style={{
-                    width: '8px',
-                    height: '8px',
-                    backgroundColor: dataSource.color,
-                  }}
-                ></div>
-                <span className="text-xs text-gray-500">Small</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div
-                  className="rounded-full border border-gray-300"
-                  style={{
-                    width: '12px',
-                    height: '12px',
-                    backgroundColor: dataSource.color,
-                  }}
-                ></div>
-                <span className="text-xs text-gray-500">Medium</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div
-                  className="rounded-full border border-gray-300"
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    backgroundColor: dataSource.color,
-                  }}
-                ></div>
-                <span className="text-xs text-gray-500">Large</span>
-              </div>
-            </div>
-          );
-        })}
+        <div className="text-xs font-medium mb-2">Size Scale</div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <div
+              className="rounded-full border border-gray-300"
+              style={{
+                width: '6px',
+                height: '6px',
+                backgroundColor: '#4f46e5',
+              }}
+            ></div>
+            <span className="text-xs text-gray-500">Small</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div
+              className="rounded-full border border-gray-300"
+              style={{
+                width: '10px',
+                height: '10px',
+                backgroundColor: '#4f46e5',
+              }}
+            ></div>
+            <span className="text-xs text-gray-500">Medium</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div
+              className="rounded-full border border-gray-300"
+              style={{
+                width: '15px',
+                height: '15px',
+                backgroundColor: '#4f46e5',
+              }}
+            ></div>
+            <span className="text-xs text-gray-500">Large</span>
+          </div>
+        </div>
+        <div className="text-xs text-gray-400 mt-2">
+          Data sources: {activeDataSources.map(ds => ds.name).join(', ')}
+        </div>
       </div>
     );
   };
 
   const renderEdgeLegend = (activeDataSources: DataSource[], featureType: string) => {
     const isWidth = featureType === 'edge_width';
+    const title = isWidth ? 'Edge Width Scale' : 'Edge Strength Scale';
 
     return (
       <div className="space-y-3">
-        {activeDataSources.map(dataSource => {
-          const weight = currentMapping?.dataSourceWeights[dataSource.id] || 0;
-
-          return (
-            <div key={dataSource.id} className="space-y-2">
-              <div className="text-xs font-medium">
-                {dataSource.name} ({weight}%)
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="rounded"
-                    style={{
-                      width: '20px',
-                      height: isWidth ? '1px' : '2px',
-                      backgroundColor: dataSource.color,
-                      opacity: isWidth ? 1 : 0.3,
-                    }}
-                  ></div>
-                  <span className="text-xs text-gray-500">Weak</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="rounded"
-                    style={{
-                      width: '20px',
-                      height: isWidth ? '2px' : '2px',
-                      backgroundColor: dataSource.color,
-                      opacity: isWidth ? 1 : 0.6,
-                    }}
-                  ></div>
-                  <span className="text-xs text-gray-500">Medium</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="rounded"
-                    style={{
-                      width: '20px',
-                      height: isWidth ? '3px' : '2px',
-                      backgroundColor: dataSource.color,
-                      opacity: 1,
-                    }}
-                  ></div>
-                  <span className="text-xs text-gray-500">Strong</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        <div className="text-xs font-medium mb-2">{title}</div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <div
+              className="rounded"
+              style={{
+                width: '24px',
+                height: isWidth ? '1px' : '2px',
+                backgroundColor: '#64748b',
+                opacity: isWidth ? 1 : 0.4,
+              }}
+            ></div>
+            <span className="text-xs text-gray-500">Weak</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div
+              className="rounded"
+              style={{
+                width: '24px',
+                height: isWidth ? '2px' : '2px',
+                backgroundColor: '#64748b',
+                opacity: isWidth ? 1 : 0.7,
+              }}
+            ></div>
+            <span className="text-xs text-gray-500">Medium</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div
+              className="rounded"
+              style={{
+                width: '24px',
+                height: isWidth ? '3px' : '2px',
+                backgroundColor: '#64748b',
+                opacity: 1,
+              }}
+            ></div>
+            <span className="text-xs text-gray-500">Strong</span>
+          </div>
+        </div>
+        <div className="text-xs text-gray-400 mt-2">
+          Data sources: {activeDataSources.map(ds => ds.name).join(', ')}
+        </div>
       </div>
     );
   };
