@@ -22,3 +22,12 @@ export const EXTENSION_COLORS: Record<string, string> = {
   lua: '#000080', // Lua
   r: '#198CE7', // R
 };
+
+// Special node colors for different node types
+export const NODE_COLORS = {
+  DIRECTORY: '#7f8c8d',
+  CLASS: '#e67e22',
+  FUNCTION: '#3498db',
+  METHOD: '#9b59b6',
+  UNKNOWN: '#aaaaaa',
+};

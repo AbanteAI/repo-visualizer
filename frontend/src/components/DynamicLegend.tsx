@@ -8,13 +8,12 @@ import {
   DataSource,
 } from '../types/visualization';
 import {
-  ComputedNodeMetrics,
   computeNodeMetrics,
   isColorMappingCategorical,
   calculateCategoricalValue,
   generateCategoricalColors,
 } from '../utils/visualizationUtils';
-import { EXTENSION_COLORS } from '../utils/extensionColors';
+import { EXTENSION_COLORS, NODE_COLORS } from '../utils/extensionColors';
 
 interface DynamicLegendProps {
   data: RepositoryData;
@@ -156,34 +155,49 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
         return (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: NODE_COLORS.DIRECTORY }}
+              ></div>
               <span className="text-xs">Directory</span>
             </div>
             {Array.from(usedExtensions).map(ext => (
               <div key={ext} className="flex items-center gap-2">
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: EXTENSION_COLORS[ext] || '#aaaaaa' }}
+                  style={{ backgroundColor: EXTENSION_COLORS[ext] || NODE_COLORS.UNKNOWN }}
                 ></div>
                 <span className="text-xs">.{ext}</span>
               </div>
             ))}
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: NODE_COLORS.UNKNOWN }}
+              ></div>
               <span className="text-xs">Other</span>
             </div>
             {/* Component types */}
             <div className="pt-2 border-t border-gray-200">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#e67e22' }}></div>
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: NODE_COLORS.CLASS }}
+                ></div>
                 <span className="text-xs">class</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3498db' }}></div>
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: NODE_COLORS.FUNCTION }}
+                ></div>
                 <span className="text-xs">function</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#9b59b6' }}></div>
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: NODE_COLORS.METHOD }}
+                ></div>
                 <span className="text-xs">method</span>
               </div>
             </div>
