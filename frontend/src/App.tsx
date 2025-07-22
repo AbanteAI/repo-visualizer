@@ -231,8 +231,8 @@ const App: React.FC = () => {
                   />
                 )}
 
-                {/* Visualization Controls - only show for regular graph view */}
-                {!hasHistory && showControls && (
+                {/* Visualization Controls - show for both regular and history views */}
+                {showControls && (
                   <UnifiedVisualizationControls
                     config={config}
                     onConfigChange={handleConfigChange}

@@ -28,7 +28,7 @@ const FloatingHistoryControls: React.FC<FloatingHistoryControlsProps> = ({
   currentBranch,
   onClose,
 }) => {
-  const [position, setPosition] = useState({ x: 20, y: 200 });
+  const [position, setPosition] = useState({ x: 20, y: 120 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
