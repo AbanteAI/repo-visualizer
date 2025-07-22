@@ -220,11 +220,6 @@ const App: React.FC = () => {
                   />
                 )}
 
-<<<<<<< HEAD
-                {/* Visualization Controls - show for both regular and history views */}
-||||||| 69f93d0
-                {/* Visualization Controls */}
-=======
                 {/* Controls Toggle Button - positioned on canvas */}
                 {repositoryData && (
                   <button
@@ -261,7 +256,7 @@ const App: React.FC = () => {
                   </button>
                 )}
 
-                {/* Visualization Controls */}
+                {/* Visualization Controls - show for both regular and history views */}
                 {showControls && (
                   <UnifiedVisualizationControls
                     config={config}
