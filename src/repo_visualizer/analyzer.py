@@ -1043,45 +1043,53 @@ class RepositoryAnalyzer:
             extension: File extension
         """
         if extension == "py":
-            # Extract Python imports - more comprehensive patterns
-            import_patterns = [
-                # Standard imports
-                r"import\s+([\w\.]+(?:\s*,\s*[\w\.]+)*)",
-                # From imports with specific items
-                r"from\s+([\w\.]+)\s+import\s+(?:[\w\*]+(?:\s*,\s*[\w\*]+)*|\((?:[\w\*]+(?:\s*,\s*[\w\*]+)*)\))",
-                # Relative imports
-                r"from\s+(\.*[\w\.]*)\s+import",
-                # Import with aliases
-                r"import\s+([\w\.]+)\s+as\s+\w+",
-                # From import with alias
-                r"from\s+([\w\.]+)\s+import\s+[\w\*]+\s+as\s+\w+",
-            ]
+            # Extract Python imports - non-overlapping patterns
+            # Process imports to avoid double-counting by using one comprehensive regex
 
-            # Process each import pattern
-            for pattern in import_patterns:
+            # Find all import statements
+            all_import_matches = []
+
+            # Standard imports: import module1, module2
+            for match in re.finditer(
+                r"^import\s+([\w\.]+(?:\s*,\s*[\w\.]+)*)\s*(?:$|#)",
+                content,
+                re.MULTILINE,
+            ):
+                modules = [m.strip() for m in match.group(1).split(",")]
+                for module in modules:
+                    all_import_matches.append((module, match.start(), match.end()))
+
+            # Import with alias: import module as alias
+            for match in re.finditer(
+                r"^import\s+([\w\.]+)\s+as\s+\w+\s*(?:$|#)", content, re.MULTILINE
+            ):
+                all_import_matches.append((match.group(1), match.start(), match.end()))
+
+            # From imports: from module import items
+            for match in re.finditer(
+                r"^from\s+([\w\.\*]+)\s+import\s+", content, re.MULTILINE
+            ):
+                all_import_matches.append((match.group(1), match.start(), match.end()))
+
+            # Process all found imports
+            processed_ranges = set()
+            for module, start, end in all_import_matches:
+                # Skip if we've already processed this range (avoid overlaps)
+                range_key = (start, end)
+                if range_key in processed_ranges:
+                    continue
+                processed_ranges.add(range_key)
+
                 try:
-                    matches = re.finditer(pattern, content)
-                    for match in matches:
-                        raw_modules = match.group(1)
-
-                        # Handle comma-separated imports
-                        if "," in raw_modules and "from" not in match.group(0):
-                            modules = [m.strip() for m in raw_modules.split(",")]
-                        else:
-                            modules = [raw_modules]
-
-                        for module in modules:
-                            # Try to resolve the import to a file in the repository
-                            import_paths = self._resolve_python_import(
-                                module, file_path
+                    # Try to resolve the import to a file in the repository
+                    import_paths = self._resolve_python_import(module, file_path)
+                    for import_path in import_paths:
+                        if import_path and import_path in self.file_ids:
+                            # Count this reference
+                            rel_key = (file_path, import_path, "import")
+                            self.relationship_counts[rel_key] = (
+                                self.relationship_counts.get(rel_key, 0) + 1
                             )
-                            for import_path in import_paths:
-                                if import_path and import_path in self.file_ids:
-                                    # Count this reference
-                                    rel_key = (file_path, import_path, "import")
-                                    self.relationship_counts[rel_key] = (
-                                        self.relationship_counts.get(rel_key, 0) + 1
-                                    )
                 except Exception as e:
                     print(
                         f"Error extracting Python relationships from {file_path}: {e}"
