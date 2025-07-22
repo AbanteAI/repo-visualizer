@@ -60,14 +60,19 @@ export const computeNodeMetrics = async (
 
   if (searchTerm && searchTerm.trim()) {
     try {
+      console.log(`🔍 Starting content search for term: "${searchTerm}"`);
       const isBackendAvailable = await apiClient.isAvailable();
 
       if (isBackendAvailable) {
         const filePaths = data.files.map(f => f.path);
+        console.log(`📂 Searching ${filePaths.length} files`);
 
         // Get keyword relevance
         const keywordResults = await apiClient.searchContent(filePaths, searchTerm, 'keyword');
         const semanticResults = await apiClient.searchContent(filePaths, searchTerm, 'semantic');
+
+        console.log(`🎯 Keyword results:`, keywordResults.results.slice(0, 3));
+        console.log(`🧠 Semantic results:`, semanticResults.results.slice(0, 3));
 
         // Build relevance map
         keywordResults.results.forEach(result => {
@@ -79,8 +84,13 @@ export const computeNodeMetrics = async (
           const existing = contentRelevanceMap.get(result.path) || { keyword: 0, semantic: 0 };
           contentRelevanceMap.set(result.path, { ...existing, semantic: result.relevance });
         });
+
+        console.log(`✅ Built relevance map for ${contentRelevanceMap.size} files`);
+      } else {
+        console.warn('🚫 Backend API not available, using path-based search');
       }
     } catch (error) {
+      console.error('❌ Search API error:', error);
       console.warn(
         'Failed to get content-based search results, falling back to path-based search:',
         error
