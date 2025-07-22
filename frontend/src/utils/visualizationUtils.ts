@@ -49,7 +49,7 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
     incomingReferences.set(rel.target, count + 1);
   });
 
-  // Process each file
+  // Process each file and directory
   data.files.forEach(file => {
     const fileMetrics = file.metrics || {};
 
@@ -61,8 +61,11 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       recencyScore = Math.max(0, 1 - daysAgo / 365); // Normalize to 0-1 over a year
     }
 
+    // For directories, use 'directory' as the file_type for categorical coloring
+    const fileType = file.type === 'directory' ? 'directory' : file.extension || 'unknown';
+
     metrics.set(file.id, {
-      file_type: file.extension || 'unknown',
+      file_type: fileType,
       file_size: file.size || 0,
       commit_count: fileMetrics.commitCount || 0,
       recency: recencyScore,
@@ -70,8 +73,8 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       references: incomingReferences.get(file.id) || 0,
     });
 
-    // Add metrics for components (classes, functions, methods)
-    if (file.components) {
+    // Add metrics for components (classes, functions, methods) - only for files, not directories
+    if (file.type === 'file' && file.components) {
       file.components.forEach(component => {
         metrics.set(component.id, {
           file_type: component.type, // Use component type as the categorical value
@@ -183,6 +186,8 @@ export const calculateCategoricalValue = (
 
 // Normalize values to a 0-1 range
 export const normalizeValues = (values: number[]): number[] => {
+  if (values.length === 0) return [];
+
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min;
@@ -199,19 +204,46 @@ export const calculateNodeSize = (
   allNodeMetrics: ComputedNodeMetrics[],
   nodeType: string
 ): number => {
-  if (nodeType === 'directory') {
-    return 10;
-  }
-
   if (nodeType === 'class' || nodeType === 'function' || nodeType === 'method') {
     return 6;
   }
 
-  // Normalize across all nodes
+  // Check if directories should participate in size calculations
+  const sizeMapping = getFeatureMapping(config, 'node_size');
+  const includeDirectoriesInSize = sizeMapping?.includeDirectories ?? true;
+
+  // If directories are excluded, give them a default size
+  if (nodeType === 'directory' && !includeDirectoriesInSize) {
+    return 12; // Fixed reasonable size for directories when excluded
+  }
+
+  // Calculate weighted values for all nodes
   const allWeightedValues = allNodeMetrics.map(m => calculateWeightedValue(m, config, 'node_size'));
-  const normalizedValues = normalizeValues(allWeightedValues);
-  const nodeIndex = allNodeMetrics.indexOf(nodeMetrics);
-  const normalizedValue = normalizedValues[nodeIndex] || 0;
+
+  // Filter values for normalization if directories are excluded
+  let valuesForNormalization = allWeightedValues;
+  let metricsForLookup = allNodeMetrics;
+
+  if (!includeDirectoriesInSize) {
+    // Filter out directory metrics and their corresponding weighted values
+    const filteredData = allNodeMetrics
+      .map((metric, index) => ({ metric, value: allWeightedValues[index], index }))
+      .filter(item => item.metric.file_type !== 'directory');
+
+    valuesForNormalization = filteredData.map(item => item.value);
+    metricsForLookup = filteredData.map(item => item.metric);
+  }
+
+  const normalizedValues = normalizeValues(valuesForNormalization);
+  const nodeIndex = metricsForLookup.indexOf(nodeMetrics);
+  const normalizedValue = nodeIndex >= 0 ? normalizedValues[nodeIndex] || 0 : 0;
+
+  // Directories get a larger size range to make them more prominent
+  if (nodeType === 'directory') {
+    const minRadius = 8;
+    const maxRadius = 20;
+    return minRadius + normalizedValue * (maxRadius - minRadius);
+  }
 
   const minRadius = 5;
   const maxRadius = 15;
@@ -225,14 +257,33 @@ export const calculateNodeColorIntensity = (
   config: VisualizationConfig,
   allNodeMetrics: ComputedNodeMetrics[]
 ): number => {
-  // Normalize across all nodes
+  // Check if directories should participate in color calculations
+  const colorMapping = getFeatureMapping(config, 'node_color');
+  const includeDirectoriesInColor = colorMapping?.includeDirectories ?? true;
+
+  // Calculate weighted values for all nodes
   const allWeightedValues = allNodeMetrics.map(m =>
     calculateWeightedValue(m, config, 'node_color')
   );
-  const normalizedValues = normalizeValues(allWeightedValues);
-  const nodeIndex = allNodeMetrics.indexOf(nodeMetrics);
 
-  return normalizedValues[nodeIndex] || 0;
+  // Filter values for normalization if directories are excluded
+  let valuesForNormalization = allWeightedValues;
+  let metricsForLookup = allNodeMetrics;
+
+  if (!includeDirectoriesInColor) {
+    // Filter out directory metrics and their corresponding weighted values
+    const filteredData = allNodeMetrics
+      .map((metric, index) => ({ metric, value: allWeightedValues[index], index }))
+      .filter(item => item.metric.file_type !== 'directory');
+
+    valuesForNormalization = filteredData.map(item => item.value);
+    metricsForLookup = filteredData.map(item => item.metric);
+  }
+
+  const normalizedValues = normalizeValues(valuesForNormalization);
+  const nodeIndex = metricsForLookup.indexOf(nodeMetrics);
+
+  return nodeIndex >= 0 ? normalizedValues[nodeIndex] || 0 : 0;
 };
 
 // Calculate edge strength based on weighted metrics
@@ -288,9 +339,7 @@ export const getNodeColor = (
   extensionColors: Record<string, string>
 ): string => {
   // Special handling for non-file nodes
-  if (node.type === 'directory') {
-    return '#7f8c8d';
-  } else if (node.type === 'class') {
+  if (node.type === 'class') {
     return '#e67e22';
   } else if (node.type === 'function') {
     return '#3498db';
@@ -298,7 +347,20 @@ export const getNodeColor = (
     return '#9b59b6';
   }
 
+  // Check if directories should participate in color calculations
+  const colorMapping = getFeatureMapping(config, 'node_color');
+  const includeDirectoriesInColor = colorMapping?.includeDirectories ?? true;
+
+  // If directories are excluded from color mapping, use default gray
+  if (node.type === 'directory' && !includeDirectoriesInColor) {
+    return '#7f8c8d'; // Default gray for directories when excluded
+  }
+
   if (!nodeMetrics) {
+    // Fallback colors for nodes without metrics
+    if (node.type === 'directory') {
+      return '#7f8c8d';
+    }
     return extensionColors[node.extension || 'unknown'] || '#aaaaaa';
   }
 
@@ -308,20 +370,22 @@ export const getNodeColor = (
     // Categorical coloring
     const categoryValue = calculateCategoricalValue(nodeMetrics, config, 'node_color');
 
-    // If file_type is active, use extension colors
-    const mapping = getFeatureMapping(config, 'node_color');
-    if (mapping?.dataSourceWeights.file_type > 0) {
+    // If file_type is active, use extension colors for files, special handling for directories
+    if (colorMapping?.dataSourceWeights.file_type > 0) {
+      if (node.type === 'directory') {
+        return '#7f8c8d'; // Keep directories gray when using file type coloring
+      }
       return extensionColors[node.extension || 'unknown'] || '#aaaaaa';
     }
 
-    // For other categorical data, generate distributed colors
+    // For other categorical data, generate distributed colors (including directories if enabled)
     const allCategories = [
       ...new Set(allNodeMetrics.map(m => calculateCategoricalValue(m, config, 'node_color'))),
     ];
     const categoricalColors = generateCategoricalColors(allCategories);
     return categoricalColors[categoryValue] || '#aaaaaa';
   } else {
-    // Continuous coloring (blue to red gradient)
+    // Continuous coloring (blue to red gradient) - includes directories if enabled
     const intensity = calculateNodeColorIntensity(nodeMetrics, config, allNodeMetrics);
 
     // Blue to red gradient
