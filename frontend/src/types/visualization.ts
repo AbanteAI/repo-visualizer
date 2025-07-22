@@ -10,6 +10,7 @@ export interface DataSource {
   defaultWeight: number;
   category: 'file' | 'relationship' | 'git' | 'semantic';
   dataType: 'continuous' | 'categorical';
+  applicableTo: 'node' | 'edge' | 'both';
 }
 
 export interface VisualFeature {
@@ -40,6 +41,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 100,
     category: 'file',
     dataType: 'categorical',
+    applicableTo: 'node',
   },
   {
     id: 'file_size',
@@ -49,6 +51,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 100,
     category: 'file',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'commit_count',
@@ -58,6 +61,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'git',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'recency',
@@ -67,6 +71,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'git',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'identifiers',
@@ -76,6 +81,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'file',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'references',
@@ -85,6 +91,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'relationship',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'semantic_similarity',
@@ -94,6 +101,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 30,
     category: 'semantic',
     dataType: 'continuous',
+    applicableTo: 'edge',
   },
   {
     id: 'filesystem_proximity',
@@ -103,6 +111,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 30,
     category: 'file',
     dataType: 'continuous',
+    applicableTo: 'edge',
   },
   {
     id: 'code_references',
@@ -112,6 +121,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 70,
     category: 'relationship',
     dataType: 'continuous',
+    applicableTo: 'edge',
   },
 ];
 
@@ -146,6 +156,14 @@ export const VISUAL_FEATURES: VisualFeature[] = [
     name: 'Edge Width',
     description: 'Width of the edges',
     icon: '═',
+    category: 'edge',
+    defaultDataSources: ['code_references'],
+  },
+  {
+    id: 'edge_color',
+    name: 'Edge Color',
+    description: 'Color of the edges',
+    icon: '🌈',
     category: 'edge',
     defaultDataSources: ['code_references'],
   },
@@ -198,6 +216,20 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
     },
     {
       featureId: 'edge_width',
+      dataSourceWeights: {
+        file_type: 0,
+        file_size: 0,
+        commit_count: 0,
+        recency: 0,
+        identifiers: 0,
+        references: 0,
+        semantic_similarity: 0,
+        filesystem_proximity: 0,
+        code_references: 100,
+      },
+    },
+    {
+      featureId: 'edge_color',
       dataSourceWeights: {
         file_type: 0,
         file_size: 0,

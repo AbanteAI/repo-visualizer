@@ -347,7 +347,10 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             {/* Active Data Sources */}
             {DATA_SOURCES.filter(ds => {
               const weight = currentMapping?.dataSourceWeights[ds.id] || 0;
-              return weight > 0;
+              const isApplicable = selectedFeatureData
+                ? ds.applicableTo === 'both' || ds.applicableTo === selectedFeatureData.category
+                : true;
+              return weight > 0 && isApplicable;
             }).map(dataSource => {
               const weight = currentMapping?.dataSourceWeights[dataSource.id] || 0;
               return (
@@ -408,7 +411,10 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                 <option value="">+ Add Data Source</option>
                 {DATA_SOURCES.filter(ds => {
                   const weight = currentMapping?.dataSourceWeights[ds.id] || 0;
-                  return weight === 0;
+                  const isApplicable = selectedFeatureData
+                    ? ds.applicableTo === 'both' || ds.applicableTo === selectedFeatureData.category
+                    : true;
+                  return weight === 0 && isApplicable;
                 }).map(dataSource => (
                   <option key={dataSource.id} value={dataSource.id}>
                     {dataSource.name}
@@ -466,7 +472,11 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             {nodeFeatures
               .filter(feature => {
                 const weight = getDataSourceWeight(feature.id, selectedDataSource);
-                return weight > 0;
+                const dataSource = selectedDataSourceData;
+                const isApplicable = dataSource
+                  ? dataSource.applicableTo === 'both' || dataSource.applicableTo === 'node'
+                  : true;
+                return weight > 0 && isApplicable;
               })
               .map(feature => {
                 const weight = getDataSourceWeight(feature.id, selectedDataSource);
@@ -534,7 +544,11 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                 {nodeFeatures
                   .filter(feature => {
                     const weight = getDataSourceWeight(feature.id, selectedDataSource);
-                    return weight === 0;
+                    const dataSource = selectedDataSourceData;
+                    const isApplicable = dataSource
+                      ? dataSource.applicableTo === 'both' || dataSource.applicableTo === 'node'
+                      : true;
+                    return weight === 0 && isApplicable;
                   })
                   .map(feature => (
                     <option key={feature.id} value={feature.id}>
@@ -564,7 +578,11 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             {edgeFeatures
               .filter(feature => {
                 const weight = getDataSourceWeight(feature.id, selectedDataSource);
-                return weight > 0;
+                const dataSource = selectedDataSourceData;
+                const isApplicable = dataSource
+                  ? dataSource.applicableTo === 'both' || dataSource.applicableTo === 'edge'
+                  : true;
+                return weight > 0 && isApplicable;
               })
               .map(feature => {
                 const weight = getDataSourceWeight(feature.id, selectedDataSource);
@@ -632,7 +650,11 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                 {edgeFeatures
                   .filter(feature => {
                     const weight = getDataSourceWeight(feature.id, selectedDataSource);
-                    return weight === 0;
+                    const dataSource = selectedDataSourceData;
+                    const isApplicable = dataSource
+                      ? dataSource.applicableTo === 'both' || dataSource.applicableTo === 'edge'
+                      : true;
+                    return weight === 0 && isApplicable;
                   })
                   .map(feature => (
                     <option key={feature.id} value={feature.id}>
