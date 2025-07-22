@@ -24,7 +24,7 @@ export interface VisualFeature {
 export interface FeatureMapping {
   featureId: string;
   dataSourceWeights: Record<string, number>; // dataSourceId -> weight (0-100)
-  includeDirectories: boolean; // Whether directories should participate in this feature
+  includeDirectories?: boolean; // Whether directories should participate in this feature
 }
 
 export interface VisualizationConfig {
