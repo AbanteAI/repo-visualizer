@@ -186,6 +186,8 @@ export const calculateCategoricalValue = (
 
 // Normalize values to a 0-1 range
 export const normalizeValues = (values: number[]): number[] => {
+  if (values.length === 0) return [];
+
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min;
