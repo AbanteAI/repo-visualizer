@@ -238,7 +238,9 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             <div className="flex flex-col">
               <label className="text-sm font-medium text-gray-700">Include Directories</label>
               <p className="text-xs text-gray-500 mt-1">
-                Whether directories should participate in this visual feature or use default values
+                {currentMapping?.includeDirectories
+                  ? 'Directories participate in this visual feature'
+                  : 'Directories use default values'}
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -251,11 +253,6 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
             </label>
           </div>
-          {!currentMapping?.includeDirectories && (
-            <div className="mt-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
-              ⚠️ Directories will use default values to prevent crowding out files
-            </div>
-          )}
         </div>
       )}
 
