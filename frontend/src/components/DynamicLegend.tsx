@@ -156,24 +156,42 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: NODE_COLORS.DIRECTORY }}
+                style={{
+                  backgroundColor: NODE_COLORS.DIRECTORY,
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  flexShrink: 0,
+                }}
               ></div>
               <span className="text-xs">Directory</span>
             </div>
             {Array.from(usedExtensions).map(ext => (
               <div key={ext} className="flex items-center gap-2">
                 <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: EXTENSION_COLORS[ext] || NODE_COLORS.UNKNOWN }}
+                  style={{
+                    backgroundColor: EXTENSION_COLORS[ext] || NODE_COLORS.UNKNOWN,
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    flexShrink: 0,
+                  }}
                 ></div>
                 <span className="text-xs">.{ext}</span>
               </div>
             ))}
             <div className="flex items-center gap-2">
               <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: NODE_COLORS.UNKNOWN }}
+                style={{
+                  backgroundColor: NODE_COLORS.UNKNOWN,
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  flexShrink: 0,
+                }}
               ></div>
               <span className="text-xs">Other</span>
             </div>
@@ -181,22 +199,40 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
             <div className="pt-2 border-t border-gray-200">
               <div className="flex items-center gap-2">
                 <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: NODE_COLORS.CLASS }}
+                  style={{
+                    backgroundColor: NODE_COLORS.CLASS,
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    flexShrink: 0,
+                  }}
                 ></div>
                 <span className="text-xs">class</span>
               </div>
               <div className="flex items-center gap-2">
                 <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: NODE_COLORS.FUNCTION }}
+                  style={{
+                    backgroundColor: NODE_COLORS.FUNCTION,
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    flexShrink: 0,
+                  }}
                 ></div>
                 <span className="text-xs">function</span>
               </div>
               <div className="flex items-center gap-2">
                 <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: NODE_COLORS.METHOD }}
+                  style={{
+                    backgroundColor: NODE_COLORS.METHOD,
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    flexShrink: 0,
+                  }}
                 ></div>
                 <span className="text-xs">method</span>
               </div>
@@ -215,8 +251,14 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
             {allCategories.map(category => (
               <div key={category} className="flex items-center gap-2">
                 <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: categoricalColors[category] || '#aaaaaa' }}
+                  style={{
+                    backgroundColor: categoricalColors[category] || NODE_COLORS.UNKNOWN,
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    flexShrink: 0,
+                  }}
                 ></div>
                 <span className="text-xs">{category}</span>
               </div>
@@ -232,22 +274,40 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <div
-                className="w-4 h-3 rounded-sm"
-                style={{ backgroundColor: 'rgb(0, 64, 255)' }} // Low intensity (blue)
+                style={{
+                  backgroundColor: 'rgb(0, 64, 255)',
+                  width: '16px',
+                  height: '12px',
+                  borderRadius: '2px',
+                  display: 'inline-block',
+                  flexShrink: 0,
+                }}
               ></div>
               <span className="text-xs text-gray-500">Low</span>
             </div>
             <div className="flex items-center gap-2">
               <div
-                className="w-4 h-3 rounded-sm"
-                style={{ backgroundColor: 'rgb(128, 128, 128)' }} // Medium intensity (gray)
+                style={{
+                  backgroundColor: 'rgb(128, 128, 128)',
+                  width: '16px',
+                  height: '12px',
+                  borderRadius: '2px',
+                  display: 'inline-block',
+                  flexShrink: 0,
+                }}
               ></div>
               <span className="text-xs text-gray-500">Medium</span>
             </div>
             <div className="flex items-center gap-2">
               <div
-                className="w-4 h-3 rounded-sm"
-                style={{ backgroundColor: 'rgb(255, 64, 0)' }} // High intensity (red)
+                style={{
+                  backgroundColor: 'rgb(255, 64, 0)',
+                  width: '16px',
+                  height: '12px',
+                  borderRadius: '2px',
+                  display: 'inline-block',
+                  flexShrink: 0,
+                }}
               ></div>
               <span className="text-xs text-gray-500">High</span>
             </div>
@@ -267,33 +327,42 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <div
-              className="rounded-full border border-gray-300"
               style={{
                 width: '6px',
                 height: '6px',
                 backgroundColor: '#4f46e5',
+                borderRadius: '50%',
+                border: '1px solid #d1d5db',
+                display: 'inline-block',
+                flexShrink: 0,
               }}
             ></div>
             <span className="text-xs text-gray-500">Small</span>
           </div>
           <div className="flex items-center gap-3">
             <div
-              className="rounded-full border border-gray-300"
               style={{
                 width: '10px',
                 height: '10px',
                 backgroundColor: '#4f46e5',
+                borderRadius: '50%',
+                border: '1px solid #d1d5db',
+                display: 'inline-block',
+                flexShrink: 0,
               }}
             ></div>
             <span className="text-xs text-gray-500">Medium</span>
           </div>
           <div className="flex items-center gap-3">
             <div
-              className="rounded-full border border-gray-300"
               style={{
                 width: '15px',
                 height: '15px',
                 backgroundColor: '#4f46e5',
+                borderRadius: '50%',
+                border: '1px solid #d1d5db',
+                display: 'inline-block',
+                flexShrink: 0,
               }}
             ></div>
             <span className="text-xs text-gray-500">Large</span>
