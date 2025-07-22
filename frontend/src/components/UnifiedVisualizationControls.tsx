@@ -728,10 +728,10 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                   ...config,
                   mappings: config.mappings.map(mapping =>
                     mapping.featureId === selectedFeature
-                      ? { 
-                          ...mapping, 
+                      ? {
+                          ...mapping,
                           dataSourceWeights: resetWeights,
-                          includeDirectories: defaultIncludeDirectories
+                          includeDirectories: defaultIncludeDirectories,
                         }
                       : mapping
                   ),
