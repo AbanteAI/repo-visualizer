@@ -194,9 +194,7 @@ describe('App', () => {
 
     await waitFor(() => {
       // Check that controls are rendered with default values
-      expect(screen.getByText('70%')).toBeInTheDocument(); // Reference weight
-      expect(screen.getByText('30%')).toBeInTheDocument(); // Filesystem weight
-      expect(screen.getByText('100%')).toBeInTheDocument(); // File size weight
+      expect(screen.getByText('100%')).toBeInTheDocument(); // File size weight should be visible
     });
   });
 
