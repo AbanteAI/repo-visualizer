@@ -472,6 +472,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           return calculateEdgeWidth(linkMetric, config, d.type);
         });
 
+      // Add tooltips to edges showing reference counts
+      link.append('title').text(d => {
+        const sourceName = (d.source as any).name || (d.source as any).id || d.source;
+        const targetName = (d.target as any).name || (d.target as any).id || d.target;
+        const strength = d.originalStrength || 1;
+        const referenceText = strength > 1 ? `${strength} references` : '1 reference';
+
+        return `${sourceName} → ${targetName}\nType: ${d.type}\nReferences: ${referenceText}`;
+      });
+
       // Create node groups (to hold both circles and expand/collapse indicators)
       const nodeGroups = g
         .append('g')

@@ -61,6 +61,7 @@ class RepositoryAnalyzer:
         self.data = create_empty_schema()
         self.file_ids: Set[str] = set()
         self.relationships: List[Relationship] = []
+        self.relationship_counts: Dict[Tuple[str, str, str], int] = {}
 
         # Load gitignore patterns
         self.gitignore_spec = self._load_gitignore_patterns()
@@ -1076,19 +1077,11 @@ class RepositoryAnalyzer:
                             )
                             for import_path in import_paths:
                                 if import_path and import_path in self.file_ids:
-                                    relationship: Relationship = {
-                                        "source": file_path,
-                                        "target": import_path,
-                                        "type": "import",
-                                    }
-                                    # Check if this relationship already exists
-                                    if not any(
-                                        r["source"] == relationship["source"]
-                                        and r["target"] == relationship["target"]
-                                        and r["type"] == relationship["type"]
-                                        for r in self.relationships
-                                    ):
-                                        self.relationships.append(relationship)
+                                    # Count this reference
+                                    rel_key = (file_path, import_path, "import")
+                                    self.relationship_counts[rel_key] = (
+                                        self.relationship_counts.get(rel_key, 0) + 1
+                                    )
                 except Exception as e:
                     print(
                         f"Error extracting Python relationships from {file_path}: {e}"
@@ -1119,19 +1112,11 @@ class RepositoryAnalyzer:
                         # Try to resolve the import to a file in the repository
                         import_path = self._resolve_js_import(module, file_path)
                         if import_path and import_path in self.file_ids:
-                            relationship: Relationship = {
-                                "source": file_path,
-                                "target": import_path,
-                                "type": "import",
-                            }
-                            # Check if this relationship already exists
-                            if not any(
-                                r["source"] == relationship["source"]
-                                and r["target"] == relationship["target"]
-                                and r["type"] == relationship["type"]
-                                for r in self.relationships
-                            ):
-                                self.relationships.append(relationship)
+                            # Count this reference
+                            rel_key = (file_path, import_path, "import")
+                            self.relationship_counts[rel_key] = (
+                                self.relationship_counts.get(rel_key, 0) + 1
+                            )
                 except Exception as e:
                     print(f"Error extracting JS/TS relationships from {file_path}: {e}")
 
@@ -1171,13 +1156,17 @@ class RepositoryAnalyzer:
                                 comp_content = "\n".join(
                                     lines[comp_start - 1 : comp_end]
                                 )
-                                if re.search(call_pattern, comp_content):
-                                    self.relationships.append(
-                                        {
-                                            "source": component["id"],
-                                            "target": other_comp["id"],
-                                            "type": "call",
-                                        }
+                                # Count all occurrences of the function call
+                                call_matches = re.findall(call_pattern, comp_content)
+                                if call_matches:
+                                    rel_key = (
+                                        component["id"],
+                                        other_comp["id"],
+                                        "call",
+                                    )
+                                    self.relationship_counts[rel_key] = (
+                                        self.relationship_counts.get(rel_key, 0)
+                                        + len(call_matches)
                                     )
         except Exception as e:
             print(f"Error extracting Python function calls from {file_path}: {e}")
@@ -1458,17 +1447,27 @@ class RepositoryAnalyzer:
         # Add component nodes to files list
         self.data["files"].extend(component_nodes)
 
-        # De-duplicate relationships
-        unique_relationships = []
-        relationship_keys = set()
+        # Convert relationship counts to relationships with strength
+        final_relationships = []
 
+        # Add counted relationships with strength values
+        for (source, target, rel_type), count in self.relationship_counts.items():
+            final_relationships.append(
+                {
+                    "source": source,
+                    "target": target,
+                    "type": rel_type,
+                    "strength": count,
+                }
+            )
+
+        # Add other relationships that weren't counted (like filesystem proximity)
         for rel in self.relationships:
-            key = f"{rel['source']}|{rel['target']}|{rel['type']}"
-            if key not in relationship_keys:
-                relationship_keys.add(key)
-                unique_relationships.append(rel)
+            rel_key = (rel["source"], rel["target"], rel["type"])
+            if rel_key not in self.relationship_counts:
+                final_relationships.append(rel)
 
-        self.data["relationships"] = unique_relationships
+        self.data["relationships"] = final_relationships
 
     def _add_filesystem_relationships(self) -> None:
         """Add relationships between files based on filesystem proximity."""
