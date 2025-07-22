@@ -3,7 +3,6 @@ import {
   VisualizationConfig,
   getFeatureMapping,
   DATA_SOURCES,
-  VisualFeature,
   VISUAL_FEATURES,
 } from '../types/visualization';
 

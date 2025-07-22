@@ -504,9 +504,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('cursor', 'pointer')
         .call(dragBehavior(simulation));
 
-      // Get all node metrics for normalization (compute once per render)
-      const allNodeMetrics = Array.from(nodeMetrics.values());
-
       // Create circles for nodes
       const node = nodeGroups
         .append('circle')
@@ -624,7 +621,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       expandedFiles,
       toggleNodeExpansion,
       hasComponents,
-      config,
+      config.mappings,
+      config.nodeThreshold,
+      config.edgeThreshold,
       nodeMetrics,
       linkMetrics,
     ]);
