@@ -18,10 +18,7 @@ import {
   computeLinkMetrics,
   calculateNodeSize,
   calculateEdgeStrength,
-  calculateEdgeWidth,
-  calculateEdgeColor,
   getNodeColor,
-  getLinkColor,
 } from '../../utils/visualizationUtils';
 
 interface RepositoryGraphProps {
