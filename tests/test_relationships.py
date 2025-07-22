@@ -280,15 +280,18 @@ from config import settings as s
             analyzer._extract_file_relationships(python_content, "test.py", "py")
 
             # Check the relationship counts were created
-            # utils is referenced 3 times: import utils, from utils import helper, import utils as u
+            # utils is referenced 3 times: import utils, from utils import helper,
+            # import utils as u
             assert ("test.py", "utils.py", "import") in analyzer.relationship_counts
             assert analyzer.relationship_counts[("test.py", "utils.py", "import")] == 3
 
-            # models is referenced 2 times: import models, config (comma-separated), from models import User, Admin
+            # models is referenced 2 times: import models, config (comma-separated),
+            # from models import User, Admin
             assert ("test.py", "models.py", "import") in analyzer.relationship_counts
             assert analyzer.relationship_counts[("test.py", "models.py", "import")] == 2
 
-            # config is referenced 2 times: import models, config (comma-separated), from config import settings as s
+            # config is referenced 2 times: import models, config (comma-separated),
+            # from config import settings as s
             assert ("test.py", "config.py", "import") in analyzer.relationship_counts
             assert analyzer.relationship_counts[("test.py", "config.py", "import")] == 1
 
