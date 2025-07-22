@@ -433,7 +433,28 @@ export const getNodeColor = (
   }
 };
 
-// Helper function to get link color based on type
+// Calculate edge color based on weighted metrics
+export const calculateEdgeColor = (
+  linkMetrics: ComputedLinkMetrics,
+  config: VisualizationConfig,
+  linkType: string
+): string => {
+  const weightedValue = calculateWeightedValue(linkMetrics, config, 'edge_color');
+
+  // If no configuration is set, fall back to type-based colors
+  if (weightedValue === 0) {
+    return getLinkColor(linkType);
+  }
+
+  // Create a color gradient based on weighted value (blue to red)
+  const red = Math.round(255 * weightedValue);
+  const blue = Math.round(255 * (1 - weightedValue));
+  const green = Math.round(128 * (1 - Math.abs(weightedValue - 0.5) * 2));
+
+  return `rgb(${red}, ${green}, ${blue})`;
+};
+
+// Helper function to get link color based on type (fallback)
 export const getLinkColor = (linkType: string): string => {
   switch (linkType) {
     case 'filesystem_proximity':

@@ -19,6 +19,7 @@ import {
   calculateNodeSize,
   calculateEdgeStrength,
   calculateEdgeWidth,
+  calculateEdgeColor,
   getNodeColor,
   getLinkColor,
 } from '../../utils/visualizationUtils';
@@ -455,7 +456,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .data(links)
         .enter()
         .append('line')
-        .attr('stroke', d => getLinkColor(d.type))
+        .attr('stroke', d => {
+          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+          const linkMetric = linkMetrics.get(linkKey) ?? {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: d.type === 'contains' ? 1 : 0,
+          };
+          return calculateEdgeColor(linkMetric, config, d.type);
+        })
         .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', d => {
           const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -735,7 +744,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           enter =>
             enter
               .append('line')
-              .attr('stroke', (d: Link) => getLinkColor(d.type))
+              .attr('stroke', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeColor(linkMetric, config, d.type);
+              })
               .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
               .attr('stroke-width', (d: Link) => {
                 const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -748,7 +765,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               }),
           update =>
             update
-              .attr('stroke', (d: Link) => getLinkColor(d.type))
+              .attr('stroke', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeColor(linkMetric, config, d.type);
+              })
               .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
               .attr('stroke-width', (d: Link) => {
                 const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
