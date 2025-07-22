@@ -1,5 +1,6 @@
 import { RepositoryData } from '../types/schema';
 import { VisualizationConfig, getFeatureMapping, DATA_SOURCES } from '../types/visualization';
+import apiClient from './apiClient';
 
 export interface NodeData {
   id: string;
@@ -41,10 +42,10 @@ export interface ComputedLinkMetrics {
 }
 
 // Compute metrics for all nodes from repository data
-export const computeNodeMetrics = (
+export const computeNodeMetrics = async (
   data: RepositoryData,
   searchTerm?: string
-): Map<string, ComputedNodeMetrics> => {
+): Promise<Map<string, ComputedNodeMetrics>> => {
   const metrics = new Map<string, ComputedNodeMetrics>();
 
   // Calculate incoming references count
@@ -53,6 +54,39 @@ export const computeNodeMetrics = (
     const count = incomingReferences.get(rel.target) || 0;
     incomingReferences.set(rel.target, count + 1);
   });
+
+  // If we have a search term, get content-based relevance scores
+  const contentRelevanceMap: Map<string, { keyword: number; semantic: number }> = new Map();
+
+  if (searchTerm && searchTerm.trim()) {
+    try {
+      const isBackendAvailable = await apiClient.isAvailable();
+
+      if (isBackendAvailable) {
+        const filePaths = data.files.map(f => f.path);
+
+        // Get keyword relevance
+        const keywordResults = await apiClient.searchContent(filePaths, searchTerm, 'keyword');
+        const semanticResults = await apiClient.searchContent(filePaths, searchTerm, 'semantic');
+
+        // Build relevance map
+        keywordResults.results.forEach(result => {
+          const existing = contentRelevanceMap.get(result.path) || { keyword: 0, semantic: 0 };
+          contentRelevanceMap.set(result.path, { ...existing, keyword: result.relevance });
+        });
+
+        semanticResults.results.forEach(result => {
+          const existing = contentRelevanceMap.get(result.path) || { keyword: 0, semantic: 0 };
+          contentRelevanceMap.set(result.path, { ...existing, semantic: result.relevance });
+        });
+      }
+    } catch (error) {
+      console.warn(
+        'Failed to get content-based search results, falling back to path-based search:',
+        error
+      );
+    }
+  }
 
   // Process each file
   data.files.forEach(file => {
@@ -66,6 +100,19 @@ export const computeNodeMetrics = (
       recencyScore = Math.max(0, 1 - daysAgo / 365); // Normalize to 0-1 over a year
     }
 
+    // Get content-based relevance or fallback to path-based
+    const contentRelevance = contentRelevanceMap.get(file.path);
+    const keywordRelevance =
+      contentRelevance?.keyword ??
+      (searchTerm
+        ? calculateKeywordRelevance(file.path, searchTerm)
+        : (fileMetrics.custom?.keywordRelevance as number) || 0);
+    const semanticRelevance =
+      contentRelevance?.semantic ??
+      (searchTerm
+        ? calculateSemanticRelevance(file.path, searchTerm)
+        : (fileMetrics.custom?.semanticRelevance as number) || 0);
+
     metrics.set(file.id, {
       file_type: file.extension || 'unknown',
       file_size: file.size || 0,
@@ -73,17 +120,14 @@ export const computeNodeMetrics = (
       recency: recencyScore,
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
-      keyword_search: searchTerm
-        ? calculateKeywordRelevance(file.path, searchTerm)
-        : (fileMetrics.custom?.keywordRelevance as number) || 0,
-      semantic_search: searchTerm
-        ? calculateSemanticRelevance(file.path, searchTerm)
-        : (fileMetrics.custom?.semanticRelevance as number) || 0,
+      keyword_search: keywordRelevance,
+      semantic_search: semanticRelevance,
     });
 
     // Add metrics for components (classes, functions, methods)
     if (file.components) {
       file.components.forEach(component => {
+        // For components, use the parent file's content relevance (since components are part of the file)
         metrics.set(component.id, {
           file_type: component.type, // Use component type as the categorical value
           file_size: file.size || 0, // Use parent file size
@@ -91,12 +135,8 @@ export const computeNodeMetrics = (
           recency: recencyScore,
           identifiers: fileMetrics.topLevelIdentifiers || 0,
           references: incomingReferences.get(component.id) || 0,
-          keyword_search: searchTerm
-            ? calculateKeywordRelevance(component.name, searchTerm)
-            : (fileMetrics.custom?.keywordRelevance as number) || 0,
-          semantic_search: searchTerm
-            ? calculateSemanticRelevance(component.name, searchTerm)
-            : (fileMetrics.custom?.semanticRelevance as number) || 0,
+          keyword_search: keywordRelevance,
+          semantic_search: semanticRelevance,
         });
       });
     }
