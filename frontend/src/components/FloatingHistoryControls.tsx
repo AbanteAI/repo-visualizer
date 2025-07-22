@@ -137,12 +137,14 @@ const FloatingHistoryControls: React.FC<FloatingHistoryControlsProps> = ({
   return (
     <div
       ref={panelRef}
-      className="fixed bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50 select-none"
+      className="fixed bg-white border border-gray-300 rounded-lg shadow-lg p-4 select-none"
       style={{
         left: position.x,
         top: position.y,
         width: '320px',
         cursor: isDragging ? 'grabbing' : 'grab',
+        zIndex: 9999,
+        position: 'fixed',
       }}
       onMouseDown={handleMouseDown}
     >

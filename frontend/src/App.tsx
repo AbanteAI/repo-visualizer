@@ -193,13 +193,12 @@ const App: React.FC = () => {
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', height: '80vh' }}>
               <div
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  flex: 1,
-                  minHeight: 0,
+                  height: '100%',
                   position: 'relative',
                 }}
               >

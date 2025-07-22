@@ -152,52 +152,54 @@ export const HistoryVisualization: React.FC<HistoryVisualizationProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 relative">
-        {/* Add a subtle overlay during transitions */}
-        {isTransitioning && (
-          <div className="absolute inset-0 bg-white bg-opacity-10 z-10 pointer-events-none transition-opacity duration-300" />
-        )}
+    <>
+      <div className="flex flex-col h-full">
+        <div className="flex-1 relative">
+          {/* Add a subtle overlay during transitions */}
+          {isTransitioning && (
+            <div className="absolute inset-0 bg-white bg-opacity-10 z-10 pointer-events-none transition-opacity duration-300" />
+          )}
 
-        <RepositoryGraph ref={repositoryGraphRef} {...graphProps} />
+          <RepositoryGraph ref={repositoryGraphRef} {...graphProps} />
 
-        {/* Timeline indicator overlay */}
-        {hasHistory && (
-          <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white px-3 py-2 rounded-lg text-sm font-mono">
-            {timelinePoints[currentTimelineIndex]?.commitId.substring(0, 8) || 'Unknown'}
-            {isPlaying && <span className="ml-2 animate-pulse">▶</span>}
-          </div>
-        )}
+          {/* Timeline indicator overlay */}
+          {hasHistory && (
+            <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white px-3 py-2 rounded-lg text-sm font-mono">
+              {timelinePoints[currentTimelineIndex]?.commitId.substring(0, 8) || 'Unknown'}
+              {isPlaying && <span className="ml-2 animate-pulse">▶</span>}
+            </div>
+          )}
 
-        {/* History Controls Toggle Button */}
-        {hasHistory && !showHistoryControls && (
-          <button
-            onClick={() => setShowHistoryControls(true)}
-            className="absolute bottom-4 left-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg font-medium text-sm"
-            title="Show History Controls"
-          >
-            🕰️ History Controls
-          </button>
-        )}
-
-        {/* Floating History Controls */}
-        {hasHistory && showHistoryControls && (
-          <FloatingHistoryControls
-            data={data}
-            currentTimelineIndex={currentTimelineIndex}
-            onTimelineChange={handleTimelineChange}
-            isPlaying={isPlaying}
-            onPlay={handlePlay}
-            onPause={handlePause}
-            animationSpeed={animationSpeed}
-            onSpeedChange={setAnimationSpeed}
-            onBranchChange={handleBranchChange}
-            currentBranch={currentBranch}
-            onClose={() => setShowHistoryControls(false)}
-          />
-        )}
+          {/* History Controls Toggle Button */}
+          {hasHistory && !showHistoryControls && (
+            <button
+              onClick={() => setShowHistoryControls(true)}
+              className="absolute bottom-4 left-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg font-medium text-sm"
+              title="Show History Controls"
+            >
+              🕰️ History Controls
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Floating History Controls - Render at top level outside of layout */}
+      {hasHistory && showHistoryControls && (
+        <FloatingHistoryControls
+          data={data}
+          currentTimelineIndex={currentTimelineIndex}
+          onTimelineChange={handleTimelineChange}
+          isPlaying={isPlaying}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          animationSpeed={animationSpeed}
+          onSpeedChange={setAnimationSpeed}
+          onBranchChange={handleBranchChange}
+          currentBranch={currentBranch}
+          onClose={() => setShowHistoryControls(false)}
+        />
+      )}
+    </>
   );
 };
 
