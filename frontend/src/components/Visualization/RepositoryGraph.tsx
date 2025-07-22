@@ -501,7 +501,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
       // Create circles for nodes
-      const node = nodeGroups
+      nodeGroups
         .append('circle')
         .attr('class', 'node')
         .attr('r', d => {
