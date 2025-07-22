@@ -132,6 +132,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'semantic',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'semantic_search',
@@ -141,6 +142,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'semantic',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
 ];
 
