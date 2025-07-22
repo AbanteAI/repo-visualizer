@@ -131,6 +131,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'file',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
 ];
 
