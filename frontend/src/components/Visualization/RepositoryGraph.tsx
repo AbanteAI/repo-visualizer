@@ -23,7 +23,6 @@ import {
   getNodeColor,
   getLinkColor,
 } from '../../utils/visualizationUtils';
-import { getSkeletonConfig } from '../../types/visualization';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
@@ -609,11 +608,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Create legend
       createLegend(svg, width, data, extensionColors);
-
-      // Store references for weight updates
-      (simulation as any).__linkSelection = link;
-      (simulation as any).__nodeSelection = node;
-      (simulation as any).__labelSelection = label;
 
       // Clean up on unmount
       return () => {
