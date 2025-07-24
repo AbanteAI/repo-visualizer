@@ -706,7 +706,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       expandedFiles,
       toggleNodeExpansion,
       hasComponents,
-      config.mappings,
+      config?.mappings,
       nodeMetrics,
       linkMetrics,
     ]);
