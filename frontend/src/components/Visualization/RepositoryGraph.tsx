@@ -19,7 +19,6 @@ import {
   calculateNodeSize,
   calculateEdgeStrength,
   getNodeColor,
-  getLinkColor,
   calculatePieChartData,
   isPieChartEnabled,
 } from '../../utils/visualizationUtils';
