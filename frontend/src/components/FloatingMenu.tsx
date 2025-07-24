@@ -40,25 +40,7 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, elementX: 0, elementY: 0 });
   const [resizeStart, setResizeStart] = useState({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
-  const [isInitialized, setIsInitialized] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // Initialize position
-  useEffect(() => {
-    const initializePosition = () => {
-      if (menuRef.current) {
-        setPosition(initialPosition);
-        setIsInitialized(true);
-      }
-    };
-
-    if (!isInitialized) {
-      initializePosition();
-      if (!isInitialized) {
-        setTimeout(initializePosition, 100);
-      }
-    }
-  }, [isInitialized, initialPosition]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!menuRef.current) return;
@@ -145,7 +127,7 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   // Handle window resize to keep menu visible
   useEffect(() => {
     const handleResize = () => {
-      if (menuRef.current && isInitialized) {
+      if (menuRef.current) {
         const parent = menuRef.current.parentElement;
         if (parent) {
           const maxX = Math.max(0, parent.offsetWidth - size.width);
@@ -161,7 +143,7 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isInitialized, size.width, size.height]);
+  }, [size.width, size.height]);
 
   useEffect(() => {
     if (isDragging || isResizing) {
@@ -181,8 +163,8 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
       onMouseDown={handleMouseDown}
       style={{
         position: 'absolute',
-        left: isInitialized ? position.x : initialPosition.x,
-        top: isInitialized ? position.y : initialPosition.y,
+        left: position.x,
+        top: position.y,
         width: size.width,
         height: size.height,
         pointerEvents: 'auto',
