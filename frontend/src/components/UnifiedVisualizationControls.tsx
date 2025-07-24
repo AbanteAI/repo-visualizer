@@ -94,7 +94,7 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
     <FloatingMenu
       title="Visualization Controls"
       titleColor="indigo-500"
-      initialPosition={{ x: window.innerWidth - 380, y: 20 }}
+      initialPosition={{ x: typeof window !== 'undefined' ? window.innerWidth - 380 : 100, y: 20 }}
       initialSize={{ width: 360, height: 700 }}
       minSize={{ width: 320, height: 500 }}
       maxSize={{ width: 500, height: 900 }}

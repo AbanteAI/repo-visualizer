@@ -57,7 +57,7 @@ const FileDetails: React.FC<FileDetailsProps> = ({ fileId, data, onClose }) => {
     <FloatingMenu
       title="File Details"
       titleColor="green-500"
-      initialPosition={{ x: window.innerWidth - 340, y: 20 }}
+      initialPosition={{ x: typeof window !== 'undefined' ? window.innerWidth - 340 : 100, y: 20 }}
       initialSize={{ width: 320, height: 600 }}
       minSize={{ width: 280, height: 400 }}
       maxSize={{ width: 500, height: 800 }}

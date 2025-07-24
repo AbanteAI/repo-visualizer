@@ -13,6 +13,15 @@ interface FloatingMenuProps {
   className?: string;
 }
 
+const TITLE_COLORS: Record<string, string> = {
+  'blue-500': '#3b82f6',
+  'indigo-500': '#6366f1',
+  'purple-500': '#a855f7',
+  'green-500': '#22c55e',
+  'red-500': '#ef4444',
+  'yellow-500': '#eab308',
+};
+
 const FloatingMenu: React.FC<FloatingMenuProps> = ({
   title,
   titleColor = 'blue-500',
@@ -207,24 +216,7 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
         <h3
           className="text-xl font-bold text-gray-900 border-b-2 pb-1"
           style={{
-            borderBottomColor: (() => {
-              switch (titleColor) {
-                case 'blue-500':
-                  return '#3b82f6';
-                case 'indigo-500':
-                  return '#6366f1';
-                case 'purple-500':
-                  return '#a855f7';
-                case 'green-500':
-                  return '#22c55e';
-                case 'red-500':
-                  return '#ef4444';
-                case 'yellow-500':
-                  return '#eab308';
-                default:
-                  return '#6b7280';
-              }
-            })(),
+            borderBottomColor: TITLE_COLORS[titleColor] || '#6b7280',
           }}
         >
           {title}

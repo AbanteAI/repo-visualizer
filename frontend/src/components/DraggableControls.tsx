@@ -24,7 +24,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
     <FloatingMenu
       title="Connection Weights"
       titleColor="blue-500"
-      initialPosition={{ x: window.innerWidth - 300, y: 20 }}
+      initialPosition={{ x: typeof window !== 'undefined' ? window.innerWidth - 300 : 100, y: 20 }}
       initialSize={{ width: 280, height: 350 }}
       minSize={{ width: 250, height: 300 }}
       onClose={onClose}
