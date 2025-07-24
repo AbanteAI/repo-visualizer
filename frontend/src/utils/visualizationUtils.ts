@@ -451,6 +451,9 @@ export const isNodeVisible = (
   allNodeMetrics: ComputedNodeMetrics[],
   nodeType: string
 ): boolean => {
+  // Handle undefined config (e.g., in tests)
+  if (!config) return true;
+
   // Always show special node types (directories, components)
   if (
     nodeType === 'directory' ||
@@ -510,6 +513,9 @@ export const isEdgeVisible = (
   config: VisualizationConfig,
   linkType: string
 ): boolean => {
+  // Handle undefined config (e.g., in tests)
+  if (!config) return true;
+
   // Always show contains relationships
   if (linkType === 'contains') {
     return true;
