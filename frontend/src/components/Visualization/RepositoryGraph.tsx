@@ -150,6 +150,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const originalNodesRef = useRef<Node[]>([]);
     const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
     const [nodeMetrics, setNodeMetrics] = useState<Map<string, ComputedNodeMetrics>>(new Map());
@@ -478,6 +479,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       const links = createLinks();
 
+      // Store original nodes for threshold filtering
+      originalNodesRef.current = nodes;
+
       // Create a force simulation
       const simulation = d3
         .forceSimulation<Node>(nodes)
@@ -755,8 +759,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       if (!linkSelection || !nodeSelection) return;
 
-      // Get current nodes and apply threshold filtering
-      const nodes = simulation.nodes();
+      // Get original nodes and apply threshold filtering
+      const nodes = originalNodesRef.current;
       const currentNodeMetrics = Array.from(nodeMetrics.values());
 
       // Filter nodes based on thresholds while preserving positions
