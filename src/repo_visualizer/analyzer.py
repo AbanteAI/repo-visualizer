@@ -1863,7 +1863,8 @@ class RepositoryAnalyzer:
                     "timelinePoints": timeline_points,
                 }
                 print(
-                    f"Analyzed {len(commits)} commits with {len(timeline_points)} timeline points"
+                    f"Analyzed {len(commits)} commits with "
+                    f"{len(timeline_points)} timeline points"
                 )
 
         finally:
@@ -2224,7 +2225,8 @@ class RepositoryAnalyzer:
         for i, commit in enumerate(commits):
             try:
                 print(
-                    f"Analyzing commit {i + 1}/{len(commits)}: {commit['id'][:8]} - {commit['message'][:50]}..."
+                    f"Analyzing commit {i + 1}/{len(commits)}: "
+                    f"{commit['id'][:8]} - {commit['message'][:50]}..."
                 )
 
                 # Checkout this specific commit

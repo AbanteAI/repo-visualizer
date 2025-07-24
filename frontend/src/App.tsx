@@ -19,7 +19,7 @@ const App: React.FC = () => {
   const [config, setConfig] = useState<VisualizationConfig>(DEFAULT_CONFIG);
   const [showControls, setShowControls] = useState(true);
   const [showLegend, setShowLegend] = useState(false);
-  
+
   // Timeline state
   const [currentTimelineIndex, setCurrentTimelineIndex] = useState(-1); // -1 means current state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -107,7 +107,7 @@ const App: React.FC = () => {
 
   const handlePlay = useCallback(() => {
     if (!repositoryData?.history) return;
-    
+
     if (currentTimelineIndex >= repositoryData.history.timelinePoints.length - 1) {
       // If at the end, start from beginning
       setCurrentTimelineIndex(0);
@@ -158,7 +158,7 @@ const App: React.FC = () => {
   // Get the current visualization data based on timeline position
   const getCurrentVisualizationData = useCallback((): RepositoryData | null => {
     if (!repositoryData) return null;
-    
+
     // If no timeline or showing current state
     if (currentTimelineIndex === -1 || !repositoryData.history) {
       return repositoryData;
@@ -404,10 +404,16 @@ const App: React.FC = () => {
                           fontSize: '12px',
                           fontWeight: '500',
                         }}
-                        title={currentTimelineIndex === -1 ? 'Current state' : `Historical view: commit ${currentTimelineIndex + 1}`}
+                        title={
+                          currentTimelineIndex === -1
+                            ? 'Current state'
+                            : `Historical view: commit ${currentTimelineIndex + 1}`
+                        }
                       >
                         {currentTimelineIndex === -1 ? '●' : '🕒'}
-                        {currentTimelineIndex === -1 ? 'LIVE' : `${currentTimelineIndex + 1}/${repositoryData?.history?.timelinePoints.length || 0}`}
+                        {currentTimelineIndex === -1
+                          ? 'LIVE'
+                          : `${currentTimelineIndex + 1}/${repositoryData?.history?.timelinePoints.length || 0}`}
                       </div>
                     )}
                   </div>

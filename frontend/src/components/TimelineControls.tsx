@@ -27,9 +27,7 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
   if (!history || history.timelinePoints.length === 0) {
     return (
       <div className="bg-gray-100 border-t border-gray-200 p-4">
-        <div className="text-center text-gray-500">
-          No historical data available
-        </div>
+        <div className="text-center text-gray-500">No historical data available</div>
       </div>
     );
   }
@@ -56,7 +54,8 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
 
   const goToFirst = () => onTimelineChange(0);
   const goToPrevious = () => onTimelineChange(Math.max(0, currentTimelineIndex - 1));
-  const goToNext = () => onTimelineChange(Math.min(timelinePoints.length - 1, currentTimelineIndex + 1));
+  const goToNext = () =>
+    onTimelineChange(Math.min(timelinePoints.length - 1, currentTimelineIndex + 1));
   const goToLast = () => onTimelineChange(timelinePoints.length - 1);
 
   const speedOptions = [0.25, 0.5, 1, 2, 4, 8];
@@ -83,9 +82,7 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
           </div>
         )}
         {currentPoint?.state?.author && (
-          <div className="text-xs text-gray-500">
-            by {currentPoint.state.author}
-          </div>
+          <div className="text-xs text-gray-500">by {currentPoint.state.author}</div>
         )}
       </div>
 
@@ -119,7 +116,7 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
         >
           ⏮
         </button>
-        
+
         <button
           onClick={goToPrevious}
           disabled={currentTimelineIndex === 0}
@@ -146,7 +143,7 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
         >
           ⏩
         </button>
-        
+
         <button
           onClick={goToLast}
           disabled={currentTimelineIndex === timelinePoints.length - 1}
@@ -161,10 +158,10 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
           <span className="text-xs text-gray-600">Speed:</span>
           <select
             value={playbackSpeed}
-            onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
+            onChange={e => onSpeedChange(parseFloat(e.target.value))}
             className="text-xs border border-gray-300 rounded px-1 py-1"
           >
-            {speedOptions.map((speed) => (
+            {speedOptions.map(speed => (
               <option key={speed} value={speed}>
                 {speed}x
               </option>
@@ -178,8 +175,8 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
         Commit: {currentPoint?.commitId?.substring(0, 8) || 'Unknown'}
         {currentPoint?.snapshot && (
           <span className="ml-4">
-            Files: {currentPoint.snapshot.files?.length || 0} | 
-            Relationships: {currentPoint.snapshot.relationships?.length || 0}
+            Files: {currentPoint.snapshot.files?.length || 0} | Relationships:{' '}
+            {currentPoint.snapshot.relationships?.length || 0}
           </span>
         )}
       </div>
