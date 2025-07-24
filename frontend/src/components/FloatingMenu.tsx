@@ -42,6 +42,24 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   const [resizeStart, setResizeStart] = useState({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Clamp initial position to prevent off-screen rendering
+  useEffect(() => {
+    if (menuRef.current) {
+      const parent = menuRef.current.parentElement;
+      if (parent) {
+        const maxX = Math.max(0, parent.offsetWidth - size.width);
+        const maxY = Math.max(0, window.innerHeight - size.height - 40);
+
+        const clampedX = Math.max(0, Math.min(maxX, initialPosition.x));
+        const clampedY = Math.max(0, Math.min(maxY, initialPosition.y));
+
+        if (clampedX !== initialPosition.x || clampedY !== initialPosition.y) {
+          setPosition({ x: clampedX, y: clampedY });
+        }
+      }
+    }
+  }, []); // Run once on mount
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!menuRef.current) return;
 
