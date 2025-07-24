@@ -710,9 +710,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       expandedFiles,
       toggleNodeExpansion,
       hasComponents,
-      config.mappings,
-      config.nodeThreshold,
-      config.edgeThreshold,
+      config,
       nodeMetrics,
       linkMetrics,
     ]);
