@@ -407,12 +407,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Get all node metrics for threshold calculations
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
-      // Apply node thresholding - filter out nodes that don't meet the threshold criteria
-      const nodes = allNodes.filter(node => {
-        const nodeMetric = nodeMetrics.get(node.id);
-        if (!nodeMetric) return true; // Keep nodes without metrics
-        return isNodeVisible(nodeMetric, config, allNodeMetrics, node.type);
-      });
+      // Use all nodes initially - thresholding will be applied in config update effect
+      const nodes = allNodes;
 
       // Create initial links with current weights, but only for visible nodes
       const nodeIds = new Set(nodes.map(n => n.id));
@@ -710,7 +706,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       expandedFiles,
       toggleNodeExpansion,
       hasComponents,
-      config,
+      config.mappings,
       nodeMetrics,
       linkMetrics,
     ]);
@@ -759,9 +755,31 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       if (!linkSelection || !nodeSelection) return;
 
-      // Get current visible node IDs
+      // Get current nodes and apply threshold filtering
       const nodes = simulation.nodes();
-      const currentNodeIds = new Set(nodes.map(n => n.id));
+      const allNodeMetrics = Array.from(nodeMetrics.values());
+
+      // Filter nodes based on thresholds while preserving positions
+      const visibleNodes = nodes.filter(node => {
+        const nodeMetric = nodeMetrics.get(node.id);
+        if (!nodeMetric) return true; // Keep nodes without metrics
+        return isNodeVisible(nodeMetric, config, allNodeMetrics, node.type);
+      });
+
+      // Update simulation with filtered nodes
+      simulation.nodes(visibleNodes);
+
+      // Update visual representation
+      const svg = d3.select(svgRef.current);
+      const nodeGroups = svg.selectAll('g.nodes g');
+
+      nodeGroups.style('display', function (d: any) {
+        const nodeMetric = nodeMetrics.get(d.id);
+        if (!nodeMetric) return 'block';
+        return isNodeVisible(nodeMetric, config, allNodeMetrics, d.type) ? 'block' : 'none';
+      });
+
+      const currentNodeIds = new Set(visibleNodes.map(n => n.id));
 
       // Recreate links with new weights, but only for visible nodes
       const baseUpdatedLinks = data.relationships
