@@ -1,6 +1,6 @@
 import React from 'react';
 import FloatingMenu from './FloatingMenu';
-import { RepositoryData, File } from '../types/schema';
+import { RepositoryData } from '../types/schema';
 
 interface FileDetailsProps {
   fileId: string;
