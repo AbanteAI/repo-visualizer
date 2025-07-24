@@ -467,19 +467,26 @@ export const isNodeVisible = (
   // Check global node threshold
   if (config.nodeThreshold && config.nodeThreshold > 0) {
     const nodeFeatures = VISUAL_FEATURES.filter(f => f.category === 'node');
+    let maxFeatureValue = 0;
+    let hasActiveFeatures = false;
+
     for (const feature of nodeFeatures) {
       const mapping = getFeatureMapping(config, feature.id);
       if (mapping && Object.values(mapping.dataSourceWeights).some(w => w > 0)) {
+        hasActiveFeatures = true;
         const normalizedValue = getNormalizedFeatureValue(
           nodeMetrics,
           config,
           allNodeMetrics,
           feature.id
         );
-        if (normalizedValue < config.nodeThreshold) {
-          return false;
-        }
+        maxFeatureValue = Math.max(maxFeatureValue, normalizedValue);
       }
+    }
+
+    // Hide node only if ALL active features are below threshold
+    if (hasActiveFeatures && maxFeatureValue < config.nodeThreshold) {
+      return false;
     }
   }
 
