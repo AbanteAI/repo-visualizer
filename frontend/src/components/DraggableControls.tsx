@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React from 'react';
+import FloatingMenu from './FloatingMenu';
 
 interface DraggableControlsProps {
   referenceWeight: number;
@@ -19,169 +20,15 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
   onSemanticWeightChange,
   onClose,
 }) => {
-  const [position, setPosition] = useState({ x: 0, y: 20 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, elementX: 0, elementY: 0 });
-  const [isInitialized, setIsInitialized] = useState(false);
-  const controlsRef = useRef<HTMLDivElement>(null);
-
-  // Initialize position to upper right corner
-  useEffect(() => {
-    const initializePosition = () => {
-      if (controlsRef.current) {
-        const parent = controlsRef.current.parentElement;
-        if (parent) {
-          const parentWidth = parent.offsetWidth;
-          const controlsWidth = controlsRef.current.offsetWidth || 320;
-
-          setPosition({
-            x: Math.max(0, parentWidth - controlsWidth - 20),
-            y: 20,
-          });
-          setIsInitialized(true);
-        }
-      }
-    };
-
-    if (!isInitialized) {
-      initializePosition();
-      if (!isInitialized) {
-        setTimeout(initializePosition, 100);
-      }
-    }
-  }, [isInitialized]);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!controlsRef.current) return;
-
-    // Don't start dragging if clicking on input elements, labels, or close button
-    const target = e.target as HTMLElement;
-    if (
-      target.tagName === 'INPUT' ||
-      target.tagName === 'LABEL' ||
-      target.tagName === 'BUTTON' ||
-      target.closest('input, label, button')
-    ) {
-      return;
-    }
-
-    // Store initial positions
-    setDragStart({
-      mouseX: e.clientX,
-      mouseY: e.clientY,
-      elementX: position.x,
-      elementY: position.y,
-    });
-    setIsDragging(true);
-    e.preventDefault();
-  };
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isDragging || !controlsRef.current) return;
-
-      const parent = controlsRef.current.parentElement;
-      if (!parent) return;
-
-      // Calculate how much the mouse has moved since drag started
-      const deltaX = e.clientX - dragStart.mouseX;
-      const deltaY = e.clientY - dragStart.mouseY;
-
-      // Calculate new position
-      const newX = dragStart.elementX + deltaX;
-      const newY = dragStart.elementY + deltaY;
-
-      // Keep within bounds - use window dimensions for better movement freedom
-      const maxX = Math.max(0, parent.offsetWidth - controlsRef.current.offsetWidth);
-      const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40); // 40px buffer from bottom
-
-      setPosition({
-        x: Math.max(0, Math.min(maxX, newX)),
-        y: Math.max(0, Math.min(maxY, newY)),
-      });
-    },
-    [isDragging, dragStart]
-  );
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Handle window resize to keep panel visible
-  useEffect(() => {
-    const handleResize = () => {
-      if (controlsRef.current && isInitialized) {
-        const parent = controlsRef.current.parentElement;
-        if (parent) {
-          const maxX = Math.max(0, parent.offsetWidth - controlsRef.current.offsetWidth);
-          const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40);
-
-          setPosition(prev => ({
-            x: Math.max(0, Math.min(maxX, prev.x)),
-            y: Math.max(0, Math.min(maxY, prev.y)),
-          }));
-        }
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isInitialized]);
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
-
   return (
-    <div
-      ref={controlsRef}
-      className="absolute transition-all duration-200 draggable-controls"
-      onMouseDown={handleMouseDown}
-      style={{
-        position: 'absolute',
-        left: isInitialized ? position.x : 'calc(100% - 300px)',
-        top: isInitialized ? position.y : '20px',
-        width: '280px',
-        pointerEvents: 'auto',
-        transform: 'translate3d(0, 0, 0)',
-        zIndex: 1000,
-        userSelect: 'none',
-        backgroundColor: 'white',
-        border: '2px solid #e5e7eb',
-        borderRadius: '16px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-        cursor: isDragging ? 'grabbing' : 'grab',
-        padding: '20px',
-      }}
+    <FloatingMenu
+      title="Connection Weights"
+      titleColor="blue-500"
+      initialPosition={{ x: window.innerWidth - 300, y: 20 }}
+      initialSize={{ width: 280, height: 350 }}
+      minSize={{ width: 250, height: 300 }}
+      onClose={onClose}
     >
-      {/* Close button positioned absolutely in top right */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-white hover:bg-red-50 border border-gray-200 text-gray-400 hover:text-red-500 transition-all duration-200 shadow-sm hover:shadow-md"
-        style={{ cursor: 'pointer' }}
-        aria-label="Close"
-      >
-        <span className="text-lg font-bold">×</span>
-      </button>
-
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6 pr-12">
-        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-        <h3 className="text-xl font-bold text-gray-900 border-b-2 border-blue-500 pb-1">
-          Connection Weights
-        </h3>
-      </div>
-
-      {/* Controls */}
       <div className="space-y-5">
         {/* Reference Connections */}
         <div className="space-y-2">
@@ -264,7 +111,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </FloatingMenu>
   );
 };
 

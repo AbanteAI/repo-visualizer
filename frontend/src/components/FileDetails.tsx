@@ -1,4 +1,5 @@
 import React from 'react';
+import FloatingMenu from './FloatingMenu';
 import { RepositoryData, File } from '../types/schema';
 
 interface FileDetailsProps {
@@ -53,45 +54,15 @@ const FileDetails: React.FC<FileDetailsProps> = ({ fileId, data, onClose }) => {
   };
 
   return (
-    <div
-      className="absolute z-10"
-      style={{
-        position: 'absolute',
-        right: '20px',
-        top: '20px',
-        width: '320px',
-        maxHeight: '80vh',
-        overflowY: 'auto',
-        pointerEvents: 'auto',
-        transform: 'translate3d(0, 0, 0)',
-        userSelect: 'none',
-        backgroundColor: 'white',
-        border: '2px solid #e5e7eb',
-        borderRadius: '16px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-        padding: '20px',
-      }}
+    <FloatingMenu
+      title="File Details"
+      titleColor="green-500"
+      initialPosition={{ x: window.innerWidth - 340, y: 20 }}
+      initialSize={{ width: 320, height: 600 }}
+      minSize={{ width: 280, height: 400 }}
+      maxSize={{ width: 500, height: 800 }}
+      onClose={onClose}
     >
-      {/* Close button positioned absolutely in top right */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-white hover:bg-red-50 border border-gray-200 text-gray-400 hover:text-red-500 transition-all duration-200 shadow-sm hover:shadow-md"
-        style={{ cursor: 'pointer' }}
-        aria-label="Close"
-      >
-        <span className="text-lg font-bold">×</span>
-      </button>
-
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6 pr-12">
-        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-        <h3 className="text-xl font-bold text-gray-900 border-b-2 border-green-500 pb-1">
-          File Details
-        </h3>
-      </div>
-
       <div className="border-b border-gray-200 pb-4 mb-4">
         <p className="text-sm text-gray-600 mb-2">
           <span className="font-medium text-gray-800">Path:</span> {file.path}
@@ -223,7 +194,7 @@ const FileDetails: React.FC<FileDetailsProps> = ({ fileId, data, onClose }) => {
           </div>
         </div>
       )}
-    </div>
+    </FloatingMenu>
   );
 };
 
