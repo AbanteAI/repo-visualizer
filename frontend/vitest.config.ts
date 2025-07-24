@@ -9,7 +9,7 @@ export default defineConfig({
     globals: true,
     css: true,
     coverage: {
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text', 'json', 'html', 'lcov'],
       exclude: [
         'node_modules/',
         'src/test/',
@@ -19,6 +19,12 @@ export default defineConfig({
         'src/main.tsx',
         'src/index.ts',
       ],
+      thresholds: {
+        lines: 10,
+        branches: 10,
+        functions: 10,
+        statements: 10,
+      },
     },
   },
 });

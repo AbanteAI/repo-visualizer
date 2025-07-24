@@ -24,7 +24,10 @@ import {
   getLinkColor,
   isNodeVisible,
   isEdgeVisible,
+  calculatePieChartData,
+  isPieChartEnabled,
 } from '../../utils/visualizationUtils';
+import { EXTENSION_COLORS } from '../../utils/extensionColors';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
@@ -45,6 +48,101 @@ interface Link extends d3.SimulationLinkDatum<Node>, LinkData {
   source: string | Node;
   target: string | Node;
 }
+
+// Helper function to create pie chart nodes
+const createPieChartNodes = (
+  nodeGroups: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>,
+  nodeMetrics: Map<string, ComputedNodeMetrics>,
+  config: VisualizationConfig | undefined,
+  allNodeMetrics: ComputedNodeMetrics[],
+  extensionColors: Record<string, string>,
+  onSelectFile: (fileId: string | null) => void
+): d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown> => {
+  // Create a group for each pie chart
+  const pieGroups = nodeGroups.append('g').attr('class', 'pie-node');
+
+  pieGroups.each(function (d) {
+    const group = d3.select(this);
+    const metrics = nodeMetrics.get(d.id);
+
+    if (!metrics) {
+      // Fallback to regular circle if no metrics
+      group
+        .append('circle')
+        .attr('r', 5)
+        .attr('fill', '#ccc')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5);
+      return;
+    }
+
+    const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
+    const pieData = calculatePieChartData(metrics, config);
+
+    if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
+      // No coverage data available, show regular circle
+      group
+        .append('circle')
+        .attr('r', radius)
+        .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, extensionColors))
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5);
+      return;
+    }
+
+    // Create pie generator
+    const pie = d3
+      .pie<{ label: string; value: number }>()
+      .value(d => d.value)
+      .sort(null);
+
+    const arc = d3
+      .arc<d3.PieArcDatum<{ label: string; value: number }>>()
+      .innerRadius(0)
+      .outerRadius(radius);
+
+    const pieChartData = pie([
+      { label: 'covered', value: pieData.covered },
+      { label: 'uncovered', value: pieData.uncovered },
+    ]);
+
+    // Add pie chart segments
+    group
+      .selectAll('.pie-segment')
+      .data(pieChartData)
+      .enter()
+      .append('path')
+      .attr('class', 'pie-segment')
+      .attr('d', arc)
+      .attr('fill', (_, i) => {
+        if (i === 0) {
+          // Covered portion - use green
+          return '#22c55e';
+        } else {
+          // Uncovered portion - use the node's regular color or red
+          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+        }
+      })
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1);
+  });
+
+  // Add event handlers to the pie groups
+  pieGroups
+    .style('cursor', 'pointer')
+    .on('mouseover', function () {
+      d3.select(this).selectAll('.pie-segment').attr('stroke-width', 2);
+    })
+    .on('mouseout', function () {
+      d3.select(this).selectAll('.pie-segment').attr('stroke-width', 1);
+    })
+    .on('click', (event, d) => {
+      event.stopPropagation();
+      onSelectFile(d.id);
+    });
+
+  return pieGroups;
+};
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
   ({ data, onSelectFile, selectedFile, config }, ref) => {
@@ -78,31 +176,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       },
       [data.files]
     );
-
-    // Extension colors mapping
-    const extensionColors: Record<string, string> = {
-      py: '#3572A5', // Python
-      js: '#f7df1e', // JavaScript
-      html: '#e34c26', // HTML
-      css: '#563d7c', // CSS
-      md: '#083fa1', // Markdown
-      json: '#292929', // JSON
-      java: '#b07219', // Java
-      cpp: '#f34b7d', // C++
-      c: '#555555', // C
-      rb: '#701516', // Ruby
-      php: '#4F5D95', // PHP
-      ts: '#2b7489', // TypeScript
-      sh: '#89e051', // Shell
-      go: '#00ADD8', // Go
-      rs: '#dea584', // Rust
-      swift: '#ffac45', // Swift
-      kt: '#F18E33', // Kotlin
-      scala: '#c22d40', // Scala
-      pl: '#0298c3', // Perl
-      lua: '#000080', // Lua
-      r: '#198CE7', // R
-    };
 
     // Expose methods to parent components
     useImperativeHandle(ref, () => ({
@@ -504,32 +577,49 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('cursor', 'pointer')
         .call(dragBehavior(simulation));
 
-      // Create circles for nodes
-      const node = nodeGroups
-        .append('circle')
-        .attr('class', 'node')
-        .attr('r', d => {
-          const metrics = nodeMetrics.get(d.id);
-          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-        })
-        .attr('fill', d => {
-          const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
-        })
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5)
-        .on('mouseover', function (_event, _d) {
-          d3.select(this).attr('stroke-width', 3);
-        })
-        .on('mouseout', function (_event, _d) {
-          // Reset to default hover state, but preserve selection highlighting
-          const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
-          d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
-        })
-        .on('click', (event, d) => {
-          event.stopPropagation();
-          onSelectFile(d.id);
-        });
+      // Check if pie chart mode is enabled
+      const pieChartMode = isPieChartEnabled(config);
+
+      let node: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>;
+
+      if (pieChartMode) {
+        // Create pie chart nodes
+        node = createPieChartNodes(
+          nodeGroups,
+          nodeMetrics,
+          config,
+          allNodeMetrics,
+          EXTENSION_COLORS,
+          onSelectFile
+        );
+      } else {
+        // Create regular circle nodes
+        node = nodeGroups
+          .append('circle')
+          .attr('class', 'node')
+          .attr('r', d => {
+            const metrics = nodeMetrics.get(d.id);
+            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          })
+          .attr('fill', d => {
+            const metrics = nodeMetrics.get(d.id);
+            return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+          })
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 1.5)
+          .on('mouseover', function (_event, _d) {
+            d3.select(this).attr('stroke-width', 3);
+          })
+          .on('mouseout', function (_event, _d) {
+            // Reset to default hover state, but preserve selection highlighting
+            const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
+            d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
+          })
+          .on('click', (event, d) => {
+            event.stopPropagation();
+            onSelectFile(d.id);
+          });
+      }
 
       // Add expand/collapse indicators for files with components
       nodeGroups
@@ -598,8 +688,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         nodeGroups.attr('transform', d => `translate(${d.x || 0}, ${d.y || 0})`);
       });
 
-      // Create legend
-      createLegend(svg, width, data, extensionColors);
+      // Legend is now handled by DynamicLegend component
 
       // Store references for weight updates
       (simulation as any).__linkSelection = link;
@@ -633,24 +722,34 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       if (!svgRef.current || !data) return;
 
       const svg = d3.select(svgRef.current);
-      const nodes = svg.selectAll('circle.node');
+      const pieChartMode = isPieChartEnabled(config);
+
+      // Select appropriate node elements based on mode
+      const nodes = pieChartMode ? svg.selectAll('g.pie-node') : svg.selectAll('circle.node');
 
       // Only proceed if nodes exist
       if (nodes.empty()) return;
 
       // Reset all nodes to default stroke
-      nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+      if (pieChartMode) {
+        nodes.selectAll('.pie-segment').attr('stroke', '#fff').attr('stroke-width', 1);
+      } else {
+        nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+      }
 
       // Highlight selected file
       if (selectedFile) {
-        nodes
-          .filter(function (d) {
-            return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
-          })
-          .attr('stroke', '#e74c3c')
-          .attr('stroke-width', 3);
+        const selectedNodes = nodes.filter(function (d) {
+          return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
+        });
+
+        if (pieChartMode) {
+          selectedNodes.selectAll('.pie-segment').attr('stroke', '#e74c3c').attr('stroke-width', 2);
+        } else {
+          selectedNodes.attr('stroke', '#e74c3c').attr('stroke-width', 3);
+        }
       }
-    }, [selectedFile, data, expandedFiles]);
+    }, [selectedFile, data, expandedFiles, config]);
 
     // Config update effect - runs when visualization config changes
     useEffect(() => {
@@ -818,16 +917,80 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Get all node metrics for normalization (compute once)
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
-      // Update node visual properties
-      nodeSelection
-        .attr('r', (d: Node) => {
+      // Update node visual properties based on mode
+      const pieChartMode = isPieChartEnabled(config);
+
+      if (pieChartMode) {
+        // In pie chart mode, nodeSelection refers to the pie groups
+        // We need to recreate the pie charts with updated data
+        nodeSelection.each(function (d: Node) {
+          const group = d3.select(this);
           const metrics = nodeMetrics.get(d.id);
-          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-        })
-        .attr('fill', (d: Node) => {
-          const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+
+          if (!metrics) return;
+
+          const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
+          const pieData = calculatePieChartData(metrics, config);
+
+          // Remove old segments
+          group.selectAll('.pie-segment').remove();
+          group.selectAll('circle').remove();
+
+          if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
+            // No coverage data, show regular circle
+            group
+              .append('circle')
+              .attr('r', radius)
+              .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS))
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1.5);
+          } else {
+            // Recreate pie chart
+            const pie = d3
+              .pie<{ label: string; value: number }>()
+              .value(d => d.value)
+              .sort(null);
+
+            const arc = d3
+              .arc<d3.PieArcDatum<{ label: string; value: number }>>()
+              .innerRadius(0)
+              .outerRadius(radius);
+
+            const pieChartData = pie([
+              { label: 'covered', value: pieData.covered },
+              { label: 'uncovered', value: pieData.uncovered },
+            ]);
+
+            group
+              .selectAll('.pie-segment')
+              .data(pieChartData)
+              .enter()
+              .append('path')
+              .attr('class', 'pie-segment')
+              .attr('d', arc)
+              .attr('fill', (_, i) => {
+                if (i === 0) {
+                  return '#22c55e'; // Covered portion - green
+                } else {
+                  return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+                }
+              })
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1);
+          }
         });
+      } else {
+        // Regular circle mode
+        nodeSelection
+          .attr('r', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          })
+          .attr('fill', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+          });
+      }
 
       // Update label positions to match new node sizes
       const labelSelection = (simulation as any).__labelSelection;
@@ -872,108 +1035,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d.fx = null;
           d.fy = null;
         });
-    };
-
-    const createLegend = (
-      svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
-      width: number,
-      data: RepositoryData,
-      colors: Record<string, string>
-    ) => {
-      // Only show extensions that were actually in the data
-      const usedExtensions = new Set<string>();
-      data.files.forEach(file => {
-        if (file.extension) {
-          usedExtensions.add(file.extension);
-        }
-      });
-
-      const legendGroup = svg.append('g').attr('transform', `translate(20, 20)`);
-
-      // Add directory type
-      legendGroup
-        .append('circle')
-        .attr('class', 'legend-item')
-        .attr('cx', 10)
-        .attr('cy', 10)
-        .attr('r', 6)
-        .attr('fill', '#7f8c8d');
-
-      legendGroup
-        .append('text')
-        .attr('x', 20)
-        .attr('y', 14)
-        .text('Directory')
-        .style('font-size', '12px')
-        .style('fill', '#333');
-
-      // Add file types
-      let index = 1;
-      for (const ext of usedExtensions) {
-        if (colors[ext]) {
-          legendGroup
-            .append('circle')
-            .attr('class', 'legend-item')
-            .attr('cx', 10 + Math.floor(index / 10) * 100)
-            .attr('cy', 10 + (index % 10) * 20)
-            .attr('r', 6)
-            .attr('fill', colors[ext]);
-
-          legendGroup
-            .append('text')
-            .attr('x', 20 + Math.floor(index / 10) * 100)
-            .attr('y', 14 + (index % 10) * 20)
-            .text(`.${ext}`)
-            .style('font-size', '12px')
-            .style('fill', '#333');
-
-          index++;
-        }
-      }
-
-      // Add "Other" type
-      legendGroup
-        .append('circle')
-        .attr('class', 'legend-item')
-        .attr('cx', 10 + Math.floor(index / 10) * 100)
-        .attr('cy', 10 + (index % 10) * 20)
-        .attr('r', 6)
-        .attr('fill', '#aaaaaa');
-
-      legendGroup
-        .append('text')
-        .attr('x', 20 + Math.floor(index / 10) * 100)
-        .attr('y', 14 + (index % 10) * 20)
-        .text('Other')
-        .style('font-size', '12px')
-        .style('fill', '#333');
-
-      // Add component types
-      index++;
-      const componentTypes = [
-        { type: 'class', color: '#e67e22' },
-        { type: 'function', color: '#3498db' },
-        { type: 'method', color: '#9b59b6' },
-      ];
-
-      componentTypes.forEach(({ type, color }) => {
-        legendGroup
-          .append('circle')
-          .attr('cx', 10 + Math.floor(index / 10) * 100)
-          .attr('cy', 10 + (index % 10) * 20)
-          .attr('r', 6)
-          .attr('fill', color);
-
-        legendGroup
-          .append('text')
-          .attr('x', 20 + Math.floor(index / 10) * 100)
-          .attr('y', 14 + (index % 10) * 20)
-          .text(type)
-          .style('font-size', '12px')
-          .style('fill', '#333');
-
-        index++;
-      });
     };
 
     return (

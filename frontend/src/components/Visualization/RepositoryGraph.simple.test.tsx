@@ -39,6 +39,7 @@ vi.mock('d3', () => {
     transform: vi.fn().mockReturnThis(),
     translate: vi.fn().mockReturnThis(),
     scale: vi.fn().mockReturnThis(),
+    join: vi.fn().mockReturnThis(),
   };
 
   return {
@@ -88,7 +89,7 @@ describe('RepositoryGraph Simple Tests', () => {
   it('applies correct container classes', () => {
     render(<RepositoryGraph {...defaultProps} />);
     const container = document.querySelector('svg')?.parentElement;
-    expect(container).toHaveClass('w-full', 'h-[600px]', 'relative');
+    expect(container).toHaveClass('w-full', 'h-full', 'relative', 'overflow-hidden');
   });
 
   it('handles prop changes', () => {
