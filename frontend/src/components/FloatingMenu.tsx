@@ -81,48 +81,46 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
     setIsResizing(true);
   };
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (isDragging && menuRef.current) {
-        const parent = menuRef.current.parentElement;
-        if (!parent) return;
+  const handleMouseMoveRef = useRef<(e: MouseEvent) => void>(() => {});
+  const handleMouseUpRef = useRef<() => void>(() => {});
 
-        const deltaX = e.clientX - dragStart.mouseX;
-        const deltaY = e.clientY - dragStart.mouseY;
+  // Update refs with current values
+  handleMouseMoveRef.current = (e: MouseEvent) => {
+    if (isDragging && menuRef.current) {
+      const parent = menuRef.current.parentElement;
+      if (!parent) return;
 
-        const newX = dragStart.elementX + deltaX;
-        const newY = dragStart.elementY + deltaY;
+      const deltaX = e.clientX - dragStart.mouseX;
+      const deltaY = e.clientY - dragStart.mouseY;
 
-        const maxX = Math.max(0, parent.offsetWidth - size.width);
-        const maxY = Math.max(0, window.innerHeight - size.height - 40);
+      const newX = dragStart.elementX + deltaX;
+      const newY = dragStart.elementY + deltaY;
 
-        setPosition({
-          x: Math.max(0, Math.min(maxX, newX)),
-          y: Math.max(0, Math.min(maxY, newY)),
-        });
-      } else if (isResizing) {
-        const deltaX = e.clientX - resizeStart.mouseX;
-        const deltaY = e.clientY - resizeStart.mouseY;
+      const maxX = Math.max(0, parent.offsetWidth - size.width);
+      const maxY = Math.max(0, window.innerHeight - size.height - 40);
 
-        const newWidth = Math.max(
-          minSize.width,
-          Math.min(maxSize.width, resizeStart.width + deltaX)
-        );
-        const newHeight = Math.max(
-          minSize.height,
-          Math.min(maxSize.height, resizeStart.height + deltaY)
-        );
+      setPosition({
+        x: Math.max(0, Math.min(maxX, newX)),
+        y: Math.max(0, Math.min(maxY, newY)),
+      });
+    } else if (isResizing) {
+      const deltaX = e.clientX - resizeStart.mouseX;
+      const deltaY = e.clientY - resizeStart.mouseY;
 
-        setSize({ width: newWidth, height: newHeight });
-      }
-    },
-    [isDragging, isResizing, dragStart, resizeStart, size.width, size.height, minSize, maxSize]
-  );
+      const newWidth = Math.max(minSize.width, Math.min(maxSize.width, resizeStart.width + deltaX));
+      const newHeight = Math.max(
+        minSize.height,
+        Math.min(maxSize.height, resizeStart.height + deltaY)
+      );
 
-  const handleMouseUp = useCallback(() => {
+      setSize({ width: newWidth, height: newHeight });
+    }
+  };
+
+  handleMouseUpRef.current = () => {
     setIsDragging(false);
     setIsResizing(false);
-  }, []);
+  };
 
   // Handle window resize to keep menu visible
   useEffect(() => {
@@ -147,14 +145,17 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
 
   useEffect(() => {
     if (isDragging || isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      const moveHandler = (e: MouseEvent) => handleMouseMoveRef.current(e);
+      const upHandler = () => handleMouseUpRef.current();
+
+      document.addEventListener('mousemove', moveHandler);
+      document.addEventListener('mouseup', upHandler);
       return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('mousemove', moveHandler);
+        document.removeEventListener('mouseup', upHandler);
       };
     }
-  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
+  }, [isDragging, isResizing]);
 
   return (
     <div
