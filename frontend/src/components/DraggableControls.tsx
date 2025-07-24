@@ -27,6 +27,7 @@ const DraggableControls: React.FC<DraggableControlsProps> = ({
       initialPosition={{ x: typeof window !== 'undefined' ? window.innerWidth - 300 : 100, y: 20 }}
       initialSize={{ width: 280, height: 350 }}
       minSize={{ width: 250, height: 300 }}
+      className="draggable-controls"
       onClose={onClose}
     >
       <div className="space-y-5">

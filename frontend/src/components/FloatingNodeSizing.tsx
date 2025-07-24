@@ -35,6 +35,7 @@ const FloatingNodeSizing: React.FC<FloatingNodeSizingProps> = ({
       initialPosition={{ x: 320, y: 20 }}
       initialSize={{ width: 300, height: 450 }}
       minSize={{ width: 280, height: 350 }}
+      className="draggable-controls"
       onClose={onClose}
     >
       <div className="space-y-4">

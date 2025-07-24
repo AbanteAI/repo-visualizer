@@ -98,6 +98,7 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
       initialSize={{ width: 360, height: 700 }}
       minSize={{ width: 320, height: 500 }}
       maxSize={{ width: 500, height: 900 }}
+      className="draggable-controls"
       onClose={onClose}
     >
       {/* Mode Toggle */}

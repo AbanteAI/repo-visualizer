@@ -141,14 +141,18 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
     setIsResizing(false);
   };
 
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
+
   // Handle window resize to keep menu visible
   useEffect(() => {
     const handleResize = () => {
       if (menuRef.current) {
         const parent = menuRef.current.parentElement;
         if (parent) {
-          const maxX = Math.max(0, parent.offsetWidth - size.width);
-          const maxY = Math.max(0, window.innerHeight - size.height - 40);
+          const currentSize = sizeRef.current;
+          const maxX = Math.max(0, parent.offsetWidth - currentSize.width);
+          const maxY = Math.max(0, window.innerHeight - currentSize.height - 40);
 
           setPosition(prev => ({
             x: Math.max(0, Math.min(maxX, prev.x)),
@@ -160,7 +164,7 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [size.width, size.height]);
+  }, []); // Empty dependency array - handler uses refs
 
   useEffect(() => {
     if (isDragging || isResizing) {
