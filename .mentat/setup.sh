@@ -40,9 +40,19 @@ if [ ! -d "node_modules" ]; then
 fi
 cd ..
 
+# Generate repository data for visualization
+echo "Generating repository data..."
+$PYTHON_CMD -m repo_visualizer . -o repo_data.json -v
+
+# Copy data to frontend
+echo "Copying data to frontend..."
+cp repo_data.json frontend/
+
 # Print completion message
 echo "Setup complete!"
 echo "Virtual environment activated. You can deactivate it with: deactivate"
+echo ""
+echo "Repository data generated and ready for visualization!"
 echo ""
 echo "To start the project, run:"
 echo "  ./start_project.sh"
