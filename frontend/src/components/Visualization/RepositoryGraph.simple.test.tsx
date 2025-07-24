@@ -95,7 +95,7 @@ describe('RepositoryGraph Simple Tests', () => {
   it('handles prop changes', () => {
     const { rerender } = render(<RepositoryGraph {...defaultProps} />);
     expect(() => {
-      rerender(<RepositoryGraph {...defaultProps} referenceWeight={80} />);
+      rerender(<RepositoryGraph {...defaultProps} selectedFile="file1" />);
     }).not.toThrow();
   });
 

@@ -557,6 +557,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             return 1.5;
           });
 
+        // Add tooltips to skeleton links
+        linkSelection.append('title').text(d => {
+          const sourceName = (d.source as any).name || (d.source as any).id || d.source;
+          const targetName = (d.target as any).name || (d.target as any).id || d.target;
+          const strength = d.originalStrength || 1;
+          const referenceText = strength > 1 ? `${strength} references` : '1 reference';
+
+          return `${sourceName} → ${targetName}\nType: ${d.type}\nReferences: ${referenceText}`;
+        });
+
         allLinkElements.push(linkSelection);
       });
 
