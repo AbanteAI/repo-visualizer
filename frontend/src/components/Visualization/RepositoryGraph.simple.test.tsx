@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { mockRepositoryData } from '../../test/mockData';
 import RepositoryGraph from './RepositoryGraph';
+import { DEFAULT_CONFIG } from '../../types/visualization';
 
 // Mock d3 completely to avoid complex interactions
 vi.mock('d3', () => {
@@ -40,6 +41,7 @@ vi.mock('d3', () => {
     translate: vi.fn().mockReturnThis(),
     scale: vi.fn().mockReturnThis(),
     join: vi.fn().mockReturnThis(),
+    each: vi.fn().mockReturnThis(),
   };
 
   return {
@@ -63,9 +65,7 @@ describe('RepositoryGraph Simple Tests', () => {
     data: mockRepositoryData,
     onSelectFile: vi.fn(),
     selectedFile: null,
-    referenceWeight: 50,
-    filesystemWeight: 30,
-    semanticWeight: 20,
+    config: DEFAULT_CONFIG,
   };
 
   // Mock DOM properties

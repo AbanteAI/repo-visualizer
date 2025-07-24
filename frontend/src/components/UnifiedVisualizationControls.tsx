@@ -256,7 +256,7 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
           Show different types of connections as separate colored skeletons
         </p>
         <div className="space-y-3">
-          {config.skeletons.map(skeleton => (
+          {(config.skeletons || []).map(skeleton => (
             <div key={skeleton.id} className="space-y-2">
               <div className="flex items-center gap-3">
                 <div className="flex items-center">
