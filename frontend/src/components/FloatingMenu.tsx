@@ -58,7 +58,6 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount, ignore deps to prevent re-clamping
 
   const handleMouseDown = (e: React.MouseEvent) => {
