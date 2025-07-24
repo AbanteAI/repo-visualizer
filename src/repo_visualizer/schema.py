@@ -85,12 +85,29 @@ class Commit(TypedDict):
     fileChanges: List[FileChange]
 
 
+class FileLifecycle(TypedDict):
+    """Track file lifecycle changes."""
+
+    added: List[str]  # Files added in this commit
+    removed: List[str]  # Files removed in this commit
+    renamed: List[Dict[str, str]]  # Files renamed: [{"from": "old", "to": "new"}]
+
+
+class TimelineSnapshot(TypedDict):
+    """Repository snapshot at a point in time."""
+
+    files: List[File]
+    relationships: List[Relationship]
+    fileLifecycle: FileLifecycle
+
+
 class TimelinePoint(TypedDict):
     """Point in time with repository snapshot."""
 
     commitId: str
-    state: Dict[str, Any]
-    snapshot: Dict[str, Union[List[File], List[Relationship]]]
+    branch: str
+    state: Dict[str, Any]  # Contains commitIndex, timestamp, message, author
+    snapshot: TimelineSnapshot
 
 
 class History(TypedDict):
@@ -98,6 +115,15 @@ class History(TypedDict):
 
     commits: List[Commit]
     timelinePoints: List[TimelinePoint]
+
+
+class HistoryRange(TypedDict):
+    """Commit range analyzed."""
+
+    fromCommit: str  # First commit SHA
+    toCommit: str  # Latest commit SHA
+    totalCommits: int
+    sampledCommits: int
 
 
 class Metadata(TypedDict, total=False):
@@ -111,6 +137,9 @@ class Metadata(TypedDict, total=False):
     analysisDate: str  # ISO format date string
     defaultBranch: str
     language: Dict[str, float]  # Language name to percentage
+    branches: List[str]  # Available branches
+    analyzedBranch: str  # Which branch was analyzed
+    historyRange: Optional[HistoryRange]  # Commit range analyzed
 
 
 class RepositoryData(TypedDict):

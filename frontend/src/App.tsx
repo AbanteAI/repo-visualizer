@@ -3,6 +3,7 @@ import { RepositoryData } from './types/schema';
 import { VisualizationConfig, DEFAULT_CONFIG } from './types/visualization';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
+import HistoryVisualization from './components/HistoryVisualization';
 import FileDetails from './components/FileDetails';
 import UnifiedVisualizationControls from './components/UnifiedVisualizationControls';
 import DynamicLegend from './components/DynamicLegend';
@@ -20,6 +21,10 @@ const App: React.FC = () => {
   const [showLegend, setShowLegend] = useState(false);
 
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
+
+  // Check if repository has history data
+  const hasHistory =
+    repositoryData?.history?.timelinePoints && repositoryData.history.timelinePoints.length > 0;
 
   // Auto-load repo_data.json on component mount
   useEffect(() => {
@@ -194,23 +199,31 @@ const App: React.FC = () => {
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', height: '80vh' }}>
               <div
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  flex: 1,
-                  minHeight: 0,
+                  height: '100%',
                   position: 'relative',
                 }}
               >
-                <RepositoryGraph
-                  ref={graphRef}
-                  data={repositoryData}
-                  onSelectFile={handleFileSelect}
-                  selectedFile={selectedFile}
-                  config={config}
-                />
+                {hasHistory ? (
+                  <HistoryVisualization
+                    data={repositoryData}
+                    onSelectFile={handleFileSelect}
+                    selectedFile={selectedFile}
+                    config={config}
+                  />
+                ) : (
+                  <RepositoryGraph
+                    ref={graphRef}
+                    data={repositoryData}
+                    onSelectFile={handleFileSelect}
+                    selectedFile={selectedFile}
+                    config={config}
+                  />
+                )}
 
                 {/* Control Buttons - positioned on canvas */}
                 {repositoryData && (
@@ -296,7 +309,7 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                {/* Visualization Controls */}
+                {/* Visualization Controls - show for both regular and history views */}
                 {showControls && (
                   <UnifiedVisualizationControls
                     config={config}

@@ -42,12 +42,21 @@ from .schema import (
 class RepositoryAnalyzer:
     """Analyzes a local git repository and generates visualization data."""
 
-    def __init__(self, repo_path: str):
+    def __init__(
+        self,
+        repo_path: str,
+        branch: Optional[str] = None,
+        history_sample: int = 10,
+        max_commits: int = 1000,
+    ):
         """
         Initialize the repository analyzer.
 
         Args:
             repo_path: Path to the local git repository
+            branch: Git branch to analyze (None for current branch)
+            history_sample: Sample every N commits for detailed history (1 for all)
+            max_commits: Maximum number of commits to analyze
         """
         self.repo_path = os.path.abspath(repo_path)
         if not os.path.isdir(self.repo_path):
@@ -58,6 +67,9 @@ class RepositoryAnalyzer:
         if not os.path.isdir(git_dir):
             raise ValueError(f"Not a git repository: {self.repo_path}")
 
+        self.branch = branch
+        self.history_sample = history_sample
+        self.max_commits = max_commits
         self.data = create_empty_schema()
         self.file_ids: Set[str] = set()
         self.relationships: List[Relationship] = []
@@ -110,6 +122,10 @@ class RepositoryAnalyzer:
         # Get language statistics
         language_stats = self._calculate_language_stats()
 
+        # Get branch information
+        available_branches = self._get_available_branches()
+        analyzed_branch = self._get_analyzed_branch()
+
         # Update metadata
         self.data["metadata"].update(
             {
@@ -121,6 +137,8 @@ class RepositoryAnalyzer:
                 "analysisDate": datetime.now().isoformat(),
                 "defaultBranch": default_branch,
                 "language": language_stats,
+                "branches": available_branches,
+                "analyzedBranch": analyzed_branch,
             }
         )
 
@@ -147,6 +165,21 @@ class RepositoryAnalyzer:
     def _get_default_branch(self) -> str:
         """Get the default branch name."""
         try:
+            # Try to get the default branch from remote
+            result = subprocess.run(
+                ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                # Extract branch name from refs/remotes/origin/HEAD
+                # -> refs/remotes/origin/main
+                branch_ref = result.stdout.strip()
+                return branch_ref.split("/")[-1]
+
+            # Fallback: get current branch
             result = subprocess.run(
                 ["git", "symbolic-ref", "--short", "HEAD"],
                 cwd=self.repo_path,
@@ -159,6 +192,89 @@ class RepositoryAnalyzer:
             return "main"  # Default fallback
         except Exception:
             return "main"  # Default fallback
+
+    def _get_available_branches(self) -> List[str]:
+        """Get list of available branches."""
+        try:
+            result = subprocess.run(
+                ["git", "branch", "-a", "--format=%(refname:short)"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                branches = []
+                for line in result.stdout.split("\n"):
+                    line = line.strip()
+                    if line and not line.startswith("origin/"):
+                        # Remove the asterisk from current branch
+                        branch = line.lstrip("* ")
+                        if branch not in branches:
+                            branches.append(branch)
+                return branches
+            return []
+        except Exception:
+            return []
+
+    def _get_analyzed_branch(self) -> str:
+        """Get the branch that will be/was analyzed."""
+        if self.branch:
+            return self.branch
+
+        try:
+            result = subprocess.run(
+                ["git", "symbolic-ref", "--short", "HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return "main"  # Default fallback
+        except Exception:
+            return "main"  # Default fallback
+
+    def _checkout_branch(self) -> None:
+        """Switch to the specified branch if needed."""
+        if not self.branch:
+            return
+
+        try:
+            # Check if branch exists
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", self.branch],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                print(
+                    f"Warning: Branch '{self.branch}' does not exist, "
+                    f"using current branch"
+                )
+                return
+
+            # Checkout the branch
+            result = subprocess.run(
+                ["git", "checkout", self.branch],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                print(
+                    f"Warning: Could not checkout branch '{self.branch}': "
+                    f"{result.stderr}"
+                )
+
+        except Exception as e:
+            print(f"Error checking out branch '{self.branch}': {e}")
 
     def _get_first_commit_date(self) -> str:
         """Get the date of the first commit."""
@@ -1840,14 +1956,29 @@ class RepositoryAnalyzer:
 
     def _analyze_history(self) -> None:
         """Analyze git history."""
+        # Switch to the specified branch if needed
+        self._checkout_branch()
+
         # Extract commit history
         commits = self._extract_commits()
 
-        # Create timeline points (simplified for now)
+        # Create timeline points with full repository snapshots
         timeline_points = self._create_timeline_points(commits)
 
-        # Set history data
+        # Set history data with range metadata
         if commits:
+            # Update metadata with history range
+            self.data["metadata"]["historyRange"] = {
+                "fromCommit": commits[-1]["id"]
+                if commits
+                else "",  # Last commit in list (oldest)
+                "toCommit": commits[0]["id"]
+                if commits
+                else "",  # First commit in list (newest)
+                "totalCommits": len(commits),
+                "sampledCommits": len(timeline_points),
+            }
+
             self.data["history"] = {
                 "commits": commits,
                 "timelinePoints": timeline_points,
@@ -1861,17 +1992,24 @@ class RepositoryAnalyzer:
             List of commit data
         """
         try:
+            # Build git log command with optional branch
+            cmd = [
+                "git",
+                "log",
+                "--pretty=format:%H|||%an <%ae>|||%ad|||%s",
+                "--date=iso",
+                "--name-status",
+                "-n",
+                str(self.max_commits),
+            ]
+
+            # Add branch specification if provided
+            if self.branch:
+                cmd.append(self.branch)
+
             # Get commit logs
             result = subprocess.run(
-                [
-                    "git",
-                    "log",
-                    "--pretty=format:%H|||%an <%ae>|||%ad|||%s",
-                    "--date=iso",
-                    "--name-status",
-                    "-n",
-                    "100",  # Limit to 100 commits for performance
-                ],
+                cmd,
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
@@ -1964,7 +2102,9 @@ class RepositoryAnalyzer:
                     print(f"Error parsing commit: {e}")
                     continue
 
-            return commits
+            # Reverse commits so timeline flows forward chronologically
+            # (oldest to newest instead of git log's newest to oldest)
+            return list(reversed(commits))
         except Exception as e:
             print(f"Error extracting commits: {e}")
             return []
@@ -1973,7 +2113,7 @@ class RepositoryAnalyzer:
         self, commits: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
-        Create timeline points from commits.
+        Create timeline points from commits with full repository snapshots.
 
         Args:
             commits: List of commit data
@@ -1981,34 +2121,180 @@ class RepositoryAnalyzer:
         Returns:
             List of timeline points
         """
-        # This is a simplified implementation that creates a timeline point
-        # for every 10th commit (or fewer if there aren't many commits)
         timeline_points = []
 
         if not commits:
             return timeline_points
 
-        step = max(1, len(commits) // 10)
+        # Sample commits based on history_sample setting
+        step = max(1, self.history_sample)
+        sampled_indices = list(range(0, len(commits), step))
 
-        for i in range(0, len(commits), step):
-            commit = commits[i]
+        # Always include the first and last commits if not already included
+        if 0 not in sampled_indices:
+            sampled_indices.insert(0, 0)
+        if len(commits) - 1 not in sampled_indices and len(commits) > 1:
+            sampled_indices.append(len(commits) - 1)
 
-            # Create a simplified snapshot
+        sampled_indices = sorted(set(sampled_indices))
+
+        print(f"Creating timeline points for {len(sampled_indices)} commits...")
+
+        for i, commit_idx in enumerate(sampled_indices):
+            commit = commits[commit_idx]
+            commit_id = commit["id"]
+
+            print(
+                f"  Processing timeline point {i + 1}/{len(sampled_indices)}: "
+                f"{commit_id[:8]}"
+            )
+
+            # Create repository snapshot at this commit
+            snapshot = self._create_repository_snapshot(commit_id)
+
+            # Determine file lifecycle changes for this commit
+            file_lifecycle = self._determine_file_lifecycle(commit)
+
             timeline_points.append(
                 {
-                    "commitId": commit["id"],
+                    "commitId": commit_id,
+                    "branch": self.data["metadata"]["analyzedBranch"],
                     "state": {
-                        "commitIndex": i,
+                        "commitIndex": commit_idx,
                         "timestamp": commit["date"],
+                        "message": commit["message"],
+                        "author": commit["author"],
                     },
                     "snapshot": {
-                        "files": [],  # Simplified for now
-                        "relationships": [],  # Simplified for now
+                        "files": snapshot["files"],
+                        "relationships": snapshot["relationships"],
+                        "fileLifecycle": file_lifecycle,
                     },
                 }
             )
 
         return timeline_points
+
+    def _create_repository_snapshot(self, commit_id: str) -> Dict[str, Any]:
+        """
+        Create a repository snapshot at a specific commit.
+
+        Args:
+            commit_id: The commit SHA to create snapshot for
+
+        Returns:
+            Dictionary with files and relationships at this commit
+        """
+        # Checkout the specific commit
+        original_branch = self._get_current_branch()
+
+        try:
+            # Checkout the specific commit
+            result = subprocess.run(
+                ["git", "checkout", commit_id],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                print(f"Warning: Could not checkout commit {commit_id}")
+                return {"files": [], "relationships": []}
+
+            # Create a temporary analyzer to get the state at this commit
+            # We need to save the current state and restore it
+            original_data = self.data
+            original_file_ids = self.file_ids
+            original_relationships = self.relationships
+
+            # Reset state for snapshot
+            self.data = create_empty_schema()
+            self.file_ids = set()
+            self.relationships = []
+
+            # Analyze files at this commit (skip history to avoid recursion)
+            self._analyze_files()
+            self._extract_relationships()
+
+            # Capture the snapshot
+            snapshot = {
+                "files": self.data["files"],
+                "relationships": self.data["relationships"],
+            }
+
+            # Restore original state
+            self.data = original_data
+            self.file_ids = original_file_ids
+            self.relationships = original_relationships
+
+            return snapshot
+
+        except Exception as e:
+            print(f"Error creating snapshot for commit {commit_id}: {e}")
+            return {"files": [], "relationships": []}
+
+        finally:
+            # Always return to original branch
+            try:
+                if original_branch:
+                    subprocess.run(
+                        ["git", "checkout", original_branch],
+                        cwd=self.repo_path,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+            except Exception:
+                pass
+
+    def _get_current_branch(self) -> Optional[str]:
+        """Get the current branch name."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode == 0:
+                branch = result.stdout.strip()
+                # If we're in detached HEAD state, return None
+                return branch if branch != "HEAD" else None
+            return None
+        except Exception:
+            return None
+
+    def _determine_file_lifecycle(self, commit: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Determine file lifecycle changes for a commit.
+
+        Args:
+            commit: Commit data with fileChanges
+
+        Returns:
+            File lifecycle information
+        """
+        added = []
+        removed = []
+
+        for change in commit.get("fileChanges", []):
+            file_id = change["fileId"]
+            change_type = change["type"]
+
+            if change_type == "add":
+                added.append(file_id)
+            elif change_type == "delete":
+                removed.append(file_id)
+            # Note: rename detection would require more sophisticated git parsing
+
+        return {
+            "added": added,
+            "removed": removed,
+            "renamed": [],  # TODO: Implement proper rename detection
+        }
 
     def _extract_file_git_metrics(self, file_path: str) -> Dict[str, Any]:
         """
@@ -2337,41 +2623,3 @@ class RepositoryAnalyzer:
             json.dump(self.data, f, indent=2, cls=DateTimeEncoder)
 
         print(f"Repository data saved to {output_path}")
-
-
-def analyze_repository(repo_path: str, output_path: str) -> None:
-    """
-    Analyze a repository and generate visualization data.
-
-    Args:
-        repo_path: Path to the local git repository
-        output_path: Path to output JSON file
-    """
-    analyzer = RepositoryAnalyzer(repo_path)
-    analyzer.analyze()
-    analyzer.save_to_file(output_path)
-
-    print(f"Repository analysis complete. Data saved to {output_path}")
-
-
-def main() -> None:
-    """Command-line entry point."""
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Analyze a git repository for visualization"
-    )
-    parser.add_argument("repo_path", help="Path to the local git repository")
-    parser.add_argument(
-        "--output",
-        "-o",
-        default="repo_data.json",
-        help="Output JSON file path (default: repo_data.json)",
-    )
-
-    args = parser.parse_args()
-    analyze_repository(args.repo_path, args.output)
-
-
-if __name__ == "__main__":
-    main()

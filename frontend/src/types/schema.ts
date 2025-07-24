@@ -11,6 +11,13 @@ export interface RepositoryData {
   customData?: Record<string, any>;
 }
 
+export interface HistoryRange {
+  fromCommit: string; // First commit SHA
+  toCommit: string; // Latest commit SHA
+  totalCommits: number;
+  sampledCommits: number;
+}
+
 export interface Metadata {
   repoName: string;
   description?: string;
@@ -20,6 +27,9 @@ export interface Metadata {
   analysisDate: string;
   defaultBranch?: string;
   language?: Record<string, number>;
+  branches?: string[]; // Available branches
+  analyzedBranch?: string; // Which branch was analyzed
+  historyRange?: HistoryRange; // Commit range analyzed
 }
 
 export interface File {
@@ -87,13 +97,28 @@ export interface Commit {
   fileChanges: FileChange[];
 }
 
+export interface FileLifecycle {
+  added: string[]; // Files added in this commit
+  removed: string[]; // Files removed in this commit
+  renamed: Array<{ from: string; to: string }>; // Files renamed
+}
+
+export interface TimelineSnapshot {
+  files: File[];
+  relationships: Relationship[];
+  fileLifecycle: FileLifecycle;
+}
+
 export interface TimelinePoint {
   commitId: string;
-  state: Record<string, any>;
-  snapshot: {
-    files?: File[];
-    relationships?: Relationship[];
+  branch: string;
+  state: {
+    commitIndex: number;
+    timestamp: string;
+    message: string;
+    author: string;
   };
+  snapshot: TimelineSnapshot;
 }
 
 export interface History {
