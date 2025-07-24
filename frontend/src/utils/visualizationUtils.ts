@@ -357,7 +357,7 @@ export const getNodeColor = (
 
   // If directories are excluded from color mapping, use default gray
   if (node.type === 'directory' && !includeDirectoriesInColor) {
-    return '#7f8c8d'; // Default gray for directories when excluded
+    return NODE_COLORS.DIRECTORY; // Default gray for directories when excluded
   }
 
   if (!nodeMetrics) {
