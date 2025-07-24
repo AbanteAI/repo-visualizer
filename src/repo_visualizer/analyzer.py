@@ -2432,7 +2432,7 @@ class RepositoryAnalyzer:
                             self._extract_file_relationships_for_snapshot(
                                 content,
                                 file_entry["path"],
-                                file_entry.get("extension", ""),
+                                file_entry.get("extension") or "",
                                 temp_relationships,
                                 file_ids,
                             )
