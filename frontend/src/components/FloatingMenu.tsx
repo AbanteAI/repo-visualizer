@@ -107,15 +107,15 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   handleMouseMoveRef.current = (e: MouseEvent) => {
     if (isDragging && menuRef.current) {
       const parent = menuRef.current.parentElement;
-      if (!parent) return;
-
       const deltaX = e.clientX - dragStart.mouseX;
       const deltaY = e.clientY - dragStart.mouseY;
 
       const newX = dragStart.elementX + deltaX;
       const newY = dragStart.elementY + deltaY;
 
-      const maxX = Math.max(0, parent.offsetWidth - size.width);
+      // Use parent bounds if available, otherwise use document bounds
+      const parentWidth = parent ? parent.offsetWidth : document.documentElement.clientWidth;
+      const maxX = Math.max(0, parentWidth - size.width);
       const maxY = Math.max(0, window.innerHeight - size.height - 40);
 
       setPosition({
@@ -146,19 +146,22 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
 
   // Handle window resize to keep menu visible
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const handleResize = () => {
       if (menuRef.current) {
         const parent = menuRef.current.parentElement;
-        if (parent) {
-          const currentSize = sizeRef.current;
-          const maxX = Math.max(0, parent.offsetWidth - currentSize.width);
-          const maxY = Math.max(0, window.innerHeight - currentSize.height - 40);
+        const currentSize = sizeRef.current;
 
-          setPosition(prev => ({
-            x: Math.max(0, Math.min(maxX, prev.x)),
-            y: Math.max(0, Math.min(maxY, prev.y)),
-          }));
-        }
+        // Use parent bounds if available, otherwise use document bounds
+        const parentWidth = parent ? parent.offsetWidth : document.documentElement.clientWidth;
+        const maxX = Math.max(0, parentWidth - currentSize.width);
+        const maxY = Math.max(0, window.innerHeight - currentSize.height - 40);
+
+        setPosition(prev => ({
+          x: Math.max(0, Math.min(maxX, prev.x)),
+          y: Math.max(0, Math.min(maxY, prev.y)),
+        }));
       }
     };
 
