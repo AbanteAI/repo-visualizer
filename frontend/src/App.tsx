@@ -5,6 +5,7 @@ import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import FileDetails from './components/FileDetails';
 import UnifiedVisualizationControls from './components/UnifiedVisualizationControls';
+import DynamicLegend from './components/DynamicLegend';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -16,6 +17,7 @@ const App: React.FC = () => {
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
   const [config, setConfig] = useState<VisualizationConfig>(DEFAULT_CONFIG);
   const [showControls, setShowControls] = useState(true);
+  const [showLegend, setShowLegend] = useState(false);
 
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
 
@@ -75,6 +77,10 @@ const App: React.FC = () => {
 
   const handleToggleControls = () => {
     setShowControls(!showControls);
+  };
+
+  const handleToggleLegend = () => {
+    setShowLegend(!showLegend);
   };
 
   return (
@@ -206,40 +212,88 @@ const App: React.FC = () => {
                   config={config}
                 />
 
-                {/* Controls Toggle Button - positioned on canvas */}
+                {/* Control Buttons - positioned on canvas */}
                 {repositoryData && (
-                  <button
-                    onClick={handleToggleControls}
+                  <div
                     style={{
                       position: 'absolute',
                       top: '16px',
                       right: '16px',
-                      width: '32px',
-                      height: '32px',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '20px',
-                      color: '#666',
-                      cursor: 'pointer',
+                      gap: '8px',
                       zIndex: 10,
-                      transition: 'all 0.2s',
                     }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.backgroundColor = '#f3f4f6';
-                      e.currentTarget.style.border = '1px solid #d1d5db';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.border = 'none';
-                    }}
-                    aria-label="Toggle controls"
                   >
-                    ⚙
-                  </button>
+                    {/* Legend Toggle Button */}
+                    <button
+                      onClick={handleToggleLegend}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: showLegend ? '#f3f4f6' : 'transparent',
+                        border: showLegend ? '1px solid #d1d5db' : 'none',
+                        borderRadius: '4px',
+                        fontSize: '16px',
+                        color: showLegend ? '#374151' : '#666',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => {
+                        if (!showLegend) {
+                          e.currentTarget.style.backgroundColor = '#f3f4f6';
+                          e.currentTarget.style.border = '1px solid #d1d5db';
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!showLegend) {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.border = 'none';
+                        }
+                      }}
+                      aria-label="Toggle legend"
+                      title="Legend"
+                    >
+                      📊
+                    </button>
+
+                    {/* Controls Toggle Button */}
+                    <button
+                      onClick={handleToggleControls}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: showControls ? '#f3f4f6' : 'transparent',
+                        border: showControls ? '1px solid #d1d5db' : 'none',
+                        borderRadius: '4px',
+                        fontSize: '20px',
+                        color: showControls ? '#374151' : '#666',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => {
+                        if (!showControls) {
+                          e.currentTarget.style.backgroundColor = '#f3f4f6';
+                          e.currentTarget.style.border = '1px solid #d1d5db';
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!showControls) {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.border = 'none';
+                        }
+                      }}
+                      aria-label="Toggle controls"
+                      title="Controls"
+                    >
+                      ⚙
+                    </button>
+                  </div>
                 )}
 
                 {/* Visualization Controls */}
@@ -248,6 +302,15 @@ const App: React.FC = () => {
                     config={config}
                     onConfigChange={handleConfigChange}
                     onClose={() => setShowControls(false)}
+                  />
+                )}
+
+                {/* Dynamic Legend */}
+                {showLegend && repositoryData && (
+                  <DynamicLegend
+                    data={repositoryData}
+                    config={config}
+                    onClose={() => setShowLegend(false)}
                   />
                 )}
 

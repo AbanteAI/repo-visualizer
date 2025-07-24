@@ -1,5 +1,6 @@
 import { RepositoryData } from '../types/schema';
 import { VisualizationConfig, getFeatureMapping, DATA_SOURCES } from '../types/visualization';
+import { NODE_COLORS } from './extensionColors';
 
 export interface NodeData {
   id: string;
@@ -343,11 +344,11 @@ export const getNodeColor = (
 ): string => {
   // Special handling for non-file nodes
   if (node.type === 'class') {
-    return '#e67e22';
+    return NODE_COLORS.CLASS;
   } else if (node.type === 'function') {
-    return '#3498db';
+    return NODE_COLORS.FUNCTION;
   } else if (node.type === 'method') {
-    return '#9b59b6';
+    return NODE_COLORS.METHOD;
   }
 
   // Check if directories should participate in color calculations
@@ -356,15 +357,15 @@ export const getNodeColor = (
 
   // If directories are excluded from color mapping, use default gray
   if (node.type === 'directory' && !includeDirectoriesInColor) {
-    return '#7f8c8d'; // Default gray for directories when excluded
+    return NODE_COLORS.DIRECTORY; // Default gray for directories when excluded
   }
 
   if (!nodeMetrics) {
     // Fallback colors for nodes without metrics
     if (node.type === 'directory') {
-      return '#7f8c8d';
+      return NODE_COLORS.DIRECTORY;
     }
-    return extensionColors[node.extension || 'unknown'] || '#aaaaaa';
+    return extensionColors[node.extension || 'unknown'] || NODE_COLORS.UNKNOWN;
   }
 
   const isCategorical = isColorMappingCategorical(config);
@@ -376,9 +377,9 @@ export const getNodeColor = (
     // If file_type is active, use extension colors for files, special handling for directories
     if (colorMapping?.dataSourceWeights.file_type > 0) {
       if (node.type === 'directory') {
-        return '#7f8c8d'; // Keep directories gray when using file type coloring
+        return NODE_COLORS.DIRECTORY; // Keep directories gray when using file type coloring
       }
-      return extensionColors[node.extension || 'unknown'] || '#aaaaaa';
+      return extensionColors[node.extension || 'unknown'] || NODE_COLORS.UNKNOWN;
     }
 
     // For other categorical data, generate distributed colors (including directories if enabled)
@@ -386,7 +387,7 @@ export const getNodeColor = (
       ...new Set(allNodeMetrics.map(m => calculateCategoricalValue(m, config, 'node_color'))),
     ];
     const categoricalColors = generateCategoricalColors(allCategories);
-    return categoricalColors[categoryValue] || '#aaaaaa';
+    return categoricalColors[categoryValue] || NODE_COLORS.UNKNOWN;
   } else {
     // Continuous coloring (blue to red gradient) - includes directories if enabled
     const intensity = calculateNodeColorIntensity(nodeMetrics, config, allNodeMetrics);
