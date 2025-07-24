@@ -35,9 +35,7 @@ pip install -e ".[dev]"
 # Install frontend dependencies
 echo "Installing frontend dependencies..."
 cd frontend
-if [ ! -d "node_modules" ]; then
-    npm install
-fi
+npm install
 cd ..
 
 # Generate repository data for visualization

@@ -1,16 +1,12 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "Starting Repo Visualizer development server..."
 
-# Navigate to frontend directory
-cd frontend
-
-# Ensure frontend dependencies are installed
-if [ ! -d "node_modules" ]; then
-    echo "Installing frontend dependencies..."
-    npm install
-fi
+# Get the directory where this script is located and navigate to repo root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$REPO_ROOT/frontend"
 
 # Start frontend development server with hot reload
 echo ""
