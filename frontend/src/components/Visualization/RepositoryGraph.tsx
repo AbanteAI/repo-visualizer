@@ -757,13 +757,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Get current nodes and apply threshold filtering
       const nodes = simulation.nodes();
-      const allNodeMetrics = Array.from(nodeMetrics.values());
+      const currentNodeMetrics = Array.from(nodeMetrics.values());
 
       // Filter nodes based on thresholds while preserving positions
       const visibleNodes = nodes.filter(node => {
         const nodeMetric = nodeMetrics.get(node.id);
         if (!nodeMetric) return true; // Keep nodes without metrics
-        return isNodeVisible(nodeMetric, config, allNodeMetrics, node.type);
+        return isNodeVisible(nodeMetric, config, currentNodeMetrics, node.type);
       });
 
       // Update simulation with filtered nodes
@@ -776,7 +776,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       nodeGroups.style('display', function (d: any) {
         const nodeMetric = nodeMetrics.get(d.id);
         if (!nodeMetric) return 'block';
-        return isNodeVisible(nodeMetric, config, allNodeMetrics, d.type) ? 'block' : 'none';
+        return isNodeVisible(nodeMetric, config, currentNodeMetrics, d.type) ? 'block' : 'none';
       });
 
       const currentNodeIds = new Set(visibleNodes.map(n => n.id));
@@ -821,8 +821,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Add dynamic "contains" relationships for expanded nodes
       const dynamicUpdatedLinks: Link[] = [];
-      nodes.forEach(node => {
-        if (node.parentId && currentNodeIds.has(node.parentId)) {
+      visibleNodes.forEach(node => {
+        if (node.parentId && currentNodeIds.has(node.parentId) && currentNodeIds.has(node.id)) {
           const containsMetric: ComputedLinkMetrics = {
             semantic_similarity: 0,
             filesystem_proximity: 0,
@@ -945,7 +945,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
           if (!metrics) return;
 
-          const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
+          const radius = calculateNodeSize(metrics, config, currentNodeMetrics, d.type);
           const pieData = calculatePieChartData(metrics, config);
 
           // Remove old segments
@@ -957,7 +957,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             group
               .append('circle')
               .attr('r', radius)
-              .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS))
+              .attr('fill', getNodeColor(d, metrics, config, currentNodeMetrics, EXTENSION_COLORS))
               .attr('stroke', '#fff')
               .attr('stroke-width', 1.5);
           } else {
@@ -988,7 +988,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                 if (i === 0) {
                   return '#22c55e'; // Covered portion - green
                 } else {
-                  return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+                  return getNodeColor(d, metrics, config, currentNodeMetrics, EXTENSION_COLORS);
                 }
               })
               .attr('stroke', '#fff')
@@ -1000,11 +1000,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         nodeSelection
           .attr('r', (d: Node) => {
             const metrics = nodeMetrics.get(d.id);
-            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+            return metrics ? calculateNodeSize(metrics, config, currentNodeMetrics, d.type) : 5;
           })
           .attr('fill', (d: Node) => {
             const metrics = nodeMetrics.get(d.id);
-            return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+            return getNodeColor(d, metrics, config, currentNodeMetrics, EXTENSION_COLORS);
           });
       }
 
@@ -1013,7 +1013,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       if (labelSelection) {
         labelSelection.attr('dx', (d: Node) => {
           const metrics = nodeMetrics.get(d.id);
-          const radius = metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          const radius = metrics
+            ? calculateNodeSize(metrics, config, currentNodeMetrics, d.type)
+            : 5;
           return radius + 5;
         });
       }
@@ -1023,7 +1025,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       collisionForce.radius((d: Node) => {
         const metrics = nodeMetrics.get(d.id);
         if (!metrics) return 10;
-        return calculateNodeSize(metrics, config, allNodeMetrics, d.type) + 5;
+        return calculateNodeSize(metrics, config, currentNodeMetrics, d.type) + 5;
       });
 
       // Don't update center force during config changes - preserve current zoom/pan
