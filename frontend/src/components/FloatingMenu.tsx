@@ -52,7 +52,8 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
       target.tagName === 'BUTTON' ||
       target.tagName === 'SELECT' ||
       target.tagName === 'OPTION' ||
-      target.closest('input, label, button, select') ||
+      target.tagName === 'TEXTAREA' ||
+      target.closest('input, label, button, select, textarea') ||
       target.classList.contains('resize-handle')
     ) {
       return;
