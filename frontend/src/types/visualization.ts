@@ -381,7 +381,8 @@ export const updateSkeletonConfig = (
   skeletonId: string,
   updates: Partial<RelationshipSkeleton>
 ): VisualizationConfig => {
-  const newSkeletons = config.skeletons.map(skeleton => {
+  const currentSkeletons = config.skeletons || [];
+  const newSkeletons = currentSkeletons.map(skeleton => {
     if (skeleton.id === skeletonId) {
       return { ...skeleton, ...updates };
     }
