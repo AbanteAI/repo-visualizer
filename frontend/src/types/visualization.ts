@@ -10,6 +10,7 @@ export interface DataSource {
   defaultWeight: number;
   category: 'file' | 'relationship' | 'git' | 'semantic';
   dataType: 'continuous' | 'categorical';
+  applicableTo: 'node' | 'edge' | 'both';
 }
 
 export interface VisualFeature {
@@ -24,6 +25,7 @@ export interface VisualFeature {
 export interface FeatureMapping {
   featureId: string;
   dataSourceWeights: Record<string, number>; // dataSourceId -> weight (0-100)
+  includeDirectories?: boolean; // Whether directories should participate in this feature
 }
 
 export interface VisualizationConfig {
@@ -40,6 +42,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 100,
     category: 'file',
     dataType: 'categorical',
+    applicableTo: 'node',
   },
   {
     id: 'file_size',
@@ -49,6 +52,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 100,
     category: 'file',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'commit_count',
@@ -58,6 +62,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'git',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'recency',
@@ -67,6 +72,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'git',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'identifiers',
@@ -76,6 +82,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'file',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'references',
@@ -85,6 +92,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 0,
     category: 'relationship',
     dataType: 'continuous',
+    applicableTo: 'node',
   },
   {
     id: 'semantic_similarity',
@@ -94,6 +102,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 30,
     category: 'semantic',
     dataType: 'continuous',
+    applicableTo: 'edge',
   },
   {
     id: 'filesystem_proximity',
@@ -103,6 +112,7 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 30,
     category: 'file',
     dataType: 'continuous',
+    applicableTo: 'edge',
   },
   {
     id: 'code_references',
@@ -112,6 +122,17 @@ export const DATA_SOURCES: DataSource[] = [
     defaultWeight: 70,
     category: 'relationship',
     dataType: 'continuous',
+    applicableTo: 'edge',
+  },
+  {
+    id: 'test_coverage_ratio',
+    name: 'Test Coverage Ratio',
+    description: 'Percentage of code covered by tests',
+    color: '#16a34a',
+    defaultWeight: 0,
+    category: 'file',
+    dataType: 'continuous',
+    applicableTo: 'node',
   },
 ];
 
@@ -149,6 +170,22 @@ export const VISUAL_FEATURES: VisualFeature[] = [
     category: 'edge',
     defaultDataSources: ['code_references'],
   },
+  {
+    id: 'pie_chart_ratio',
+    name: 'Pie Chart Ratio',
+    description: 'Display nodes as pie charts showing data ratios',
+    icon: '◐',
+    category: 'node',
+    defaultDataSources: ['test_coverage_ratio'],
+  },
+  {
+    id: 'edge_color',
+    name: 'Edge Color',
+    description: 'Color of the edges',
+    icon: '🌈',
+    category: 'edge',
+    defaultDataSources: ['code_references'],
+  },
 ];
 
 // Default configuration
@@ -166,7 +203,9 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
+        test_coverage_ratio: 0,
       },
+      includeDirectories: false, // Directories excluded by default to prevent crowding
     },
     {
       featureId: 'node_color',
@@ -180,7 +219,9 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
+        test_coverage_ratio: 0,
       },
+      includeDirectories: false, // Keep directories with consistent gray color by default
     },
     {
       featureId: 'edge_strength',
@@ -194,10 +235,43 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 30,
         filesystem_proximity: 30,
         code_references: 70,
+        test_coverage_ratio: 0,
       },
+      includeDirectories: true, // Directories can participate in edge relationships
     },
     {
       featureId: 'edge_width',
+      dataSourceWeights: {
+        file_type: 0,
+        file_size: 0,
+        commit_count: 0,
+        recency: 0,
+        identifiers: 0,
+        references: 0,
+        semantic_similarity: 0,
+        filesystem_proximity: 0,
+        code_references: 100,
+        test_coverage_ratio: 0,
+      },
+    },
+    {
+      featureId: 'pie_chart_ratio',
+      dataSourceWeights: {
+        file_type: 0,
+        file_size: 0,
+        commit_count: 0,
+        recency: 0,
+        identifiers: 0,
+        references: 0,
+        semantic_similarity: 0,
+        filesystem_proximity: 0,
+        code_references: 0,
+        test_coverage_ratio: 100,
+      },
+      includeDirectories: true, // Directories can participate in edge relationships
+    },
+    {
+      featureId: 'edge_color',
       dataSourceWeights: {
         file_type: 0,
         file_size: 0,
@@ -223,9 +297,10 @@ export const getVisualFeatureById = (id: string): VisualFeature | undefined => {
 };
 
 export const getFeatureMapping = (
-  config: VisualizationConfig,
+  config: VisualizationConfig | undefined,
   featureId: string
 ): FeatureMapping | undefined => {
+  if (!config) return undefined;
   return config.mappings.find(m => m.featureId === featureId);
 };
 
@@ -243,6 +318,27 @@ export const updateFeatureMapping = (
           ...mapping.dataSourceWeights,
           [dataSourceId]: weight,
         },
+      };
+    }
+    return mapping;
+  });
+
+  return {
+    ...config,
+    mappings: newMappings,
+  };
+};
+
+export const updateDirectoryInclusion = (
+  config: VisualizationConfig,
+  featureId: string,
+  includeDirectories: boolean
+): VisualizationConfig => {
+  const newMappings = config.mappings.map(mapping => {
+    if (mapping.featureId === featureId) {
+      return {
+        ...mapping,
+        includeDirectories,
       };
     }
     return mapping;

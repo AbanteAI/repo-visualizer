@@ -19,8 +19,11 @@ import {
   calculateNodeSize,
   calculateEdgeStrength,
   calculateEdgeWidth,
+  calculateEdgeColor,
   getNodeColor,
   getLinkColor,
+  calculatePieChartData,
+  isPieChartEnabled,
 } from '../../utils/visualizationUtils';
 import { EXTENSION_COLORS } from '../../utils/extensionColors';
 
@@ -43,6 +46,101 @@ interface Link extends d3.SimulationLinkDatum<Node>, LinkData {
   source: string | Node;
   target: string | Node;
 }
+
+// Helper function to create pie chart nodes
+const createPieChartNodes = (
+  nodeGroups: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>,
+  nodeMetrics: Map<string, ComputedNodeMetrics>,
+  config: VisualizationConfig | undefined,
+  allNodeMetrics: ComputedNodeMetrics[],
+  extensionColors: Record<string, string>,
+  onSelectFile: (fileId: string | null) => void
+): d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown> => {
+  // Create a group for each pie chart
+  const pieGroups = nodeGroups.append('g').attr('class', 'pie-node');
+
+  pieGroups.each(function (d) {
+    const group = d3.select(this);
+    const metrics = nodeMetrics.get(d.id);
+
+    if (!metrics) {
+      // Fallback to regular circle if no metrics
+      group
+        .append('circle')
+        .attr('r', 5)
+        .attr('fill', '#ccc')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5);
+      return;
+    }
+
+    const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
+    const pieData = calculatePieChartData(metrics, config);
+
+    if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
+      // No coverage data available, show regular circle
+      group
+        .append('circle')
+        .attr('r', radius)
+        .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, extensionColors))
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5);
+      return;
+    }
+
+    // Create pie generator
+    const pie = d3
+      .pie<{ label: string; value: number }>()
+      .value(d => d.value)
+      .sort(null);
+
+    const arc = d3
+      .arc<d3.PieArcDatum<{ label: string; value: number }>>()
+      .innerRadius(0)
+      .outerRadius(radius);
+
+    const pieChartData = pie([
+      { label: 'covered', value: pieData.covered },
+      { label: 'uncovered', value: pieData.uncovered },
+    ]);
+
+    // Add pie chart segments
+    group
+      .selectAll('.pie-segment')
+      .data(pieChartData)
+      .enter()
+      .append('path')
+      .attr('class', 'pie-segment')
+      .attr('d', arc)
+      .attr('fill', (_, i) => {
+        if (i === 0) {
+          // Covered portion - use green
+          return '#22c55e';
+        } else {
+          // Uncovered portion - use the node's regular color or red
+          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
+        }
+      })
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1);
+  });
+
+  // Add event handlers to the pie groups
+  pieGroups
+    .style('cursor', 'pointer')
+    .on('mouseover', function () {
+      d3.select(this).selectAll('.pie-segment').attr('stroke-width', 2);
+    })
+    .on('mouseout', function () {
+      d3.select(this).selectAll('.pie-segment').attr('stroke-width', 1);
+    })
+    .on('click', (event, d) => {
+      event.stopPropagation();
+      onSelectFile(d.id);
+    });
+
+  return pieGroups;
+};
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
   ({ data, onSelectFile, selectedFile, config }, ref) => {
@@ -427,7 +525,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .data(links)
         .enter()
         .append('line')
-        .attr('stroke', d => getLinkColor(d.type))
+        .attr('stroke', d => {
+          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+          const linkMetric = linkMetrics.get(linkKey) ?? {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: d.type === 'contains' ? 1 : 0,
+          };
+          return calculateEdgeColor(linkMetric, config, d.type);
+        })
         .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
         .attr('stroke-width', d => {
           const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -453,32 +559,49 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Get all node metrics for normalization (compute once per render)
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
-      // Create circles for nodes
-      const node = nodeGroups
-        .append('circle')
-        .attr('class', 'node')
-        .attr('r', d => {
-          const metrics = nodeMetrics.get(d.id);
-          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-        })
-        .attr('fill', d => {
-          const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
-        })
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5)
-        .on('mouseover', function (_event, _d) {
-          d3.select(this).attr('stroke-width', 3);
-        })
-        .on('mouseout', function (_event, _d) {
-          // Reset to default hover state, but preserve selection highlighting
-          const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
-          d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
-        })
-        .on('click', (event, d) => {
-          event.stopPropagation();
-          onSelectFile(d.id);
-        });
+      // Check if pie chart mode is enabled
+      const pieChartMode = isPieChartEnabled(config);
+
+      let node: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>;
+
+      if (pieChartMode) {
+        // Create pie chart nodes
+        node = createPieChartNodes(
+          nodeGroups,
+          nodeMetrics,
+          config,
+          allNodeMetrics,
+          EXTENSION_COLORS,
+          onSelectFile
+        );
+      } else {
+        // Create regular circle nodes
+        node = nodeGroups
+          .append('circle')
+          .attr('class', 'node')
+          .attr('r', d => {
+            const metrics = nodeMetrics.get(d.id);
+            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          })
+          .attr('fill', d => {
+            const metrics = nodeMetrics.get(d.id);
+            return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+          })
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 1.5)
+          .on('mouseover', function (_event, _d) {
+            d3.select(this).attr('stroke-width', 3);
+          })
+          .on('mouseout', function (_event, _d) {
+            // Reset to default hover state, but preserve selection highlighting
+            const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
+            d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
+          })
+          .on('click', (event, d) => {
+            event.stopPropagation();
+            onSelectFile(d.id);
+          });
+      }
 
       // Add expand/collapse indicators for files with components
       nodeGroups
@@ -579,24 +702,34 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       if (!svgRef.current || !data) return;
 
       const svg = d3.select(svgRef.current);
-      const nodes = svg.selectAll('circle.node');
+      const pieChartMode = isPieChartEnabled(config);
+
+      // Select appropriate node elements based on mode
+      const nodes = pieChartMode ? svg.selectAll('g.pie-node') : svg.selectAll('circle.node');
 
       // Only proceed if nodes exist
       if (nodes.empty()) return;
 
       // Reset all nodes to default stroke
-      nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+      if (pieChartMode) {
+        nodes.selectAll('.pie-segment').attr('stroke', '#fff').attr('stroke-width', 1);
+      } else {
+        nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+      }
 
       // Highlight selected file
       if (selectedFile) {
-        nodes
-          .filter(function (d) {
-            return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
-          })
-          .attr('stroke', '#e74c3c')
-          .attr('stroke-width', 3);
+        const selectedNodes = nodes.filter(function (d) {
+          return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
+        });
+
+        if (pieChartMode) {
+          selectedNodes.selectAll('.pie-segment').attr('stroke', '#e74c3c').attr('stroke-width', 2);
+        } else {
+          selectedNodes.attr('stroke', '#e74c3c').attr('stroke-width', 3);
+        }
       }
-    }, [selectedFile, data, expandedFiles]);
+    }, [selectedFile, data, expandedFiles, config]);
 
     // Config update effect - runs when visualization config changes
     useEffect(() => {
@@ -706,7 +839,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           enter =>
             enter
               .append('line')
-              .attr('stroke', (d: Link) => getLinkColor(d.type))
+              .attr('stroke', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeColor(linkMetric, config, d.type);
+              })
               .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
               .attr('stroke-width', (d: Link) => {
                 const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -719,7 +860,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               }),
           update =>
             update
-              .attr('stroke', (d: Link) => getLinkColor(d.type))
+              .attr('stroke', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeColor(linkMetric, config, d.type);
+              })
               .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
               .attr('stroke-width', (d: Link) => {
                 const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
@@ -739,16 +888,80 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Get all node metrics for normalization (compute once)
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
-      // Update node visual properties
-      nodeSelection
-        .attr('r', (d: Node) => {
+      // Update node visual properties based on mode
+      const pieChartMode = isPieChartEnabled(config);
+
+      if (pieChartMode) {
+        // In pie chart mode, nodeSelection refers to the pie groups
+        // We need to recreate the pie charts with updated data
+        nodeSelection.each(function (d: Node) {
+          const group = d3.select(this);
           const metrics = nodeMetrics.get(d.id);
-          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-        })
-        .attr('fill', (d: Node) => {
-          const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+
+          if (!metrics) return;
+
+          const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
+          const pieData = calculatePieChartData(metrics, config);
+
+          // Remove old segments
+          group.selectAll('.pie-segment').remove();
+          group.selectAll('circle').remove();
+
+          if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
+            // No coverage data, show regular circle
+            group
+              .append('circle')
+              .attr('r', radius)
+              .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS))
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1.5);
+          } else {
+            // Recreate pie chart
+            const pie = d3
+              .pie<{ label: string; value: number }>()
+              .value(d => d.value)
+              .sort(null);
+
+            const arc = d3
+              .arc<d3.PieArcDatum<{ label: string; value: number }>>()
+              .innerRadius(0)
+              .outerRadius(radius);
+
+            const pieChartData = pie([
+              { label: 'covered', value: pieData.covered },
+              { label: 'uncovered', value: pieData.uncovered },
+            ]);
+
+            group
+              .selectAll('.pie-segment')
+              .data(pieChartData)
+              .enter()
+              .append('path')
+              .attr('class', 'pie-segment')
+              .attr('d', arc)
+              .attr('fill', (_, i) => {
+                if (i === 0) {
+                  return '#22c55e'; // Covered portion - green
+                } else {
+                  return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+                }
+              })
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1);
+          }
         });
+      } else {
+        // Regular circle mode
+        nodeSelection
+          .attr('r', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          })
+          .attr('fill', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+          });
+      }
 
       // Update label positions to match new node sizes
       const labelSelection = (simulation as any).__labelSelection;
