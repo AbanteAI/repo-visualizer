@@ -204,7 +204,29 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
         <div className="w-3 h-3 bg-red-500 rounded-full"></div>
         <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-        <h3 className={`text-xl font-bold text-gray-900 border-b-2 border-${titleColor} pb-1`}>
+        <h3
+          className="text-xl font-bold text-gray-900 border-b-2 pb-1"
+          style={{
+            borderBottomColor: (() => {
+              switch (titleColor) {
+                case 'blue-500':
+                  return '#3b82f6';
+                case 'indigo-500':
+                  return '#6366f1';
+                case 'purple-500':
+                  return '#a855f7';
+                case 'green-500':
+                  return '#22c55e';
+                case 'red-500':
+                  return '#ef4444';
+                case 'yellow-500':
+                  return '#eab308';
+                default:
+                  return '#6b7280';
+              }
+            })(),
+          }}
+        >
           {title}
         </h3>
       </div>
@@ -213,7 +235,7 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
       <div
         className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5"
         style={{
-          maxHeight: `${size.height - 80}px`, // Account for header height
+          maxHeight: `${Math.max(0, size.height - 80)}px`, // Account for header height, prevent negative values
           scrollbarWidth: 'thin',
           scrollbarColor: '#cbd5e1 transparent',
         }}
