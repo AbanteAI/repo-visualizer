@@ -37,6 +37,30 @@ else
     echo "Warning: Python tests failed. Continuing without coverage data."
 fi
 
+# Go to frontend to generate its coverage report
+cd frontend
+
+# Ensure frontend dependencies are installed
+echo "Ensuring frontend dependencies are installed..."
+if [ ! -d "node_modules" ]; then
+    echo "Installing frontend dependencies..."
+    npm install
+fi
+
+# Generate frontend coverage report
+echo "Generating frontend coverage report..."
+if npm run test:coverage; then
+    echo "Frontend tests passed. Coverage report generated."
+    if [ -f "coverage/coverage-final.json" ]; then
+        mv coverage/coverage-final.json coverage.json
+    fi
+else
+    echo "Warning: Frontend tests failed. Continuing without coverage data."
+fi
+
+# Go back to root
+cd ..
+
 # Generate repository data
 echo "Generating repository data..."
 COVERAGE_ARGS=""
@@ -55,32 +79,12 @@ if [ ! -d "frontend" ]; then
     exit 1
 fi
 cp repo_data.json frontend/
-if [ -f "coverage.json" ]; then
-    cp coverage.json frontend/python-coverage.json
-fi
-
-# Ensure frontend dependencies are installed
-echo "Ensuring frontend dependencies are installed..."
-cd frontend
-if [ ! -d "node_modules" ]; then
-    echo "Installing frontend dependencies..."
-    npm install
-fi
-
-# Generate frontend coverage report
-echo "Generating frontend coverage report..."
-if npm run test:coverage; then
-    echo "Frontend tests passed. Coverage report generated."
-else
-    echo "Warning: Frontend tests failed. Continuing without coverage data."
-fi
-if [ -f "coverage/coverage-final.json" ]; then
-    mv coverage/coverage-final.json coverage.json
-fi
-
 
 # Start frontend development server
+cd frontend
 echo "Starting frontend development server..."
+
+
 echo ""
 echo "Repo Visualizer will be running at:"
 echo "  Local:   http://localhost:5173/"
