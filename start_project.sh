@@ -29,9 +29,24 @@ if ! $PIP_CMD install -e ".[dev]" > /dev/null 2>&1; then
     fi
 fi
 
+# Generate Python coverage report
+echo "Generating Python coverage report..."
+if $PYTHON_CMD -m pytest; then
+    echo "Python tests passed. Coverage report generated."
+else
+    echo "Warning: Python tests failed. Continuing without coverage data."
+fi
+
 # Generate repository data
 echo "Generating repository data..."
-$PYTHON_CMD -m repo_visualizer . -o repo_data.json -v
+COVERAGE_ARGS=""
+if [ -f "coverage.json" ]; then
+    COVERAGE_ARGS="$COVERAGE_ARGS --python-coverage coverage.json"
+fi
+if [ -f "frontend/coverage.json" ]; then
+    COVERAGE_ARGS="$COVERAGE_ARGS --frontend-coverage frontend/coverage.json"
+fi
+$PYTHON_CMD -m repo_visualizer . -o repo_data.json -v $COVERAGE_ARGS
 
 # Copy data to frontend
 echo "Copying data to frontend..."
@@ -40,6 +55,9 @@ if [ ! -d "frontend" ]; then
     exit 1
 fi
 cp repo_data.json frontend/
+if [ -f "coverage.json" ]; then
+    cp coverage.json frontend/python-coverage.json
+fi
 
 # Ensure frontend dependencies are installed
 echo "Ensuring frontend dependencies are installed..."
@@ -48,6 +66,18 @@ if [ ! -d "node_modules" ]; then
     echo "Installing frontend dependencies..."
     npm install
 fi
+
+# Generate frontend coverage report
+echo "Generating frontend coverage report..."
+if npm run test:coverage; then
+    echo "Frontend tests passed. Coverage report generated."
+else
+    echo "Warning: Frontend tests failed. Continuing without coverage data."
+fi
+if [ -f "coverage/coverage-final.json" ]; then
+    mv coverage/coverage-final.json coverage.json
+fi
+
 
 # Start frontend development server
 echo "Starting frontend development server..."

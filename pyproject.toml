@@ -44,7 +44,7 @@ repo-visualizer = "src.repo_visualizer.cli:main"
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
-addopts = "--cov=src --cov-report=term --cov-fail-under=50"
+addopts = "--cov=src --cov-report=term --cov-report=json:coverage.json --cov-fail-under=50"
 
 [tool.ruff]
 target-version = "py38"

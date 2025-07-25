@@ -36,6 +36,13 @@ export interface File {
   components: Component[];
 }
 
+export interface TestCoverage {
+  lines?: number;
+  statements?: number;
+  functions?: number;
+  branches?: number;
+}
+
 export interface FileMetrics {
   complexity?: number;
   linesOfCode?: number;
@@ -45,6 +52,7 @@ export interface FileMetrics {
   lastCommitDaysAgo?: number;
   lastCommitDate?: string;
   topLevelIdentifiers?: number;
+  testCoverage?: TestCoverage;
   custom?: Record<string, any>;
 }
 

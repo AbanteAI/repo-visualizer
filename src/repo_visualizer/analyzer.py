@@ -42,7 +42,12 @@ from .schema import (
 class RepositoryAnalyzer:
     """Analyzes a local git repository and generates visualization data."""
 
-    def __init__(self, repo_path: str):
+    def __init__(
+        self,
+        repo_path: str,
+        python_coverage_path: Optional[str] = None,
+        frontend_coverage_path: Optional[str] = None,
+    ):
         """
         Initialize the repository analyzer.
 
@@ -50,6 +55,8 @@ class RepositoryAnalyzer:
             repo_path: Path to the local git repository
         """
         self.repo_path = os.path.abspath(repo_path)
+        self.python_coverage_path = python_coverage_path
+        self.frontend_coverage_path = frontend_coverage_path
         if not os.path.isdir(self.repo_path):
             raise ValueError(f"Repository path does not exist: {self.repo_path}")
 
@@ -67,7 +74,56 @@ class RepositoryAnalyzer:
         self.gitignore_spec = self._load_gitignore_patterns()
 
         # Cache for coverage data to avoid reparsing
-        self._coverage_cache: Optional[Dict[str, float]] = None
+        self._coverage_cache: Optional[Dict[str, Dict[str, float]]] = None
+
+    def _load_coverage_data(self) -> Dict[str, Dict[str, float]]:
+        """Load and parse coverage data from JSON files."""
+        if self._coverage_cache is not None:
+            return self._coverage_cache
+
+        coverage_data: Dict[str, Dict[str, float]] = {}
+
+        # Load Python coverage
+        if self.python_coverage_path and os.path.exists(self.python_coverage_path):
+            try:
+                with open(self.python_coverage_path) as f:
+                    py_coverage = json.load(f)
+                    for file_path, summary in py_coverage.get("files", {}).items():
+                        coverage_data[file_path] = {
+                            "lines": summary.get("summary", {}).get(
+                                "percent_covered", 0
+                            )
+                            / 100.0
+                        }
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse Python coverage file: {e}")
+
+        # Load frontend coverage
+        if self.frontend_coverage_path and os.path.exists(self.frontend_coverage_path):
+            try:
+                with open(self.frontend_coverage_path) as f:
+                    fe_coverage = json.load(f)
+                    for file_path, summary in (
+                        fe_coverage.get("total", {}).get("files", {}).items()
+                    ):
+                        # Normalize path
+                        normalized_path = os.path.relpath(
+                            file_path, os.path.join(self.repo_path, "frontend")
+                        )
+                        coverage_data[f"frontend/{normalized_path}"] = {
+                            "lines": summary.get("lines", {}).get("pct", 0) / 100.0,
+                            "statements": summary.get("statements", {}).get("pct", 0)
+                            / 100.0,
+                            "functions": summary.get("functions", {}).get("pct", 0)
+                            / 100.0,
+                            "branches": summary.get("branches", {}).get("pct", 0)
+                            / 100.0,
+                        }
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse frontend coverage file: {e}")
+
+        self._coverage_cache = coverage_data
+        return self._coverage_cache
 
     def analyze(self) -> RepositoryData:
         """
@@ -548,6 +604,13 @@ class RepositoryAnalyzer:
                 components, metrics = self._analyze_file_content(
                     file_path, rel_path, ext
                 )
+
+                # Add coverage metrics
+                coverage_data = self._load_coverage_data()
+                if rel_path in coverage_data:
+                    if not metrics:
+                        metrics = {}
+                    metrics["testCoverage"] = coverage_data[rel_path]
 
                 # Extract git history data for this file
                 git_metrics = self._extract_file_git_metrics(rel_path)
@@ -2339,15 +2402,26 @@ class RepositoryAnalyzer:
         print(f"Repository data saved to {output_path}")
 
 
-def analyze_repository(repo_path: str, output_path: str) -> None:
+def analyze_repository(
+    repo_path: str,
+    output_path: str,
+    python_coverage_path: Optional[str] = None,
+    frontend_coverage_path: Optional[str] = None,
+) -> None:
     """
     Analyze a repository and generate visualization data.
 
     Args:
         repo_path: Path to the local git repository
         output_path: Path to output JSON file
+        python_coverage_path: Path to Python coverage.json file
+        frontend_coverage_path: Path to frontend coverage.json file
     """
-    analyzer = RepositoryAnalyzer(repo_path)
+    analyzer = RepositoryAnalyzer(
+        repo_path,
+        python_coverage_path=python_coverage_path,
+        frontend_coverage_path=frontend_coverage_path,
+    )
     analyzer.analyze()
     analyzer.save_to_file(output_path)
 
