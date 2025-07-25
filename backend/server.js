@@ -100,13 +100,16 @@ app.get('/api/file-content', async (req, res) => {
 // Search across multiple files' content
 app.post('/api/search-content', async (req, res) => {
   try {
+    console.log('Received search request:', req.body);
     const { files, searchTerm, searchType = 'keyword' } = req.body;
     
     if (!files || !Array.isArray(files) || files.length === 0) {
+      console.log('Files array is missing or empty');
       return res.status(400).json({ error: 'Files array is required' });
     }
 
     if (!searchTerm || typeof searchTerm !== 'string') {
+      console.log('Search term is missing or invalid');
       return res.status(400).json({ error: 'Search term is required' });
     }
 
