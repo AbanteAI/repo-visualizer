@@ -133,10 +133,87 @@ const FileDetails: React.FC<FileDetailsProps> = ({ fileId, data, onClose }) => {
               {file.metrics.complexity && (
                 <p className="text-sm text-gray-600">Complexity: {file.metrics.complexity}</p>
               )}
+              {file.metrics.topLevelIdentifiers && (
+                <p className="text-sm text-gray-600">
+                  Top-level identifiers: {file.metrics.topLevelIdentifiers}
+                </p>
+              )}
+              {file.metrics.commitCount && (
+                <p className="text-sm text-gray-600">Commit count: {file.metrics.commitCount}</p>
+              )}
+              {file.metrics.lastCommitDaysAgo !== undefined && (
+                <p className="text-sm text-gray-600">
+                  Last commit: {file.metrics.lastCommitDaysAgo} days ago
+                </p>
+              )}
             </div>
           </div>
         )}
       </div>
+
+      {/* References section */}
+      {(() => {
+        const incomingRefs = data.relationships.filter(rel => rel.target === fileId);
+        const outgoingRefs = data.relationships.filter(rel => rel.source === fileId);
+
+        return (
+          (incomingRefs.length > 0 || outgoingRefs.length > 0) && (
+            <div className="border-b border-gray-200 pb-4 mb-4">
+              <p className="font-medium text-gray-800 mb-3">References:</p>
+
+              {/* Incoming references */}
+              {incomingRefs.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Incoming ({incomingRefs.reduce((sum, ref) => sum + (ref.strength || 1), 0)}{' '}
+                    total):
+                  </p>
+                  <div className="ml-4 space-y-1 max-h-32 overflow-y-auto">
+                    {incomingRefs.map((rel, idx) => {
+                      const sourceFile = data.files.find(f => f.id === rel.source);
+                      const refCount = rel.strength || 1;
+                      const refText = refCount > 1 ? `${refCount} refs` : '1 ref';
+                      return (
+                        <p key={idx} className="text-xs text-gray-600">
+                          <span className="text-blue-600">{sourceFile?.name || rel.source}</span>
+                          <span className="text-gray-500 ml-1">
+                            ({rel.type}, {refText})
+                          </span>
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Outgoing references */}
+              {outgoingRefs.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Outgoing ({outgoingRefs.reduce((sum, ref) => sum + (ref.strength || 1), 0)}{' '}
+                    total):
+                  </p>
+                  <div className="ml-4 space-y-1 max-h-32 overflow-y-auto">
+                    {outgoingRefs.map((rel, idx) => {
+                      const targetFile = data.files.find(f => f.id === rel.target);
+                      const refCount = rel.strength || 1;
+                      const refText = refCount > 1 ? `${refCount} refs` : '1 ref';
+                      return (
+                        <p key={idx} className="text-xs text-gray-600">
+                          <span className="text-green-600">{targetFile?.name || rel.target}</span>
+                          <span className="text-gray-500 ml-1">
+                            ({rel.type}, {refText})
+                          </span>
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        );
+      })()}
 
       {file.components && file.components.length > 0 && (
         <div>

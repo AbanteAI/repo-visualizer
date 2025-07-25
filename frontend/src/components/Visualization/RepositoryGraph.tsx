@@ -19,6 +19,9 @@ import {
   calculateNodeSize,
   calculateEdgeStrength,
   getNodeColor,
+  getLinkColor,
+  isNodeVisible,
+  isEdgeVisible,
   calculatePieChartData,
   isPieChartEnabled,
 } from '../../utils/visualizationUtils';
@@ -145,6 +148,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const originalNodesRef = useRef<Node[]>([]);
     const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
     const [nodeMetrics, setNodeMetrics] = useState<Map<string, ComputedNodeMetrics>>(new Map());
@@ -344,13 +348,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const g = svg.append('g');
 
       // Extract nodes from files and their components
-      const nodes: Node[] = [];
+      const allNodes: Node[] = [];
 
       // Add file and directory nodes
       data.files.forEach(file => {
         // Only add file-level nodes (not components as separate nodes)
         if (file.type === 'file' || file.type === 'directory') {
-          nodes.push({
+          allNodes.push({
             id: file.id,
             name: file.name,
             path: file.path,
@@ -364,7 +368,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           // Add component nodes only if file is expanded
           if (expandedFiles.has(file.id) && file.components) {
             file.components.forEach(component => {
-              nodes.push({
+              allNodes.push({
                 id: component.id,
                 name: component.name,
                 path: file.path,
@@ -379,7 +383,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               const addNestedComponents = (comp: any, currentDepth: number, parentId: string) => {
                 if (comp.components) {
                   comp.components.forEach((nestedComp: any) => {
-                    nodes.push({
+                    allNodes.push({
                       id: nestedComp.id,
                       name: nestedComp.name,
                       path: file.path,
@@ -398,6 +402,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           }
         }
       });
+
+      // Get all node metrics for threshold calculations
+      const allNodeMetrics = Array.from(nodeMetrics.values());
+
+      // Use all nodes initially - thresholding will be applied in config update effect
+      const nodes = allNodes;
 
       // Create initial links with current weights, but only for visible nodes
       const nodeIds = new Set(nodes.map(n => n.id));
@@ -428,7 +438,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
               originalStrength: rel.strength || 1,
             };
           })
-          .filter(link => link.weight > 0); // Only include links with non-zero weight
+          .filter(link => {
+            // Apply both existing weight check and new threshold check
+            if (link.weight <= 0) return false;
+
+            const linkKey = `${link.source}-${link.target}`;
+            const linkMetric = linkMetrics.get(linkKey);
+            if (!linkMetric) return false;
+
+            return isEdgeVisible(linkMetric, config, link.type);
+          });
 
         // Add dynamic "contains" relationships for expanded nodes
         const dynamicLinks: Link[] = [];
@@ -457,6 +476,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       };
 
       const links = createLinks();
+
+      // Store original nodes for threshold filtering
+      originalNodesRef.current = nodes;
 
       // Create a force simulation
       const simulation = d3
@@ -566,7 +588,19 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           return `${sourceName} → ${targetName}\nType: ${d.type}\nReferences: ${referenceText}`;
         });
 
+<<<<<<< HEAD
         allLinkElements.push(linkSelection);
+||||||| 5d30f50
+=======
+      // Add tooltips to edges showing reference counts
+      link.append('title').text(d => {
+        const sourceName = (d.source as any).name || (d.source as any).id || d.source;
+        const targetName = (d.target as any).name || (d.target as any).id || d.target;
+        const strength = d.originalStrength || 1;
+        const referenceText = strength > 1 ? `${strength} references` : '1 reference';
+
+        return `${sourceName} → ${targetName}\nType: ${d.type}\nReferences: ${referenceText}`;
+>>>>>>> origin/main
       });
 
       // Create node groups (to hold both circles and expand/collapse indicators)
@@ -579,9 +613,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .append('g')
         .style('cursor', 'pointer')
         .call(dragBehavior(simulation));
-
-      // Get all node metrics for normalization (compute once per render)
-      const allNodeMetrics = Array.from(nodeMetrics.values());
 
       // Check if pie chart mode is enabled
       const pieChartMode = isPieChartEnabled(config);
@@ -714,7 +745,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       expandedFiles,
       toggleNodeExpansion,
       hasComponents,
-      config,
+      config?.mappings,
       nodeMetrics,
       linkMetrics,
     ]);
@@ -753,6 +784,557 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }, [selectedFile, data, expandedFiles, config]);
 
+<<<<<<< HEAD
+||||||| 5d30f50
+    // Config update effect - runs when visualization config changes
+    useEffect(() => {
+      if (!simulationRef.current || !data || nodeMetrics.size === 0) return;
+
+      const simulation = simulationRef.current;
+      const linkSelection = (simulation as any).__linkSelection;
+      const nodeSelection = (simulation as any).__nodeSelection;
+
+      if (!linkSelection || !nodeSelection) return;
+
+      // Get current visible node IDs
+      const nodes = simulation.nodes();
+      const currentNodeIds = new Set(nodes.map(n => n.id));
+
+      // Recreate links with new weights, but only for visible nodes
+      const baseUpdatedLinks = data.relationships
+        .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
+        .map(rel => {
+          const linkKey = `${rel.source}-${rel.target}`;
+          const linkMetric = linkMetrics.get(linkKey);
+
+          if (!linkMetric) {
+            return {
+              source: rel.source,
+              target: rel.target,
+              type: rel.type,
+              weight: 0,
+              originalStrength: rel.strength || 1,
+            };
+          }
+
+          const edgeStrength = calculateEdgeStrength(linkMetric, config);
+
+          return {
+            source: rel.source,
+            target: rel.target,
+            type: rel.type,
+            weight: edgeStrength,
+            originalStrength: rel.strength || 1,
+          };
+        })
+        .filter(link => link.weight > 0);
+
+      // Add dynamic "contains" relationships for expanded nodes
+      const dynamicUpdatedLinks: Link[] = [];
+      nodes.forEach(node => {
+        if (node.parentId && currentNodeIds.has(node.parentId)) {
+          const containsMetric: ComputedLinkMetrics = {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: 1,
+          };
+
+          const edgeStrength = calculateEdgeStrength(containsMetric, config);
+
+          dynamicUpdatedLinks.push({
+            source: node.parentId,
+            target: node.id,
+            type: 'contains',
+            weight: edgeStrength,
+            originalStrength: 1,
+          });
+        }
+      });
+
+      const updatedLinks = [...baseUpdatedLinks, ...dynamicUpdatedLinks];
+
+      // Update the force simulation with new link data
+      const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
+      linkForce
+        .links(updatedLinks)
+        .distance(d => {
+          const baseDistance = 100;
+          const weight = d.weight || 0;
+          const strength = d.originalStrength || 1;
+
+          if (d.type === 'filesystem_proximity') {
+            return baseDistance * (1 - weight * 0.5) * (1 / strength);
+          } else if (d.type === 'semantic_similarity') {
+            return baseDistance * (1 - weight * 0.4) * (1 / strength);
+          } else if (d.type === 'contains') {
+            return 50;
+          } else {
+            return baseDistance * (1 - weight * 0.3);
+          }
+        })
+        .strength(d => {
+          const baseStrength = 1;
+          const weight = d.weight || 0;
+          const strength = d.originalStrength || 1;
+
+          if (d.type === 'contains') {
+            return 2;
+          }
+
+          return baseStrength * weight * strength;
+        });
+
+      // Update link visual properties with proper enter/update/exit handling
+      const newLinkSelection = linkSelection
+        .data(
+          updatedLinks,
+          (d: Link) => `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`
+        )
+        .join(
+          enter =>
+            enter
+              .append('line')
+              .attr('stroke', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeColor(linkMetric, config, d.type);
+              })
+              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
+              .attr('stroke-width', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeWidth(linkMetric, config, d.type);
+              }),
+          update =>
+            update
+              .attr('stroke', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeColor(linkMetric, config, d.type);
+              })
+              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
+              .attr('stroke-width', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeWidth(linkMetric, config, d.type);
+              }),
+          exit => exit.remove()
+        );
+
+      // Store the new selection for future updates
+      (simulation as any).__linkSelection = newLinkSelection;
+
+      // Get all node metrics for normalization (compute once)
+      const allNodeMetrics = Array.from(nodeMetrics.values());
+
+      // Update node visual properties based on mode
+      const pieChartMode = isPieChartEnabled(config);
+
+      if (pieChartMode) {
+        // In pie chart mode, nodeSelection refers to the pie groups
+        // We need to recreate the pie charts with updated data
+        nodeSelection.each(function (d: Node) {
+          const group = d3.select(this);
+          const metrics = nodeMetrics.get(d.id);
+
+          if (!metrics) return;
+
+          const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
+          const pieData = calculatePieChartData(metrics, config);
+
+          // Remove old segments
+          group.selectAll('.pie-segment').remove();
+          group.selectAll('circle').remove();
+
+          if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
+            // No coverage data, show regular circle
+            group
+              .append('circle')
+              .attr('r', radius)
+              .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS))
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1.5);
+          } else {
+            // Recreate pie chart
+            const pie = d3
+              .pie<{ label: string; value: number }>()
+              .value(d => d.value)
+              .sort(null);
+
+            const arc = d3
+              .arc<d3.PieArcDatum<{ label: string; value: number }>>()
+              .innerRadius(0)
+              .outerRadius(radius);
+
+            const pieChartData = pie([
+              { label: 'covered', value: pieData.covered },
+              { label: 'uncovered', value: pieData.uncovered },
+            ]);
+
+            group
+              .selectAll('.pie-segment')
+              .data(pieChartData)
+              .enter()
+              .append('path')
+              .attr('class', 'pie-segment')
+              .attr('d', arc)
+              .attr('fill', (_, i) => {
+                if (i === 0) {
+                  return '#22c55e'; // Covered portion - green
+                } else {
+                  return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+                }
+              })
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1);
+          }
+        });
+      } else {
+        // Regular circle mode
+        nodeSelection
+          .attr('r', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          })
+          .attr('fill', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+          });
+      }
+
+      // Update label positions to match new node sizes
+      const labelSelection = (simulation as any).__labelSelection;
+      if (labelSelection) {
+        labelSelection.attr('dx', (d: Node) => {
+          const metrics = nodeMetrics.get(d.id);
+          const radius = metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          return radius + 5;
+        });
+      }
+
+      // Update collision force with new node sizes
+      const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
+      collisionForce.radius((d: Node) => {
+        const metrics = nodeMetrics.get(d.id);
+        if (!metrics) return 10;
+        return calculateNodeSize(metrics, config, allNodeMetrics, d.type) + 5;
+      });
+
+      // Don't update center force during config changes - preserve current zoom/pan
+      // The center force should remain at the original center (width/2, height/2)
+
+      // Restart simulation with gentle animation
+      simulation.alpha(0.1).restart();
+    }, [config, data, nodeMetrics, linkMetrics]);
+
+=======
+    // Config update effect - runs when visualization config changes
+    useEffect(() => {
+      if (!simulationRef.current || !data || nodeMetrics.size === 0) return;
+
+      const simulation = simulationRef.current;
+      const linkSelection = (simulation as any).__linkSelection;
+      const nodeSelection = (simulation as any).__nodeSelection;
+
+      if (!linkSelection || !nodeSelection) return;
+
+      // Get original nodes and apply threshold filtering
+      const nodes = originalNodesRef.current;
+      const currentNodeMetrics = Array.from(nodeMetrics.values());
+
+      // Filter nodes based on thresholds while preserving positions
+      const visibleNodes = nodes.filter(node => {
+        const nodeMetric = nodeMetrics.get(node.id);
+        if (!nodeMetric) return true; // Keep nodes without metrics
+        return isNodeVisible(nodeMetric, config, currentNodeMetrics, node.type);
+      });
+
+      // Update simulation with filtered nodes
+      simulation.nodes(visibleNodes);
+
+      // Update visual representation
+      const svg = d3.select(svgRef.current);
+      const nodeGroups = svg.selectAll('g.nodes g');
+
+      nodeGroups.style('display', function (d: any) {
+        const nodeMetric = nodeMetrics.get(d.id);
+        if (!nodeMetric) return 'block';
+        return isNodeVisible(nodeMetric, config, currentNodeMetrics, d.type) ? 'block' : 'none';
+      });
+
+      const currentNodeIds = new Set(visibleNodes.map(n => n.id));
+
+      // Recreate links with new weights, but only for visible nodes
+      const baseUpdatedLinks = data.relationships
+        .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
+        .map(rel => {
+          const linkKey = `${rel.source}-${rel.target}`;
+          const linkMetric = linkMetrics.get(linkKey);
+
+          if (!linkMetric) {
+            return {
+              source: rel.source,
+              target: rel.target,
+              type: rel.type,
+              weight: 0,
+              originalStrength: rel.strength || 1,
+            };
+          }
+
+          const edgeStrength = calculateEdgeStrength(linkMetric, config);
+
+          return {
+            source: rel.source,
+            target: rel.target,
+            type: rel.type,
+            weight: edgeStrength,
+            originalStrength: rel.strength || 1,
+          };
+        })
+        .filter(link => {
+          // Apply both existing weight check and new threshold check
+          if (link.weight <= 0) return false;
+
+          const linkKey = `${link.source}-${link.target}`;
+          const linkMetric = linkMetrics.get(linkKey);
+          if (!linkMetric) return false;
+
+          return isEdgeVisible(linkMetric, config, link.type);
+        });
+
+      // Add dynamic "contains" relationships for expanded nodes
+      const dynamicUpdatedLinks: Link[] = [];
+      visibleNodes.forEach(node => {
+        if (node.parentId && currentNodeIds.has(node.parentId) && currentNodeIds.has(node.id)) {
+          const containsMetric: ComputedLinkMetrics = {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: 1,
+          };
+
+          const edgeStrength = calculateEdgeStrength(containsMetric, config);
+
+          dynamicUpdatedLinks.push({
+            source: node.parentId,
+            target: node.id,
+            type: 'contains',
+            weight: edgeStrength,
+            originalStrength: 1,
+          });
+        }
+      });
+
+      const updatedLinks = [...baseUpdatedLinks, ...dynamicUpdatedLinks];
+
+      // Update the force simulation with new link data
+      const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
+      linkForce
+        .links(updatedLinks)
+        .distance(d => {
+          const baseDistance = 100;
+          const weight = d.weight || 0;
+          const strength = d.originalStrength || 1;
+
+          if (d.type === 'filesystem_proximity') {
+            return baseDistance * (1 - weight * 0.5) * (1 / strength);
+          } else if (d.type === 'semantic_similarity') {
+            return baseDistance * (1 - weight * 0.4) * (1 / strength);
+          } else if (d.type === 'contains') {
+            return 50;
+          } else {
+            return baseDistance * (1 - weight * 0.3);
+          }
+        })
+        .strength(d => {
+          const baseStrength = 1;
+          const weight = d.weight || 0;
+          const strength = d.originalStrength || 1;
+
+          if (d.type === 'contains') {
+            return 2;
+          }
+
+          return baseStrength * weight * strength;
+        });
+
+      // Update link visual properties with proper enter/update/exit handling
+      const newLinkSelection = linkSelection
+        .data(
+          updatedLinks,
+          (d: Link) => `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`
+        )
+        .join(
+          enter =>
+            enter
+              .append('line')
+              .attr('stroke', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeColor(linkMetric, config, d.type);
+              })
+              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
+              .attr('stroke-width', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeWidth(linkMetric, config, d.type);
+              }),
+          update =>
+            update
+              .attr('stroke', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeColor(linkMetric, config, d.type);
+              })
+              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
+              .attr('stroke-width', (d: Link) => {
+                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+                const linkMetric = linkMetrics.get(linkKey) ?? {
+                  semantic_similarity: 0,
+                  filesystem_proximity: 0,
+                  code_references: d.type === 'contains' ? 1 : 0,
+                };
+                return calculateEdgeWidth(linkMetric, config, d.type);
+              }),
+          exit => exit.remove()
+        );
+
+      // Store the new selection for future updates
+      (simulation as any).__linkSelection = newLinkSelection;
+
+      // Get all node metrics for normalization (compute once)
+      const allNodeMetrics = Array.from(nodeMetrics.values());
+
+      // Update node visual properties based on mode
+      const pieChartMode = isPieChartEnabled(config);
+
+      if (pieChartMode) {
+        // In pie chart mode, nodeSelection refers to the pie groups
+        // We need to recreate the pie charts with updated data
+        nodeSelection.each(function (d: Node) {
+          const group = d3.select(this);
+          const metrics = nodeMetrics.get(d.id);
+
+          if (!metrics) return;
+
+          const radius = calculateNodeSize(metrics, config, currentNodeMetrics, d.type);
+          const pieData = calculatePieChartData(metrics, config);
+
+          // Remove old segments
+          group.selectAll('.pie-segment').remove();
+          group.selectAll('circle').remove();
+
+          if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
+            // No coverage data, show regular circle
+            group
+              .append('circle')
+              .attr('r', radius)
+              .attr('fill', getNodeColor(d, metrics, config, currentNodeMetrics, EXTENSION_COLORS))
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1.5);
+          } else {
+            // Recreate pie chart
+            const pie = d3
+              .pie<{ label: string; value: number }>()
+              .value(d => d.value)
+              .sort(null);
+
+            const arc = d3
+              .arc<d3.PieArcDatum<{ label: string; value: number }>>()
+              .innerRadius(0)
+              .outerRadius(radius);
+
+            const pieChartData = pie([
+              { label: 'covered', value: pieData.covered },
+              { label: 'uncovered', value: pieData.uncovered },
+            ]);
+
+            group
+              .selectAll('.pie-segment')
+              .data(pieChartData)
+              .enter()
+              .append('path')
+              .attr('class', 'pie-segment')
+              .attr('d', arc)
+              .attr('fill', (_, i) => {
+                if (i === 0) {
+                  return '#22c55e'; // Covered portion - green
+                } else {
+                  return getNodeColor(d, metrics, config, currentNodeMetrics, EXTENSION_COLORS);
+                }
+              })
+              .attr('stroke', '#fff')
+              .attr('stroke-width', 1);
+          }
+        });
+      } else {
+        // Regular circle mode
+        nodeSelection
+          .attr('r', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return metrics ? calculateNodeSize(metrics, config, currentNodeMetrics, d.type) : 5;
+          })
+          .attr('fill', (d: Node) => {
+            const metrics = nodeMetrics.get(d.id);
+            return getNodeColor(d, metrics, config, currentNodeMetrics, EXTENSION_COLORS);
+          });
+      }
+
+      // Update label positions to match new node sizes
+      const labelSelection = (simulation as any).__labelSelection;
+      if (labelSelection) {
+        labelSelection.attr('dx', (d: Node) => {
+          const metrics = nodeMetrics.get(d.id);
+          const radius = metrics
+            ? calculateNodeSize(metrics, config, currentNodeMetrics, d.type)
+            : 5;
+          return radius + 5;
+        });
+      }
+
+      // Update collision force with new node sizes
+      const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
+      collisionForce.radius((d: Node) => {
+        const metrics = nodeMetrics.get(d.id);
+        if (!metrics) return 10;
+        return calculateNodeSize(metrics, config, currentNodeMetrics, d.type) + 5;
+      });
+
+      // Don't update center force during config changes - preserve current zoom/pan
+      // The center force should remain at the original center (width/2, height/2)
+
+      // Restart simulation with gentle animation
+      simulation.alpha(0.1).restart();
+    }, [config, data, nodeMetrics, linkMetrics]);
+
+>>>>>>> origin/main
     // Create a drag behavior
     const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
       return d3
