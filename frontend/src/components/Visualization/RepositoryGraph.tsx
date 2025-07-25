@@ -324,31 +324,80 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       setLinkMetrics(computedLinkMetrics);
     }, [data]);
 
-    // Initial setup effect - runs when data changes
+    // Effect for initializing the simulation and SVG structure
     useEffect(() => {
       if (
         !svgRef.current ||
         !containerRef.current ||
-        !data ||
         dimensions.width === 0 ||
-        dimensions.height === 0 ||
-        nodeMetrics.size === 0
-      )
+        dimensions.height === 0
+      ) {
         return;
+      }
 
-      // Clear any existing visualization
+      if (simulationRef.current) {
+        return; // Already initialized
+      }
+
       const svg = d3.select(svgRef.current);
-      svg.selectAll('*').remove();
-
-      // Set up dimensions
       const width = dimensions.width;
       const height = dimensions.height;
 
-      // Update SVG dimensions
-      svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
-
-      // Create a group for the graph
+      svg.selectAll('*').remove();
       const g = svg.append('g');
+      g.append('g').attr('class', 'links');
+      g.append('g').attr('class', 'nodes');
+
+      const simulation = d3
+        .forceSimulation<Node>()
+        .force(
+          'link',
+          d3.forceLink<Node, Link>().id(d => d.id)
+        )
+        .force('charge', d3.forceManyBody().strength(-300))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide<Node>());
+
+      simulationRef.current = simulation;
+
+      const zoom = d3
+        .zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.1, 8])
+        .on('zoom', event => {
+          g.attr('transform', event.transform);
+          g.selectAll('.node text').style('display', event.transform.k > 1.5 ? 'block' : 'none');
+        });
+
+      svg.call(zoom);
+      zoomRef.current = zoom;
+
+      simulation.on('tick', () => {
+        const positions = nodePositionsRef.current;
+        simulation.nodes().forEach(node => {
+          if (node.x !== undefined && node.y !== undefined) {
+            positions.set(node.id, { x: node.x, y: node.y });
+          }
+        });
+
+        g.selectAll<SVGLineElement, Link>('.link')
+          .attr('x1', d => (d.source as Node).x!)
+          .attr('y1', d => (d.source as Node).y!)
+          .attr('x2', d => (d.target as Node).x!)
+          .attr('y2', d => (d.target as Node).y!);
+
+        g.selectAll<SVGGElement, Node>('.node').attr('transform', d => `translate(${d.x},${d.y})`);
+      });
+    }, [dimensions]);
+
+    // Effect for updating the visualization with new data
+    useEffect(() => {
+      if (!simulationRef.current || !data || nodeMetrics.size === 0) {
+        return;
+      }
+
+      const simulation = simulationRef.current;
+      const svg = d3.select(svgRef.current);
+      const g = svg.select<SVGGElement>('g');
 
       // Extract nodes from files and their components, preserving positions
       const allNodes: Node[] = [];
