@@ -538,7 +538,7 @@ class RepositoryAnalyzer:
                 rel_path = rel_path.replace(os.path.sep, "/")
 
                 # Calculate directory depth
-                depth = len(rel_path.split("/"))
+                depth = len(rel_path.split("/")) - 1
 
                 # Create directory entry
                 dir_entry: File = {
@@ -602,7 +602,7 @@ class RepositoryAnalyzer:
                     continue
 
                 # Calculate file depth
-                depth = len(rel_path.split("/"))
+                depth = len(rel_path.split("/")) - 1
 
                 # Extract components from the file
                 components = self._extract_components(file_path)

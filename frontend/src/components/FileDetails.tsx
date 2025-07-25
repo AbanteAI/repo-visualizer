@@ -8,9 +8,12 @@ const CoveragePieChart: React.FC<{ coverage: TestCoverage }> = ({ coverage }) =>
   const circumference = 2 * Math.PI * innerRadius;
 
   const totalMetrics = Object.values(coverage).filter(v => v !== undefined).length;
-  if (totalMetrics === 0) return null;
+  const avgCoverage =
+    totalMetrics > 0
+      ? Object.values(coverage).reduce((acc, v) => acc + (v || 0), 0) / totalMetrics
+      : 0;
 
-  const avgCoverage = Object.values(coverage).reduce((acc, v) => acc + (v || 0), 0) / totalMetrics;
+  if (totalMetrics === 0 || avgCoverage === 0) return null;
 
   const offset = circumference - avgCoverage * circumference;
 
