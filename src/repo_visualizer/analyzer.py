@@ -2229,22 +2229,9 @@ class RepositoryAnalyzer:
                     f"{commit['id'][:8]} - {commit['message'][:50]}..."
                 )
 
-                # Checkout this specific commit
-                result = subprocess.run(
-                    ["git", "checkout", commit["id"]],
-                    cwd=self.repo_path,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-
-                if result.returncode != 0:
-                    print(f"Failed to checkout commit {commit['id']}: {result.stderr}")
-                    continue
-
                 # Analyze the repository state at this commit
                 snapshot_files, snapshot_relationships = (
-                    self._analyze_repository_snapshot()
+                    self._analyze_repository_snapshot(commit["id"])
                 )
 
                 # Create timeline point with full snapshot
@@ -2270,108 +2257,92 @@ class RepositoryAnalyzer:
 
         return timeline_points
 
-    def _analyze_repository_snapshot(self) -> Tuple[List[File], List[Relationship]]:
+    def _analyze_repository_snapshot(
+        self, commit_hash: str
+    ) -> Tuple[List[File], List[Relationship]]:
         """
-        Analyze the current repository state and return files and relationships.
-        This is similar to _analyze_files but returns the data instead of storing it.
+        Analyze the repository state at a specific commit and return files and relationships.
+        Uses git ls-tree to avoid modifying the working directory.
         """
         files: List[File] = []
         relationships: List[Relationship] = []
         file_ids: Set[str] = set()
 
-        # Analyze files (similar to _analyze_files but simplified)
-        for root, dirs, file_names in os.walk(self.repo_path):
-            # Get the path relative to the repository root
-            rel_root = os.path.relpath(root, self.repo_path)
-            if rel_root == ".":
-                rel_root = ""
+        try:
+            # Get all files in the repository at the given commit
+            result = subprocess.run(
+                ["git", "ls-tree", "-r", "--name-only", commit_hash],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
 
-            # Filter directories to respect gitignore
-            i = 0
-            while i < len(dirs):
-                dir_name = dirs[i]
-                dir_path = os.path.join(rel_root, dir_name)
+            all_file_paths = result.stdout.strip().split("\n")
 
-                if dir_name.startswith(".") or self._is_ignored(
-                    dir_path, is_directory=True
-                ):
-                    dirs.pop(i)
-                else:
-                    i += 1
+            # Create directory entries and relationships
+            dir_paths = set()
+            for path in all_file_paths:
+                parts = path.split("/")
+                for i in range(1, len(parts)):
+                    dir_path = "/".join(parts[:i])
+                    if dir_path not in dir_paths:
+                        dir_paths.add(dir_path)
 
-            # Process directories
-            for dir_name in dirs:
-                dir_path = os.path.join(root, dir_name)
-                rel_path = os.path.relpath(dir_path, self.repo_path)
+                        dir_name = os.path.basename(dir_path)
+                        depth = len(dir_path.split("/")) - 1
 
-                if rel_path.startswith(".."):
-                    continue
-
-                rel_path = rel_path.replace(os.path.sep, "/")
-                depth = len(rel_path.split("/"))
-
-                dir_entry: File = {
-                    "id": rel_path,
-                    "path": rel_path,
-                    "name": dir_name,
-                    "type": "directory",
-                    "depth": depth,
-                    "size": 0,
-                    "components": [],
-                }
-
-                files.append(dir_entry)
-                file_ids.add(rel_path)
-
-                # Create parent directory relationship
-                parent_dir = os.path.dirname(rel_path)
-                if parent_dir and parent_dir in file_ids:
-                    relationships.append(
-                        {
-                            "source": parent_dir,
-                            "target": rel_path,
-                            "type": "contains",
+                        dir_entry: File = {
+                            "id": dir_path,
+                            "path": dir_path,
+                            "name": dir_name,
+                            "type": "directory",
+                            "depth": depth,
+                            "size": 0,
+                            "components": [],
                         }
-                    )
+                        files.append(dir_entry)
+                        file_ids.add(dir_path)
 
-            # Process files
-            for file_name in file_names:
-                # Skip hidden files
-                if file_name.startswith("."):
-                    continue
+                        # Add parent relationship
+                        parent_dir = os.path.dirname(dir_path)
+                        if parent_dir and parent_dir in file_ids:
+                            relationships.append(
+                                {
+                                    "source": parent_dir,
+                                    "target": dir_path,
+                                    "type": "contains",
+                                }
+                            )
 
-                rel_path = os.path.join(rel_root, file_name)
-
-                # Skip ignored files
+            # Process each file
+            for rel_path in all_file_paths:
                 if self._is_ignored(rel_path, is_directory=False):
                     continue
 
-                file_path = os.path.join(root, file_name)
-
-                if rel_path.startswith(".."):
-                    continue
-
-                rel_path = rel_path.replace(os.path.sep, "/")
-                depth = len(os.path.dirname(rel_path).split("/"))
-                if os.path.dirname(rel_path) == "":
-                    depth = 0
-
-                # Get file extension
+                file_name = os.path.basename(rel_path)
+                depth = len(rel_path.split("/")) - 1
                 _, ext = os.path.splitext(file_name)
                 ext = ext.lstrip(".")
 
-                # Get file size
+                # Get file content and size from git
                 try:
-                    size = os.path.getsize(file_path)
-                except Exception:
-                    size = 0
+                    content_result = subprocess.run(
+                        ["git", "show", f"{commit_hash}:{rel_path}"],
+                        cwd=self.repo_path,
+                        capture_output=True,
+                        check=True,
+                    )
+                    content = content_result.stdout.decode("utf-8", errors="ignore")
+                    size = len(content_result.stdout)
+                except (subprocess.CalledProcessError, UnicodeDecodeError):
+                    continue  # Skip binary files or files with encoding issues
 
-                # Extract components and metrics based on file type
-                components, metrics = self._analyze_file_content(
-                    file_path, rel_path, ext
+                # Analyze file content
+                components, metrics = self._analyze_file_content_for_snapshot(
+                    content, rel_path, ext
                 )
 
-                # Create file entry
                 file_entry: File = {
                     "id": rel_path,
                     "path": rel_path,
@@ -2382,14 +2353,13 @@ class RepositoryAnalyzer:
                     "depth": depth,
                     "components": components,
                 }
-
                 if metrics:
                     file_entry["metrics"] = metrics
 
                 files.append(file_entry)
                 file_ids.add(rel_path)
 
-                # Create relationship with parent directory
+                # Add parent directory relationship
                 parent_dir = os.path.dirname(rel_path)
                 if parent_dir and parent_dir in file_ids:
                     relationships.append(
@@ -2400,7 +2370,7 @@ class RepositoryAnalyzer:
                         }
                     )
 
-                # Add file-component relationships
+                # Add component relationships
                 for component in components:
                     relationships.append(
                         {
@@ -2409,8 +2379,6 @@ class RepositoryAnalyzer:
                             "type": "contains",
                         }
                     )
-
-                    # Add component-to-component relationships
                     for method in component.get("components", []):
                         relationships.append(
                             {
@@ -2420,28 +2388,61 @@ class RepositoryAnalyzer:
                             }
                         )
 
-        # Extract relationships between files (imports, etc.)
-        temp_relationships = []
-        for file_entry in files:
-            if file_entry["type"] == "file":
-                try:
-                    file_path = os.path.join(self.repo_path, file_entry["path"])
-                    if os.path.exists(file_path):
-                        with open(file_path, encoding="utf-8", errors="ignore") as f:
-                            content = f.read()
-                            self._extract_file_relationships_for_snapshot(
-                                content,
-                                file_entry["path"],
-                                file_entry.get("extension") or "",
-                                temp_relationships,
-                                file_ids,
-                            )
-                except Exception:
-                    continue
+            # Extract relationships between files
+            temp_relationships = []
+            for file_entry in files:
+                if file_entry["type"] == "file":
+                    try:
+                        content_result = subprocess.run(
+                            ["git", "show", f"{commit_hash}:{file_entry['path']}"],
+                            cwd=self.repo_path,
+                            capture_output=True,
+                            check=True,
+                        )
+                        content = content_result.stdout.decode("utf-8", errors="ignore")
+                        self._extract_file_relationships_for_snapshot(
+                            content,
+                            file_entry["path"],
+                            file_entry.get("extension") or "",
+                            temp_relationships,
+                            file_ids,
+                        )
+                    except (subprocess.CalledProcessError, UnicodeDecodeError):
+                        continue
 
-        relationships.extend(temp_relationships)
+            relationships.extend(temp_relationships)
 
-        return files, relationships
+            return files, relationships
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error analyzing snapshot for commit {commit_hash}: {e.stderr}")
+            return [], []
+
+    def _analyze_file_content_for_snapshot(
+        self, content: str, rel_path: str, extension: str
+    ) -> Tuple[List[Component], Optional[Dict[str, Any]]]:
+        """
+        Analyze file content from a string to extract components and metrics.
+        """
+        components: List[Component] = []
+        metrics: Dict[str, Any] = {}
+
+        try:
+            lines = content.split("\n")
+            metrics["linesOfCode"] = len(lines)
+            metrics["emptyLines"] = len([line for line in lines if not line.strip()])
+
+            if extension == "py":
+                components, metrics = self._analyze_python_file(
+                    content, rel_path, metrics
+                )
+            elif extension in ("js", "ts", "jsx", "tsx"):
+                components, metrics = self._analyze_js_file(content, rel_path, metrics)
+
+            return components, metrics
+        except Exception as e:
+            print(f"Error analyzing file content for {rel_path}: {e}")
+            return components, None
 
     def _extract_file_relationships_for_snapshot(
         self,
