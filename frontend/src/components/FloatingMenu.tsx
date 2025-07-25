@@ -40,9 +40,10 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   const [size, setSize] = useState(initialSize);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, elementX: 0, elementY: 0 });
+  const dragStartRef = useRef({ mouseX: 0, mouseY: 0, elementX: 0, elementY: 0 });
   const [resizeStart, setResizeStart] = useState({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   // Clamp initial position to prevent off-screen rendering
   useEffect(() => {
@@ -79,12 +80,12 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
       return;
     }
 
-    setDragStart({
+    dragStartRef.current = {
       mouseX: e.clientX,
       mouseY: e.clientY,
       elementX: position.x,
       elementY: position.y,
-    });
+    };
     setIsDragging(true);
     e.preventDefault();
   };
@@ -108,21 +109,26 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   // Update refs with current values
   handleMouseMoveRef.current = (e: MouseEvent) => {
     if (isDragging && menuRef.current) {
-      const parent = menuRef.current.parentElement;
-      const deltaX = e.clientX - dragStart.mouseX;
-      const deltaY = e.clientY - dragStart.mouseY;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      animationFrameRef.current = requestAnimationFrame(() => {
+        if (!menuRef.current) return;
+        const parent = menuRef.current.parentElement;
+        const deltaX = e.clientX - dragStartRef.current.mouseX;
+        const deltaY = e.clientY - dragStartRef.current.mouseY;
 
-      const newX = dragStart.elementX + deltaX;
-      const newY = dragStart.elementY + deltaY;
+        const newX = dragStartRef.current.elementX + deltaX;
+        const newY = dragStartRef.current.elementY + deltaY;
 
-      // Use parent bounds if available, otherwise use document bounds
-      const parentWidth = parent ? parent.offsetWidth : document.documentElement.clientWidth;
-      const maxX = Math.max(0, parentWidth - size.width);
-      const maxY = Math.max(0, window.innerHeight - size.height - 40);
+        const parentWidth = parent ? parent.offsetWidth : document.documentElement.clientWidth;
+        const maxX = Math.max(0, parentWidth - size.width);
+        const maxY = Math.max(0, window.innerHeight - size.height - 40);
 
-      setPosition({
-        x: Math.max(0, Math.min(maxX, newX)),
-        y: Math.max(0, Math.min(maxY, newY)),
+        const clampedX = Math.max(0, Math.min(maxX, newX));
+        const clampedY = Math.max(0, Math.min(maxY, newY));
+
+        menuRef.current.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
       });
     } else if (isResizing) {
       const deltaX = e.clientX - resizeStart.mouseX;
@@ -139,6 +145,17 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   };
 
   handleMouseUpRef.current = () => {
+    if (isDragging && menuRef.current) {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      const transform = menuRef.current.style.transform;
+      const match = /translate3d\(([^,]+)px, ([^,]+)px, 0px\)/.exec(transform);
+      if (match) {
+        setPosition({ x: parseFloat(match[1]), y: parseFloat(match[2]) });
+      }
+      menuRef.current.style.transform = '';
+    }
     setIsDragging(false);
     setIsResizing(false);
   };
@@ -192,12 +209,12 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
       onMouseDown={handleMouseDown}
       style={{
         position: 'absolute',
-        left: position.x,
-        top: position.y,
+        left: 0,
+        top: 0,
         width: size.width,
         height: size.height,
         pointerEvents: 'auto',
-        transform: 'translate3d(0, 0, 0)',
+        transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
         zIndex: 1000,
         userSelect: 'none',
         backgroundColor: 'white',
@@ -232,9 +249,6 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
       {/* Header */}
       <div className="flex items-center gap-3 mb-4 pr-10" style={{ padding: '16px 16px 0 16px' }}>
         {headerIcon && <div className="w-6 h-6 text-gray-500">{headerIcon}</div>}
-        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
         <h3
           className="text-xl font-bold text-gray-900 border-b-2 pb-1"
           style={{
