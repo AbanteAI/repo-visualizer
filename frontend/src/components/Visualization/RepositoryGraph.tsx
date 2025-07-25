@@ -383,13 +383,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             size: file.size,
             depth: file.depth,
             expanded: expandedFiles.has(file.id),
-            x: pos?.x,
-            y: pos?.y,
+            x: pos?.x ?? dimensions.width / 2,
+            y: pos?.y ?? dimensions.height / 2,
           });
 
           // Add component nodes only if file is expanded
           if (expandedFiles.has(file.id) && file.components) {
             file.components.forEach(component => {
+              const parentPos = existingPositions.get(file.id);
               const pos = existingPositions.get(component.id);
               allNodes.push({
                 ...component,
@@ -397,8 +398,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                 parentId: file.id,
                 depth: file.depth + 1,
                 size: 0,
-                x: pos?.x,
-                y: pos?.y,
+                x: pos?.x ?? parentPos?.x ?? dimensions.width / 2,
+                y: pos?.y ?? parentPos?.y ?? dimensions.height / 2,
               });
             });
           }
@@ -551,8 +552,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('fill', '#333')
         .style('pointer-events', 'none');
 
-      simulation.alpha(0.3).restart();
-    }, [data, nodeMetrics, linkMetrics, expandedFiles, config, onSelectFile]);
+      simulation.alpha(0.1).restart();
+    }, [data, nodeMetrics, linkMetrics, expandedFiles, config, onSelectFile, dimensions]);
 
     // Cleanup on unmount
     useEffect(() => {
