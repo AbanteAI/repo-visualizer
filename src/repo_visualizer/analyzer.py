@@ -124,14 +124,19 @@ class RepositoryAnalyzer:
                         )
                         coverage_data.setdefault(rel_path, {}).update(
                             {
-                                "lines": summary.get("lines", {}).get("pct", 0) / 100.0,
-                                "statements": summary.get("statements", {}).get(
-                                    "pct", 0
+                                "lines": float(summary.get("lines", {}).get("pct", 0))
+                                / 100.0,
+                                "statements": float(
+                                    summary.get("statements", {}).get("pct", 0)
                                 )
                                 / 100.0,
-                                "functions": summary.get("functions", {}).get("pct", 0)
+                                "functions": float(
+                                    summary.get("functions", {}).get("pct", 0)
+                                )
                                 / 100.0,
-                                "branches": summary.get("branches", {}).get("pct", 0)
+                                "branches": float(
+                                    summary.get("branches", {}).get("pct", 0)
+                                )
                                 / 100.0,
                             }
                         )
@@ -955,7 +960,6 @@ class RepositoryAnalyzer:
                 # Check if it's a commit line (hash and timestamp)
                 if " " in line and len(line.split()[0]) == 40:
                     parts = line.split()
-                    parts[0]
                     current_commit_timestamp = int(parts[1])
                 else:
                     # It's a file path
