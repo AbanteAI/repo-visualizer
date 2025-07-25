@@ -1839,38 +1839,179 @@ class RepositoryAnalyzer:
             return 0.0
 
     def _analyze_history(self) -> None:
-        """Analyze git history."""
-        # Extract commit history
-        commits = self._extract_commits()
+        """Analyze git history with full repository state snapshots."""
+        print("Analyzing repository history...")
 
-        # Create timeline points (simplified for now)
-        timeline_points = self._create_timeline_points(commits)
+        # Get the current branch name to restore later
+        current_branch = self._get_current_branch()
+        current_commit = self._get_current_commit()
 
-        # Set history data
-        if commits:
-            self.data["history"] = {
-                "commits": commits,
-                "timelinePoints": timeline_points,
-            }
+        # Stash any local changes to avoid conflicts
+        stash_created = self._stash_local_changes()
 
-    def _extract_commits(self) -> List[Dict[str, Any]]:
+        try:
+            # Extract commit history from default branch
+            commits = self._extract_commits_with_details()
+
+            # Create timeline points with full repository snapshots
+            timeline_points = self._create_detailed_timeline_points(commits)
+
+            # Set history data
+            if commits:
+                self.data["history"] = {
+                    "commits": commits,
+                    "timelinePoints": timeline_points,
+                }
+                print(
+                    f"Analyzed {len(commits)} commits with "
+                    f"{len(timeline_points)} timeline points"
+                )
+
+        finally:
+            # Always restore the original state
+            self._restore_git_state(current_branch, current_commit)
+
+            # Restore any stashed changes
+            if stash_created:
+                self._restore_stashed_changes()
+
+    def _get_current_branch(self) -> Optional[str]:
+        """Get the current branch name."""
+        try:
+            result = subprocess.run(
+                ["git", "branch", "--show-current"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return None
+        except Exception:
+            return None
+
+    def _get_current_commit(self) -> Optional[str]:
+        """Get the current commit hash."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return None
+        except Exception:
+            return None
+
+    def _stash_local_changes(self) -> bool:
+        """Stash local changes if any exist. Returns True if stash was created."""
+        try:
+            # Check if there are local changes
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                # There are local changes, stash them
+                print("Stashing local changes...")
+                result = subprocess.run(
+                    [
+                        "git",
+                        "stash",
+                        "push",
+                        "-m",
+                        "Temporary stash for historical analysis",
+                    ],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                if result.returncode == 0:
+                    print("Local changes stashed successfully")
+                    return True
+                else:
+                    print(f"Failed to stash changes: {result.stderr}")
+                    return False
+
+            return False
+
+        except Exception as e:
+            print(f"Error checking/stashing local changes: {e}")
+            return False
+
+    def _restore_stashed_changes(self) -> None:
+        """Restore previously stashed changes."""
+        try:
+            print("Restoring stashed changes...")
+            result = subprocess.run(
+                ["git", "stash", "pop"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode == 0:
+                print("Stashed changes restored successfully")
+            else:
+                print(f"Warning: Could not restore stashed changes: {result.stderr}")
+
+        except Exception as e:
+            print(f"Error restoring stashed changes: {e}")
+
+    def _restore_git_state(self, branch: Optional[str], commit: Optional[str]) -> None:
+        """Restore git to the original state."""
+        try:
+            if branch:
+                # Try to checkout the original branch
+                subprocess.run(
+                    ["git", "checkout", branch],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            elif commit:
+                # Fallback to the specific commit
+                subprocess.run(
+                    ["git", "checkout", commit],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+        except Exception as e:
+            print(f"Warning: Could not restore git state: {e}")
+
+    def _extract_commits_with_details(self) -> List[Dict[str, Any]]:
         """
-        Extract commit history from the git repository.
+        Extract detailed commit history from the default branch.
 
         Returns:
-            List of commit data
+            List of commit data with detailed file changes
         """
         try:
-            # Get commit logs
+            # Get commit logs from the default branch (no limit for complete history)
+            default_branch = self._get_default_branch()
+
             result = subprocess.run(
                 [
                     "git",
                     "log",
+                    default_branch,
                     "--pretty=format:%H|||%an <%ae>|||%ad|||%s",
                     "--date=iso",
-                    "--name-status",
-                    "-n",
-                    "100",  # Limit to 100 commits for performance
+                    "--reverse",  # Start from the first commit
                 ],
                 cwd=self.repo_path,
                 capture_output=True,
@@ -1879,24 +2020,26 @@ class RepositoryAnalyzer:
             )
 
             if result.returncode != 0:
+                print(f"Failed to get commit log: {result.stderr}")
                 return []
 
-            # Parse commit log
+            # Parse commit hashes and metadata
             commits = []
-            commit_blocks = result.stdout.split("\n\n")
+            lines = result.stdout.strip().split("\n")
 
-            for block in commit_blocks:
-                lines = block.strip().split("\n")
-                if not lines:
+            for line in lines:
+                if not line.strip():
                     continue
 
-                # Parse header
                 try:
-                    header = lines[0].split("|||")
-                    commit_hash = header[0]
-                    author = header[1]
-                    date_str = header[2]
-                    message = header[3]
+                    parts = line.split("|||")
+                    if len(parts) < 4:
+                        continue
+
+                    commit_hash = parts[0]
+                    author = parts[1]
+                    date_str = parts[2]
+                    message = parts[3]
 
                     # Convert date to ISO format
                     dt = datetime.fromisoformat(
@@ -1904,52 +2047,8 @@ class RepositoryAnalyzer:
                     )
                     date = dt.isoformat()
 
-                    # Parse file changes
-                    file_changes = []
-                    for i in range(1, len(lines)):
-                        if not lines[i].strip():
-                            continue
-
-                        change_parts = lines[i].split("\t")
-                        if len(change_parts) < 2:
-                            continue
-
-                        change_type = change_parts[0]
-                        file_path = change_parts[-1].replace("\\", "/")
-
-                        # Skip files outside the repo
-                        if ".." in file_path:
-                            continue
-
-                        # Map change type
-                        if change_type == "A":
-                            change_type_mapped = "add"
-                        elif change_type in ("M", "R"):
-                            change_type_mapped = "modify"
-                        elif change_type == "D":
-                            change_type_mapped = "delete"
-                        else:
-                            continue
-
-                        # Get additions and deletions (simplified)
-                        additions = 0
-                        deletions = 0
-                        if change_type_mapped == "add":
-                            additions = 10  # Placeholder value
-                        elif change_type_mapped == "modify":
-                            additions = 5  # Placeholder value
-                            deletions = 3  # Placeholder value
-                        elif change_type_mapped == "delete":
-                            deletions = 10  # Placeholder value
-
-                        file_changes.append(
-                            {
-                                "fileId": file_path,
-                                "type": change_type_mapped,
-                                "additions": additions,
-                                "deletions": deletions,
-                            }
-                        )
+                    # Get detailed file changes for this commit
+                    file_changes = self._get_commit_file_changes(commit_hash)
 
                     commits.append(
                         {
@@ -1960,55 +2059,464 @@ class RepositoryAnalyzer:
                             "fileChanges": file_changes,
                         }
                     )
+
                 except Exception as e:
-                    print(f"Error parsing commit: {e}")
+                    print(f"Error parsing commit {line}: {e}")
                     continue
 
             return commits
+
         except Exception as e:
             print(f"Error extracting commits: {e}")
             return []
 
-    def _create_timeline_points(
+    def _get_commit_file_changes(self, commit_hash: str) -> List[Dict[str, Any]]:
+        """Get detailed file changes for a specific commit."""
+        try:
+            # Get file changes with renames detected
+            result = subprocess.run(
+                ["git", "show", "--name-status", "--find-renames", commit_hash],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                return []
+
+            file_changes = []
+            lines = result.stdout.split("\n")
+
+            # Skip the commit info lines, look for file changes
+            parsing_files = False
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    parsing_files = True
+                    continue
+
+                if not parsing_files:
+                    continue
+
+                # Parse file status line
+                if line.startswith(("A\t", "D\t", "M\t")):
+                    change_type = line[0]
+                    file_path = line[2:].replace("\\", "/")
+
+                    # Skip files outside the repo or that should be ignored
+                    if ".." in file_path or self._is_ignored(file_path):
+                        continue
+
+                    # Map change type
+                    if change_type == "A":
+                        change_type_mapped = "add"
+                    elif change_type == "M":
+                        change_type_mapped = "modify"
+                    elif change_type == "D":
+                        change_type_mapped = "delete"
+                    else:
+                        continue
+
+                    # Get more detailed stats for this file in this commit
+                    additions, deletions = self._get_file_change_stats(
+                        commit_hash, file_path
+                    )
+
+                    file_changes.append(
+                        {
+                            "fileId": file_path,
+                            "type": change_type_mapped,
+                            "additions": additions,
+                            "deletions": deletions,
+                        }
+                    )
+
+                elif line.startswith("R"):
+                    # Handle renames: R100    old_path    new_path
+                    parts = line.split("\t")
+                    if len(parts) >= 3:
+                        old_path = parts[1].replace("\\", "/")
+                        new_path = parts[2].replace("\\", "/")
+
+                        if not (
+                            ".." in old_path
+                            or ".." in new_path
+                            or self._is_ignored(old_path)
+                            or self._is_ignored(new_path)
+                        ):
+                            # Record as delete of old file and add of new file
+                            file_changes.append(
+                                {
+                                    "fileId": old_path,
+                                    "type": "delete",
+                                    "additions": 0,
+                                    "deletions": 0,
+                                }
+                            )
+
+                            file_changes.append(
+                                {
+                                    "fileId": new_path,
+                                    "type": "add",
+                                    "additions": 0,
+                                    "deletions": 0,
+                                    "renamedFrom": old_path,  # Track the rename
+                                }
+                            )
+
+            return file_changes
+
+        except Exception as e:
+            print(f"Error getting file changes for commit {commit_hash}: {e}")
+            return []
+
+    def _get_file_change_stats(
+        self, commit_hash: str, file_path: str
+    ) -> Tuple[int, int]:
+        """Get addition/deletion stats for a specific file in a commit."""
+        try:
+            result = subprocess.run(
+                ["git", "show", "--numstat", commit_hash, "--", file_path],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                return 0, 0
+
+            lines = result.stdout.strip().split("\n")
+            for line in lines:
+                parts = line.split("\t")
+                if len(parts) >= 3 and parts[2].replace("\\", "/") == file_path:
+                    try:
+                        additions = int(parts[0]) if parts[0] != "-" else 0
+                        deletions = int(parts[1]) if parts[1] != "-" else 0
+                        return additions, deletions
+                    except ValueError:
+                        return 0, 0
+
+            return 0, 0
+
+        except Exception:
+            return 0, 0
+
+    def _create_detailed_timeline_points(
         self, commits: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
-        Create timeline points from commits.
+        Create timeline points with full repository snapshots for each commit.
 
         Args:
             commits: List of commit data
 
         Returns:
-            List of timeline points
+            List of timeline points with complete repository state
         """
-        # This is a simplified implementation that creates a timeline point
-        # for every 10th commit (or fewer if there aren't many commits)
         timeline_points = []
 
         if not commits:
             return timeline_points
 
-        step = max(1, len(commits) // 10)
+        print(f"Creating timeline points for {len(commits)} commits...")
 
-        for i in range(0, len(commits), step):
-            commit = commits[i]
+        for i, commit in enumerate(commits):
+            try:
+                print(
+                    f"Analyzing commit {i + 1}/{len(commits)}: "
+                    f"{commit['id'][:8]} - {commit['message'][:50]}..."
+                )
 
-            # Create a simplified snapshot
-            timeline_points.append(
-                {
-                    "commitId": commit["id"],
-                    "state": {
-                        "commitIndex": i,
-                        "timestamp": commit["date"],
-                    },
-                    "snapshot": {
-                        "files": [],  # Simplified for now
-                        "relationships": [],  # Simplified for now
-                    },
-                }
-            )
+                # Analyze the repository state at this commit
+                snapshot_files, snapshot_relationships = (
+                    self._analyze_repository_snapshot(commit["id"])
+                )
+
+                # Create timeline point with full snapshot
+                timeline_points.append(
+                    {
+                        "commitId": commit["id"],
+                        "state": {
+                            "commitIndex": i,
+                            "timestamp": commit["date"],
+                            "message": commit["message"],
+                            "author": commit["author"],
+                        },
+                        "snapshot": {
+                            "files": snapshot_files,
+                            "relationships": snapshot_relationships,
+                        },
+                    }
+                )
+
+            except Exception as e:
+                print(f"Error creating timeline point for commit {commit['id']}: {e}")
+                continue
 
         return timeline_points
+
+    def _analyze_repository_snapshot(
+        self, commit_hash: str
+    ) -> Tuple[List[File], List[Relationship]]:
+        """
+        Analyze the repository state at a specific commit.
+
+        Uses git ls-tree to avoid modifying the working directory.
+        """
+        files: List[File] = []
+        relationships: List[Relationship] = []
+        file_ids: Set[str] = set()
+
+        try:
+            # Get all files in the repository at the given commit
+            result = subprocess.run(
+                ["git", "ls-tree", "-r", "--name-only", commit_hash],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            all_file_paths = result.stdout.strip().split("\n")
+
+            # Create directory entries and relationships
+            dir_paths = set()
+            for path in all_file_paths:
+                parts = path.split("/")
+                for i in range(1, len(parts)):
+                    dir_path = "/".join(parts[:i])
+                    if dir_path not in dir_paths:
+                        dir_paths.add(dir_path)
+
+                        dir_name = os.path.basename(dir_path)
+                        depth = len(dir_path.split("/")) - 1
+
+                        dir_entry: File = {
+                            "id": dir_path,
+                            "path": dir_path,
+                            "name": dir_name,
+                            "type": "directory",
+                            "depth": depth,
+                            "size": 0,
+                            "components": [],
+                        }
+                        files.append(dir_entry)
+                        file_ids.add(dir_path)
+
+                        # Add parent relationship
+                        parent_dir = os.path.dirname(dir_path)
+                        if parent_dir and parent_dir in file_ids:
+                            relationships.append(
+                                {
+                                    "source": parent_dir,
+                                    "target": dir_path,
+                                    "type": "contains",
+                                }
+                            )
+
+            # Process each file
+            for rel_path in all_file_paths:
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                file_name = os.path.basename(rel_path)
+                depth = len(rel_path.split("/")) - 1
+                _, ext = os.path.splitext(file_name)
+                ext = ext.lstrip(".")
+
+                # Get file content and size from git
+                try:
+                    content_result = subprocess.run(
+                        ["git", "show", f"{commit_hash}:{rel_path}"],
+                        cwd=self.repo_path,
+                        capture_output=True,
+                        check=True,
+                    )
+                    content = content_result.stdout.decode("utf-8", errors="ignore")
+                    size = len(content_result.stdout)
+                except (subprocess.CalledProcessError, UnicodeDecodeError):
+                    continue  # Skip binary files or files with encoding issues
+
+                # Analyze file content
+                components, metrics = self._analyze_file_content_for_snapshot(
+                    content, rel_path, ext
+                )
+
+                file_entry: File = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": file_name,
+                    "extension": ext if ext else None,
+                    "size": size,
+                    "type": "file",
+                    "depth": depth,
+                    "components": components,
+                }
+                if metrics:
+                    file_entry["metrics"] = metrics
+
+                files.append(file_entry)
+                file_ids.add(rel_path)
+
+                # Add parent directory relationship
+                parent_dir = os.path.dirname(rel_path)
+                if parent_dir and parent_dir in file_ids:
+                    relationships.append(
+                        {
+                            "source": parent_dir,
+                            "target": rel_path,
+                            "type": "contains",
+                        }
+                    )
+
+                # Add component relationships
+                for component in components:
+                    relationships.append(
+                        {
+                            "source": rel_path,
+                            "target": component["id"],
+                            "type": "contains",
+                        }
+                    )
+                    for method in component.get("components", []):
+                        relationships.append(
+                            {
+                                "source": component["id"],
+                                "target": method["id"],
+                                "type": "contains",
+                            }
+                        )
+
+            # Extract relationships between files
+            temp_relationships = []
+            for file_entry in files:
+                if file_entry["type"] == "file":
+                    try:
+                        content_result = subprocess.run(
+                            ["git", "show", f"{commit_hash}:{file_entry['path']}"],
+                            cwd=self.repo_path,
+                            capture_output=True,
+                            check=True,
+                        )
+                        content = content_result.stdout.decode("utf-8", errors="ignore")
+                        self._extract_file_relationships_for_snapshot(
+                            content,
+                            file_entry["path"],
+                            file_entry.get("extension") or "",
+                            temp_relationships,
+                            file_ids,
+                        )
+                    except (subprocess.CalledProcessError, UnicodeDecodeError):
+                        continue
+
+            relationships.extend(temp_relationships)
+
+            return files, relationships
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error analyzing snapshot for commit {commit_hash}: {e.stderr}")
+            return [], []
+
+    def _analyze_file_content_for_snapshot(
+        self, content: str, rel_path: str, extension: str
+    ) -> Tuple[List[Component], Optional[Dict[str, Any]]]:
+        """
+        Analyze file content from a string to extract components and metrics.
+        """
+        components: List[Component] = []
+        metrics: Dict[str, Any] = {}
+
+        try:
+            lines = content.split("\n")
+            metrics["linesOfCode"] = len(lines)
+            metrics["emptyLines"] = len([line for line in lines if not line.strip()])
+
+            if extension == "py":
+                components, metrics = self._analyze_python_file(
+                    content, rel_path, metrics
+                )
+            elif extension in ("js", "ts", "jsx", "tsx"):
+                components, metrics = self._analyze_js_file(content, rel_path, metrics)
+
+            return components, metrics
+        except Exception as e:
+            print(f"Error analyzing file content for {rel_path}: {e}")
+            return components, None
+
+    def _extract_file_relationships_for_snapshot(
+        self,
+        content: str,
+        file_path: str,
+        extension: str,
+        relationships: List[Relationship],
+        available_file_ids: Set[str],
+    ) -> None:
+        """Extract relationships from file content for snapshot analysis."""
+        # Simplified relationship extraction for snapshot
+        if extension == "py":
+            # Extract Python imports
+            import_pattern = r"^(?:from\s+(\S+)\s+import|import\s+(\S+))"
+            for match in re.finditer(import_pattern, content, re.MULTILINE):
+                module = match.group(1) or match.group(2)
+                if module:
+                    # Try to find corresponding file
+                    possible_paths = [
+                        f"{module.replace('.', '/')}.py",
+                        f"{module.replace('.', '/')}/__init__.py",
+                    ]
+
+                    for possible_path in possible_paths:
+                        if possible_path in available_file_ids:
+                            relationships.append(
+                                {
+                                    "source": file_path,
+                                    "target": possible_path,
+                                    "type": "import",
+                                }
+                            )
+                            break
+
+        elif extension in ("js", "ts", "jsx", "tsx"):
+            # Extract JavaScript/TypeScript imports
+            import_patterns = [
+                r"import\s+.*?\s+from\s+['\"]([^'\"]+)['\"]",
+                r"import\s+['\"]([^'\"]+)['\"]",
+                r"require\s*\(\s*['\"]([^'\"]+)['\"]\s*\)",
+            ]
+
+            for pattern in import_patterns:
+                for match in re.finditer(pattern, content):
+                    import_path = match.group(1)
+                    if import_path.startswith("."):
+                        # Relative import - resolve it
+                        base_dir = os.path.dirname(file_path)
+                        resolved_path = os.path.normpath(
+                            os.path.join(base_dir, import_path)
+                        )
+                        resolved_path = resolved_path.replace("\\", "/")
+
+                        # Try different extensions
+                        possible_paths = [
+                            f"{resolved_path}.js",
+                            f"{resolved_path}.ts",
+                            f"{resolved_path}.jsx",
+                            f"{resolved_path}.tsx",
+                            f"{resolved_path}/index.js",
+                            f"{resolved_path}/index.ts",
+                        ]
+
+                        for possible_path in possible_paths:
+                            if possible_path in available_file_ids:
+                                relationships.append(
+                                    {
+                                        "source": file_path,
+                                        "target": possible_path,
+                                        "type": "import",
+                                    }
+                                )
+                                break
 
     def _extract_file_git_metrics(self, file_path: str) -> Dict[str, Any]:
         """

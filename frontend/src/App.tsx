@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { RepositoryData } from './types/schema';
 import { VisualizationConfig, DEFAULT_CONFIG } from './types/visualization';
 import FileUpload from './components/FileUpload';
@@ -6,6 +6,7 @@ import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualizati
 import FileDetails from './components/FileDetails';
 import UnifiedVisualizationControls from './components/UnifiedVisualizationControls';
 import DynamicLegend from './components/DynamicLegend';
+import TimelineControls from './components/TimelineControls';
 
 // Import the example data for demonstration purposes
 import { exampleData } from './utils/exampleData';
@@ -19,7 +20,14 @@ const App: React.FC = () => {
   const [showControls, setShowControls] = useState(true);
   const [showLegend, setShowLegend] = useState(false);
 
+  // Timeline state
+  const [currentTimelineIndex, setCurrentTimelineIndex] = useState(-1); // -1 means current state
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [showTimeline, setShowTimeline] = useState(false);
+
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
+  const animationRef = useRef<number | null>(null);
 
   // Auto-load repo_data.json on component mount
   useEffect(() => {
@@ -36,8 +44,7 @@ const App: React.FC = () => {
             Array.isArray(jsonData.files) &&
             Array.isArray(jsonData.relationships)
           ) {
-            setRepositoryData(jsonData);
-            setSelectedFile(null);
+            handleDataLoaded(jsonData); // Use the handler to set data and timeline
             setIsAutoLoading(false);
             return;
           }
@@ -56,6 +63,10 @@ const App: React.FC = () => {
   const handleDataLoaded = (data: RepositoryData) => {
     setRepositoryData(data);
     setSelectedFile(null);
+    // Reset timeline to current state when new data is loaded
+    setCurrentTimelineIndex(-1);
+    setIsPlaying(false);
+    setShowTimeline(data.history && data.history.timelinePoints.length > 0);
   };
 
   const handleFileSelect = (fileId: string | null) => {
@@ -69,6 +80,10 @@ const App: React.FC = () => {
   const handleLoadExample = () => {
     setRepositoryData(exampleData);
     setSelectedFile(null);
+    // Reset timeline state for example data
+    setCurrentTimelineIndex(-1);
+    setIsPlaying(false);
+    setShowTimeline(exampleData.history && exampleData.history.timelinePoints.length > 0);
   };
 
   const handleConfigChange = (newConfig: VisualizationConfig) => {
@@ -82,6 +97,87 @@ const App: React.FC = () => {
   const handleToggleLegend = () => {
     setShowLegend(!showLegend);
   };
+
+  // Timeline control handlers
+  const handleTimelineChange = useCallback((index: number) => {
+    setCurrentTimelineIndex(index);
+    setSelectedFile(null); // Clear file selection when timeline changes
+  }, []);
+
+  const handlePlay = useCallback(() => {
+    if (!repositoryData?.history) return;
+
+    if (currentTimelineIndex >= repositoryData.history.timelinePoints.length - 1) {
+      // If at the end, start from beginning
+      setCurrentTimelineIndex(0);
+    }
+    setIsPlaying(true);
+  }, [repositoryData, currentTimelineIndex]);
+
+  const handlePause = useCallback(() => {
+    setIsPlaying(false);
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+  }, []);
+
+  const handleSpeedChange = useCallback((speed: number) => {
+    setPlaybackSpeed(speed);
+  }, []);
+
+  // Animation loop
+  useEffect(() => {
+    if (!isPlaying || !repositoryData?.history) return;
+
+    const animate = () => {
+      setCurrentTimelineIndex(prevIndex => {
+        const nextIndex = prevIndex + 1;
+        if (nextIndex >= repositoryData.history!.timelinePoints.length) {
+          setIsPlaying(false);
+          return prevIndex; // Stop at the last frame
+        }
+        return nextIndex;
+      });
+    };
+
+    const timeoutId = setTimeout(() => {
+      animationRef.current = requestAnimationFrame(animate);
+    }, 1000 / playbackSpeed); // Adjust timing based on playback speed
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [isPlaying, repositoryData, playbackSpeed, currentTimelineIndex]);
+
+  // Get the current visualization data based on timeline position
+  const getCurrentVisualizationData = useCallback((): RepositoryData | null => {
+    if (!repositoryData) return null;
+
+    // If no timeline or showing current state
+    if (currentTimelineIndex === -1 || !repositoryData.history) {
+      return repositoryData;
+    }
+
+    // Get the timeline point data
+    const timelinePoint = repositoryData.history.timelinePoints[currentTimelineIndex];
+    if (!timelinePoint?.snapshot) {
+      return repositoryData;
+    }
+
+    // Create a modified version of the repository data with the historical snapshot
+    return {
+      ...repositoryData,
+      files: timelinePoint.snapshot.files || [],
+      relationships: timelinePoint.snapshot.relationships || [],
+    };
+  }, [repositoryData, currentTimelineIndex]);
+
+  const visualizationData = getCurrentVisualizationData();
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
@@ -206,7 +302,7 @@ const App: React.FC = () => {
               >
                 <RepositoryGraph
                   ref={graphRef}
-                  data={repositoryData}
+                  data={visualizationData}
                   onSelectFile={handleFileSelect}
                   selectedFile={selectedFile}
                   config={config}
@@ -293,6 +389,32 @@ const App: React.FC = () => {
                     >
                       ⚙
                     </button>
+
+                    {/* Timeline Status Indicator */}
+                    {showTimeline && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          backgroundColor: currentTimelineIndex === -1 ? '#10b981' : '#f59e0b',
+                          color: 'white',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                        }}
+                        title={
+                          currentTimelineIndex === -1
+                            ? 'Current state'
+                            : `Historical view: commit ${currentTimelineIndex + 1}`
+                        }
+                      >
+                        {currentTimelineIndex === -1 ? '●' : '🕒'}
+                        {currentTimelineIndex === -1
+                          ? 'LIVE'
+                          : `${currentTimelineIndex + 1}/${repositoryData?.history?.timelinePoints.length || 0}`}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -317,12 +439,26 @@ const App: React.FC = () => {
                 {selectedFile && (
                   <FileDetails
                     fileId={selectedFile}
-                    data={repositoryData}
+                    data={visualizationData}
                     onClose={handleCloseFileDetails}
                   />
                 )}
               </div>
             </div>
+
+            {/* Timeline Controls */}
+            {showTimeline && (
+              <TimelineControls
+                history={repositoryData?.history || null}
+                currentTimelineIndex={Math.max(0, currentTimelineIndex)}
+                onTimelineChange={handleTimelineChange}
+                onPlay={handlePlay}
+                onPause={handlePause}
+                isPlaying={isPlaying}
+                playbackSpeed={playbackSpeed}
+                onSpeedChange={handleSpeedChange}
+              />
+            )}
           </>
         )}
       </main>
