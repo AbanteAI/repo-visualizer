@@ -36,7 +36,6 @@ export interface ComputedNodeMetrics {
   recency: number;
   identifiers: number;
   references: number;
-  test_coverage_ratio?: number;
 }
 
 export interface ComputedLinkMetrics {
@@ -78,7 +77,6 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       recency: recencyScore,
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
-      test_coverage_ratio: fileMetrics.testCoverageRatio,
     });
 
     // Add metrics for components (classes, functions, methods) - only for files, not directories
@@ -91,7 +89,6 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
           recency: recencyScore,
           identifiers: fileMetrics.topLevelIdentifiers || 0,
           references: incomingReferences.get(component.id) || 0,
-          test_coverage_ratio: fileMetrics.testCoverageRatio,
         });
       });
     }
@@ -609,7 +606,7 @@ export const calculatePieChartData = (
   if (totalWeight === 0) return null;
 
   // Check if coverage data is actually available
-  if (nodeMetrics.test_coverage_ratio === undefined || nodeMetrics.test_coverage_ratio === null) {
+  if (nodeMetrics.test_coverage_ratio === undefined) {
     return null; // No coverage data available, don't show pie chart
   }
 

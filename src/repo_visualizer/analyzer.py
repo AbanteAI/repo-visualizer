@@ -89,15 +89,24 @@ class RepositoryAnalyzer:
                 with open(self.python_coverage_path) as f:
                     py_coverage = json.load(f)
                     for file_path, summary in py_coverage.get("files", {}).items():
-                        rel_path = os.path.relpath(file_path, self.repo_path).replace(
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
                             os.path.sep, "/"
                         )
-                        coverage_data[rel_path] = {
-                            "lines": summary.get("summary", {}).get(
-                                "percent_covered", 0
-                            )
-                            / 100.0
-                        }
+                        if rel_path not in coverage_data:
+                            coverage_data[rel_path] = {}
+                        coverage_data[rel_path].update(
+                            {
+                                "lines": summary.get("summary", {}).get(
+                                    "percent_covered", 0
+                                )
+                                / 100.0
+                            }
+                        )
             except (OSError, json.JSONDecodeError) as e:
                 print(f"Warning: Could not parse Python coverage file: {e}")
 
@@ -115,15 +124,21 @@ class RepositoryAnalyzer:
                         rel_path = os.path.relpath(abs_path, self.repo_path).replace(
                             os.path.sep, "/"
                         )
-                        coverage_data[rel_path] = {
-                            "lines": summary.get("lines", {}).get("pct", 0) / 100.0,
-                            "statements": summary.get("statements", {}).get("pct", 0)
-                            / 100.0,
-                            "functions": summary.get("functions", {}).get("pct", 0)
-                            / 100.0,
-                            "branches": summary.get("branches", {}).get("pct", 0)
-                            / 100.0,
-                        }
+                        if rel_path not in coverage_data:
+                            coverage_data[rel_path] = {}
+                        coverage_data[rel_path].update(
+                            {
+                                "lines": summary.get("lines", {}).get("pct", 0) / 100.0,
+                                "statements": summary.get("statements", {}).get(
+                                    "pct", 0
+                                )
+                                / 100.0,
+                                "functions": summary.get("functions", {}).get("pct", 0)
+                                / 100.0,
+                                "branches": summary.get("branches", {}).get("pct", 0)
+                                / 100.0,
+                            }
+                        )
             except (OSError, json.JSONDecodeError) as e:
                 print(f"Warning: Could not parse frontend coverage file: {e}")
 
@@ -491,6 +506,8 @@ class RepositoryAnalyzer:
             str, List[str]
         ] = {}  # Maps directory paths to contained file IDs
 
+        coverage_data = self._load_coverage_data()
+
         for root, dirs, file_names in os.walk(self.repo_path):
             # Get the path relative to the repository root
             rel_root = os.path.relpath(root, self.repo_path)
@@ -611,7 +628,6 @@ class RepositoryAnalyzer:
                 )
 
                 # Add coverage metrics
-                coverage_data = self._load_coverage_data()
                 if rel_path in coverage_data:
                     if metrics is None:
                         metrics = {}
