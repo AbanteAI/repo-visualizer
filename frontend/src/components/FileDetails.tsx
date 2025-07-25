@@ -185,9 +185,10 @@ const FileDetails: React.FC<FileDetailsProps> = ({ fileId, data, onClose }) => {
               {file.metrics.commitCount && (
                 <p className="text-sm text-gray-600">Commit count: {file.metrics.commitCount}</p>
               )}
-              {file.metrics.lastCommitDaysAgo !== undefined && (
+              {file.metrics.lastModified !== undefined && (
                 <p className="text-sm text-gray-600">
-                  Last commit: {file.metrics.lastCommitDaysAgo} days ago
+                  Last commit: {Math.floor((Date.now() / 1000 - file.metrics.lastModified) / 86400)}{' '}
+                  days ago
                 </p>
               )}
             </div>

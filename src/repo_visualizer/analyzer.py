@@ -632,6 +632,11 @@ class RepositoryAnalyzer:
                 parent_dir = os.path.dirname(rel_path)
                 if parent_dir and parent_dir in dir_file_map:
                     dir_file_map[parent_dir].append(rel_path)
+                    self._add_relationship(parent_dir, rel_path, "contains")
+
+                # Add file-component relationships
+                for component in components:
+                    self._add_relationship(rel_path, component["id"], "contains")
 
         # Update directory sizes
         for f in files:
@@ -763,7 +768,7 @@ class RepositoryAnalyzer:
                     import_path, file_info["path"], ext
                 )
                 if target_file and target_file in self.file_ids:
-                    self._add_relationship(file_info["id"], target_file, "imports")
+                    self._add_relationship(file_info["id"], target_file, "import")
 
         # Add semantic similarity relationships if enabled
         self._add_semantic_relationships()
