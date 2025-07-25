@@ -671,6 +671,7 @@ class RepositoryAnalyzer:
             A list of Component objects
         """
         components: List[Component] = []
+        rel_path = os.path.relpath(file_path, self.repo_path)
         _, ext = os.path.splitext(file_path)
         ext = ext.lstrip(".")
 
@@ -691,7 +692,7 @@ class RepositoryAnalyzer:
                 component_type = "class" if "class" in match.group(0) else "function"
                 components.append(
                     {
-                        "id": f"{file_path}::{component_name}",
+                        "id": f"{rel_path}::{component_name}",
                         "name": component_name,
                         "type": component_type,
                     }
@@ -710,7 +711,7 @@ class RepositoryAnalyzer:
                 component_type = "class" if "class" in declaration else "function"
                 components.append(
                     {
-                        "id": f"{file_path}::{component_name}",
+                        "id": f"{rel_path}::{component_name}",
                         "name": component_name,
                         "type": component_type,
                     }
@@ -821,7 +822,7 @@ class RepositoryAnalyzer:
     def _add_relationship(self, source: str, target: str, type: str) -> None:
         """Add a relationship, handling duplicates and counting."""
         # Ensure consistent ordering for relationship key
-        rel_key = (*tuple(sorted((source, target))), type)
+        rel_key = (source, target, type)
         if rel_key in self.relationship_counts:
             self.relationship_counts[rel_key] += 1
         else:
@@ -835,7 +836,7 @@ class RepositoryAnalyzer:
         consolidated: List[Relationship] = []
         for rel in self.relationships:
             source, target, type = rel["source"], rel["target"], rel["type"]
-            rel_key = (*tuple(sorted((source, target))), type)
+            rel_key = (source, target, type)
             strength = self.relationship_counts.get(rel_key, 1)
             consolidated.append(
                 {"source": source, "target": target, "type": type, "strength": strength}
@@ -961,3 +962,49 @@ class RepositoryAnalyzer:
 
         except Exception as e:
             print(f"Warning: Could not analyze git history: {e}")
+
+    def save_to_file(self, output_path: str) -> None:
+        """
+        Save the repository data to a JSON file.
+
+        Args:
+            output_path: Path to output JSON file
+        """
+
+        # Custom JSON encoder to handle datetime objects
+        class DateTimeEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+                return super().default(obj)
+
+        with open(output_path, "w") as f:
+            json.dump(self.data, f, indent=2, cls=DateTimeEncoder)
+
+        print(f"Repository data saved to {output_path}")
+
+
+def analyze_repository(
+    repo_path: str,
+    output_path: str,
+    python_coverage_path: Optional[str] = None,
+    frontend_coverage_path: Optional[str] = None,
+) -> None:
+    """
+    Analyze a repository and generate visualization data.
+
+    Args:
+        repo_path: Path to the local git repository
+        output_path: Path to output JSON file
+        python_coverage_path: Path to Python coverage.json file
+        frontend_coverage_path: Path to frontend coverage.json file
+    """
+    analyzer = RepositoryAnalyzer(
+        repo_path,
+        python_coverage_path=python_coverage_path,
+        frontend_coverage_path=frontend_coverage_path,
+    )
+    analyzer.analyze()
+    analyzer.save_to_file(output_path)
+
+    print(f"Repository analysis complete. Data saved to {output_path}")
