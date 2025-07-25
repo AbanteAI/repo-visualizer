@@ -520,6 +520,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Add tooltips to nodes
       node.append('title').text(d => `${d.name}\nPath: ${d.path}\nType: ${d.type}`);
 
+      // Add click handler for expand/collapse
+      nodeGroups
+        .filter(d => hasComponents(d.id))
+        .on('dblclick', (event, d) => {
+          event.stopPropagation();
+          toggleNodeExpansion(d.id);
+        });
+
       // Add expand/collapse indicators for expandable nodes
       nodeGroups
         .filter(d => hasComponents(d.id))
