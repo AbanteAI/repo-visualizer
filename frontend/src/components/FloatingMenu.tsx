@@ -11,6 +11,7 @@ interface FloatingMenuProps {
   onClose: () => void;
   children: ReactNode;
   className?: string;
+  headerIcon?: ReactNode;
 }
 
 const TITLE_COLORS: Record<string, string> = {
@@ -210,15 +211,26 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
       {/* Close button positioned absolutely in top right */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full bg-white hover:bg-red-50 border border-gray-200 text-gray-400 hover:text-red-500 transition-all duration-200 shadow-sm hover:shadow-md z-10"
-        style={{ cursor: 'pointer' }}
+        className="absolute top-3 right-3 p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors duration-150 z-10"
         aria-label="Close"
       >
-        <span className="text-lg font-bold">×</span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-5 w-5"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+            clipRule="evenodd"
+          />
+        </svg>
       </button>
 
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6 pr-12" style={{ padding: '20px 20px 0 20px' }}>
+      <div className="flex items-center gap-3 mb-4 pr-10" style={{ padding: '16px 16px 0 16px' }}>
+        {headerIcon && <div className="w-6 h-6 text-gray-500">{headerIcon}</div>}
         <div className="w-3 h-3 bg-red-500 rounded-full"></div>
         <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -234,9 +246,8 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
 
       {/* Content with scroll */}
       <div
-        className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5"
+        className="flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6 min-h-0"
         style={{
-          maxHeight: `${Math.max(0, size.height - 80)}px`, // Account for header height, prevent negative values
           scrollbarWidth: 'thin',
           scrollbarColor: '#cbd5e1 transparent',
         }}
