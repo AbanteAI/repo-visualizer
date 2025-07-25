@@ -107,10 +107,12 @@ class RepositoryAnalyzer:
                 with open(self.frontend_coverage_path) as f:
                     fe_coverage = json.load(f)
                     for file_path, summary in fe_coverage.items():
-                        if not file_path.startswith(self.repo_path):
-                            continue
-                        # Normalize path
-                        rel_path = os.path.relpath(file_path, self.repo_path).replace(
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
                             os.path.sep, "/"
                         )
                         coverage_data[rel_path] = {
@@ -588,7 +590,7 @@ class RepositoryAnalyzer:
                 # Get file size
                 try:
                     size = os.path.getsize(file_path)
-                except Exception:
+                except OSError:
                     size = 0
 
                 # Get file creation and modification times
@@ -599,7 +601,7 @@ class RepositoryAnalyzer:
                     updated = datetime.fromtimestamp(
                         os.path.getmtime(file_path)
                     ).isoformat()
-                except Exception:
+                except OSError:
                     created = None
                     updated = None
 
@@ -611,9 +613,9 @@ class RepositoryAnalyzer:
                 # Add coverage metrics
                 coverage_data = self._load_coverage_data()
                 if rel_path in coverage_data:
-                    if "metrics" not in file_entry:
-                        file_entry["metrics"] = {}
-                    file_entry["metrics"]["testCoverage"] = coverage_data[rel_path]
+                    if metrics is None:
+                        metrics = {}
+                    metrics["testCoverage"] = coverage_data[rel_path]
 
                 # Extract git history data for this file
                 git_metrics = self._extract_file_git_metrics(rel_path)
