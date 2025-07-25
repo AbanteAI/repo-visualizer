@@ -80,21 +80,24 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
     e.preventDefault();
   };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !controlsRef.current) return;
-    const parent = controlsRef.current.parentElement;
-    if (!parent) return;
-    const deltaX = e.clientX - dragStart.mouseX;
-    const deltaY = e.clientY - dragStart.mouseY;
-    const newX = dragStart.elementX + deltaX;
-    const newY = dragStart.elementY + deltaY;
-    const maxX = Math.max(0, parent.offsetWidth - controlsRef.current.offsetWidth);
-    const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40);
-    setPosition({
-      x: Math.max(0, Math.min(maxX, newX)),
-      y: Math.max(0, Math.min(maxY, newY)),
-    });
-  }, [isDragging, dragStart]);
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging || !controlsRef.current) return;
+      const parent = controlsRef.current.parentElement;
+      if (!parent) return;
+      const deltaX = e.clientX - dragStart.mouseX;
+      const deltaY = e.clientY - dragStart.mouseY;
+      const newX = dragStart.elementX + deltaX;
+      const newY = dragStart.elementY + deltaY;
+      const maxX = Math.max(0, parent.offsetWidth - controlsRef.current.offsetWidth);
+      const maxY = Math.max(0, window.innerHeight - controlsRef.current.offsetHeight - 40);
+      setPosition({
+        x: Math.max(0, Math.min(maxX, newX)),
+        y: Math.max(0, Math.min(maxY, newY)),
+      });
+    },
+    [isDragging, dragStart]
+  );
 
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
@@ -204,13 +207,23 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                     type="checkbox"
                     id={`skeleton-${skeleton.id}`}
                     checked={skeleton.enabled}
-                    onChange={e => onConfigChange(updateSkeletonConfig(config, skeleton.id, { enabled: e.target.checked }))}
+                    onChange={e =>
+                      onConfigChange(
+                        updateSkeletonConfig(config, skeleton.id, { enabled: e.target.checked })
+                      )
+                    }
                     className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2"
                   />
-                  <div className="w-4 h-4 rounded-full ml-2 mr-3" style={{ backgroundColor: skeleton.color }}></div>
+                  <div
+                    className="w-4 h-4 rounded-full ml-2 mr-3"
+                    style={{ backgroundColor: skeleton.color }}
+                  ></div>
                 </div>
                 <div className="flex-1">
-                  <label htmlFor={`skeleton-${skeleton.id}`} className="text-sm font-medium text-gray-700 cursor-pointer">
+                  <label
+                    htmlFor={`skeleton-${skeleton.id}`}
+                    className="text-sm font-medium text-gray-700 cursor-pointer"
+                  >
                     {skeleton.name}
                   </label>
                   <p className="text-xs text-gray-500">{skeleton.description}</p>
@@ -226,11 +239,21 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                   </div>
                   <input
                     type="range"
-                    min="0.1" max="1" step="0.1"
+                    min="0.1"
+                    max="1"
+                    step="0.1"
                     value={skeleton.opacity}
-                    onChange={e => onConfigChange(updateSkeletonConfig(config, skeleton.id, { opacity: parseFloat(e.target.value) }))}
+                    onChange={e =>
+                      onConfigChange(
+                        updateSkeletonConfig(config, skeleton.id, {
+                          opacity: parseFloat(e.target.value),
+                        })
+                      )
+                    }
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    style={{ background: `linear-gradient(to right, ${skeleton.color} 0%, ${skeleton.color} ${skeleton.opacity * 100}%, #e5e7eb ${skeleton.opacity * 100}%, #e5e7eb 100%)` }}
+                    style={{
+                      background: `linear-gradient(to right, ${skeleton.color} 0%, ${skeleton.color} ${skeleton.opacity * 100}%, #e5e7eb ${skeleton.opacity * 100}%, #e5e7eb 100%)`,
+                    }}
                     aria-label={`${skeleton.name} opacity`}
                   />
                 </div>
@@ -255,7 +278,9 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             <input
               type="range"
               id="node-threshold"
-              min="0" max="1" step="0.05"
+              min="0"
+              max="1"
+              step="0.05"
               value={config.nodeThreshold || 0}
               onChange={e => handleGlobalThresholdChange('node', parseFloat(e.target.value))}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-1"
@@ -271,7 +296,9 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             <input
               type="range"
               id="edge-threshold"
-              min="0" max="1" step="0.05"
+              min="0"
+              max="1"
+              step="0.05"
               value={config.edgeThreshold || 0}
               onChange={e => handleGlobalThresholdChange('edge', parseFloat(e.target.value))}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-1"
@@ -299,7 +326,9 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
           </button>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          {isTransposed ? 'Select data source first, then assign to visual features' : 'Select visual feature first, then assign data sources'}
+          {isTransposed
+            ? 'Select data source first, then assign to visual features'
+            : 'Select visual feature first, then assign data sources'}
         </p>
       </div>
 
@@ -326,7 +355,11 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
               </label>
               <select
                 value={selectedFeature}
-                onChange={e => activeSection === 'node' ? setSelectedNodeFeature(e.target.value) : setSelectedEdgeFeature(e.target.value)}
+                onChange={e =>
+                  activeSection === 'node'
+                    ? setSelectedNodeFeature(e.target.value)
+                    : setSelectedEdgeFeature(e.target.value)
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 style={{ cursor: 'pointer' }}
               >
@@ -336,7 +369,9 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                   </option>
                 ))}
               </select>
-              {selectedFeatureData && <p className="text-xs text-gray-500 mt-1">{selectedFeatureData.description}</p>}
+              {selectedFeatureData && (
+                <p className="text-xs text-gray-500 mt-1">{selectedFeatureData.description}</p>
+              )}
             </div>
           </div>
 
@@ -346,7 +381,9 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                 <div className="flex flex-col">
                   <label className="text-sm font-medium text-gray-700">Include Directories</label>
                   <p className="text-xs text-gray-500 mt-1">
-                    {currentMapping?.includeDirectories ? 'Directories participate in this visual feature' : 'Directories use default values'}
+                    {currentMapping?.includeDirectories
+                      ? 'Directories participate in this visual feature'
+                      : 'Directories use default values'}
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -367,15 +404,22 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
               <h4 className="text-sm font-medium text-gray-700">Data Sources</h4>
               <span className="text-xs text-gray-500">Total: {getTotalWeight()}%</span>
             </div>
-            {DATA_SOURCES.filter(ds => ds.applicableTo === 'both' || ds.applicableTo === selectedFeatureData?.category).map(ds => (
+            {DATA_SOURCES.filter(
+              ds => ds.applicableTo === 'both' || ds.applicableTo === selectedFeatureData?.category
+            ).map(ds => (
               <div key={ds.id}>
-                <label htmlFor={`weight-${ds.id}`} className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={`weight-${ds.id}`}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   {ds.name}
                 </label>
                 <input
                   type="range"
                   id={`weight-${ds.id}`}
-                  min="0" max="100" step="5"
+                  min="0"
+                  max="100"
+                  step="5"
                   value={currentMapping?.dataSourceWeights[ds.id] || 0}
                   onChange={e => handleWeightChange(ds.id, parseInt(e.target.value))}
                   className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-1"

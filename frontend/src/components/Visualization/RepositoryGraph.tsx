@@ -225,7 +225,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           const headerHeight = header ? header.offsetHeight : 0;
           const repoInfoHeight = repoInfo ? repoInfo.offsetHeight : 0;
           const controlsHeight = controls ? controls.offsetHeight : 0;
-          const availableHeight = viewportHeight - headerHeight - repoInfoHeight - controlsHeight - 16;
+          const availableHeight =
+            viewportHeight - headerHeight - repoInfoHeight - controlsHeight - 16;
           const newHeight = Math.max(availableHeight, 400);
 
           setDimensions(prev => {
@@ -264,7 +265,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
     // Effect to handle dimension changes
     useEffect(() => {
-      if (!svgRef.current || !simulationRef.current || dimensions.width === 0 || dimensions.height === 0) return;
+      if (
+        !svgRef.current ||
+        !simulationRef.current ||
+        dimensions.width === 0 ||
+        dimensions.height === 0
+      )
+        return;
       const svg = d3.select(svgRef.current);
       const simulation = simulationRef.current;
       const { width, height } = dimensions;
@@ -285,7 +292,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
     // Main drawing effect
     useEffect(() => {
-      if (!svgRef.current || !containerRef.current || !data || dimensions.width === 0 || dimensions.height === 0 || nodeMetrics.size === 0) return;
+      if (
+        !svgRef.current ||
+        !containerRef.current ||
+        !data ||
+        dimensions.width === 0 ||
+        dimensions.height === 0 ||
+        nodeMetrics.size === 0
+      )
+        return;
 
       const svg = d3.select(svgRef.current);
       svg.selectAll('*').remove();
@@ -301,7 +316,13 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           allNodes.push({ ...file, expanded: expandedFiles.has(file.id) });
           if (expandedFiles.has(file.id) && file.components) {
             file.components.forEach(component => {
-              allNodes.push({ ...component, path: file.path, parentId: file.id, depth: file.depth + 1, size: 0 });
+              allNodes.push({
+                ...component,
+                path: file.path,
+                parentId: file.id,
+                depth: file.depth + 1,
+                size: 0,
+              });
             });
           }
         }
@@ -333,39 +354,60 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         const dynamicLinks: Link[] = [];
         nodes.forEach(node => {
           if (node.parentId && nodeIds.has(node.parentId)) {
-            const containsMetric: ComputedLinkMetrics = { semantic_similarity: 0, filesystem_proximity: 0, code_references: 1 };
+            const containsMetric: ComputedLinkMetrics = {
+              semantic_similarity: 0,
+              filesystem_proximity: 0,
+              code_references: 1,
+            };
             const edgeStrength = calculateEdgeStrength(containsMetric, config);
-            dynamicLinks.push({ source: node.parentId, target: node.id, type: 'contains', weight: edgeStrength, originalStrength: 1 });
+            dynamicLinks.push({
+              source: node.parentId,
+              target: node.id,
+              type: 'contains',
+              weight: edgeStrength,
+              originalStrength: 1,
+            });
           }
         });
         return [...baseLinks, ...dynamicLinks];
       };
       const links = createLinks();
 
-      const simulation = d3.forceSimulation<Node>(nodes)
-        .force('link', d3.forceLink<Node, Link>(links).id(d => d.id)
-          .distance(d => {
-            const baseDistance = 100;
-            const weight = d.weight || 0;
-            const strength = d.originalStrength || 1;
-            if (d.type === 'filesystem_proximity') return baseDistance * (1 - weight * 0.5) * (1 / strength);
-            if (d.type === 'semantic_similarity') return baseDistance * (1 - weight * 0.4) * (1 / strength);
-            if (d.type === 'contains') return 50;
-            return baseDistance * (1 - weight * 0.3);
-          })
-          .strength(d => {
-            const baseStrength = 1;
-            const weight = d.weight || 0;
-            const strength = d.originalStrength || 1;
-            if (d.type === 'contains') return 2;
-            return baseStrength * weight * strength;
-          }))
+      const simulation = d3
+        .forceSimulation<Node>(nodes)
+        .force(
+          'link',
+          d3
+            .forceLink<Node, Link>(links)
+            .id(d => d.id)
+            .distance(d => {
+              const baseDistance = 100;
+              const weight = d.weight || 0;
+              const strength = d.originalStrength || 1;
+              if (d.type === 'filesystem_proximity')
+                return baseDistance * (1 - weight * 0.5) * (1 / strength);
+              if (d.type === 'semantic_similarity')
+                return baseDistance * (1 - weight * 0.4) * (1 / strength);
+              if (d.type === 'contains') return 50;
+              return baseDistance * (1 - weight * 0.3);
+            })
+            .strength(d => {
+              const baseStrength = 1;
+              const weight = d.weight || 0;
+              const strength = d.originalStrength || 1;
+              if (d.type === 'contains') return 2;
+              return baseStrength * weight * strength;
+            })
+        )
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide<Node>().radius(d => {
-          const metrics = nodeMetrics.get(d.id);
-          return (metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5) + 5;
-        }));
+        .force(
+          'collision',
+          d3.forceCollide<Node>().radius(d => {
+            const metrics = nodeMetrics.get(d.id);
+            return (metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5) + 5;
+          })
+        );
       simulationRef.current = simulation;
 
       const allLinkElements: d3.Selection<SVGLineElement, Link, SVGGElement, unknown>[] = [];
@@ -375,7 +417,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         if (skeletonLinks.length === 0) return;
 
         const linkGroup = g.append('g').attr('class', `skeleton-${skeleton.id}`);
-        const linkSelection = linkGroup.selectAll('line').data(skeletonLinks).enter().append('line')
+        const linkSelection = linkGroup
+          .selectAll('line')
+          .data(skeletonLinks)
+          .enter()
+          .append('line')
           .attr('stroke', skeleton.color)
           .attr('stroke-opacity', skeleton.opacity)
           .attr('stroke-width', d => {
@@ -383,9 +429,12 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             const linkMetric = linkMetrics.get(linkKey);
             if (d.type === 'contains') return 3;
             if (!linkMetric) return 1;
-            if (skeleton.id === 'code_references') return 1.5 + (linkMetric.code_references || 0) * 1.5;
-            if (skeleton.id === 'semantic_similarity') return 1 + (linkMetric.semantic_similarity || 0) * 2;
-            if (skeleton.id === 'filesystem_proximity') return 1 + (linkMetric.filesystem_proximity || 0) * 1.5;
+            if (skeleton.id === 'code_references')
+              return 1.5 + (linkMetric.code_references || 0) * 1.5;
+            if (skeleton.id === 'semantic_similarity')
+              return 1 + (linkMetric.semantic_similarity || 0) * 2;
+            if (skeleton.id === 'filesystem_proximity')
+              return 1 + (linkMetric.filesystem_proximity || 0) * 1.5;
             return 1.5;
           });
 
@@ -399,15 +448,29 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         allLinkElements.push(linkSelection);
       });
 
-      const nodeGroups = g.append('g').attr('class', 'nodes').selectAll('g').data(nodes).enter().append('g')
+      const nodeGroups = g
+        .append('g')
+        .attr('class', 'nodes')
+        .selectAll('g')
+        .data(nodes)
+        .enter()
+        .append('g')
         .style('cursor', 'pointer');
 
       const pieChartMode = isPieChartEnabled(config);
       let node: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>;
       if (pieChartMode) {
-        node = createPieChartNodes(nodeGroups, nodeMetrics, config, allNodeMetrics, EXTENSION_COLORS, onSelectFile);
+        node = createPieChartNodes(
+          nodeGroups,
+          nodeMetrics,
+          config,
+          allNodeMetrics,
+          EXTENSION_COLORS,
+          onSelectFile
+        );
       } else {
-        node = nodeGroups.append('circle')
+        node = nodeGroups
+          .append('circle')
           .attr('r', d => {
             const metrics = nodeMetrics.get(d.id);
             return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
@@ -430,27 +493,35 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         }
       });
 
-      const label = g.append('g').attr('class', 'labels').selectAll('text').data(nodes).enter().append('text')
+      const label = g
+        .append('g')
+        .attr('class', 'labels')
+        .selectAll('text')
+        .data(nodes)
+        .enter()
+        .append('text')
         .attr('class', 'node-label')
         .attr('font-size', 10)
         .attr('fill', '#333')
         .text(d => d.name);
 
-      const dragBehavior = (simulation: d3.Simulation<Node, Link>) => d3.drag<any, Node>()
-        .on('start', (event, d) => {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x;
-          d.fy = d.y;
-        })
-        .on('drag', (event, d) => {
-          d.fx = event.x;
-          d.fy = event.y;
-        })
-        .on('end', (event, d) => {
-          if (!event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
-        });
+      const dragBehavior = (simulation: d3.Simulation<Node, Link>) =>
+        d3
+          .drag<any, Node>()
+          .on('start', (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+          })
+          .on('drag', (event, d) => {
+            d.fx = event.x;
+            d.fy = event.y;
+          })
+          .on('end', (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+          });
       nodeGroups.call(dragBehavior(simulation));
 
       simulation.on('tick', () => {
@@ -465,7 +536,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         label.attr('x', d => d.x! + 10).attr('y', d => d.y! + 4);
       });
 
-      const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
+      const zoomBehavior = d3
+        .zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 10])
         .on('zoom', event => {
           g.attr('transform', event.transform);
@@ -474,7 +546,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       zoomRef.current = zoomBehavior;
 
       const updateSelectionHighlight = () => {
-        nodeGroups.selectAll('circle, .pie-node').transition().duration(200)
+        nodeGroups
+          .selectAll('circle, .pie-node')
+          .transition()
+          .duration(200)
           .attr('stroke', d => (d.id === selectedFile ? '#3b82f6' : '#fff'))
           .attr('stroke-width', d => (d.id === selectedFile ? 3 : 1.5));
       };
@@ -483,14 +558,28 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       return () => {
         simulation.stop();
       };
-    }, [data, dimensions, config, expandedFiles, nodeMetrics, linkMetrics, onSelectFile, selectedFile, hasComponents, toggleNodeExpansion]);
+    }, [
+      data,
+      dimensions,
+      config,
+      expandedFiles,
+      nodeMetrics,
+      linkMetrics,
+      onSelectFile,
+      selectedFile,
+      hasComponents,
+      toggleNodeExpansion,
+    ]);
 
     // Effect for selection highlight only
     useEffect(() => {
       if (!svgRef.current) return;
       const svg = d3.select(svgRef.current);
-      svg.selectAll('g.nodes g').selectAll('circle, .pie-node')
-        .transition().duration(200)
+      svg
+        .selectAll('g.nodes g')
+        .selectAll('circle, .pie-node')
+        .transition()
+        .duration(200)
         .attr('stroke', d => ((d as Node).id === selectedFile ? '#3b82f6' : '#fff'))
         .attr('stroke-width', d => ((d as Node).id === selectedFile ? 3 : 1.5));
     }, [selectedFile]);
