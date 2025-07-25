@@ -151,6 +151,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const originalNodesRef = useRef<Node[]>([]);
+    const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
     const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
     const [nodeMetrics, setNodeMetrics] = useState<Map<string, ComputedNodeMetrics>>(new Map());
@@ -349,13 +350,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       // Create a group for the graph
       const g = svg.append('g');
 
-      // Extract nodes from files and their components
+      // Extract nodes from files and their components, preserving positions
       const allNodes: Node[] = [];
+      const existingPositions = nodePositionsRef.current;
 
       // Add file and directory nodes
       data.files.forEach(file => {
         // Only add file-level nodes (not components as separate nodes)
         if (file.type === 'file' || file.type === 'directory') {
+          const pos = existingPositions.get(file.id);
           allNodes.push({
             id: file.id,
             name: file.name,
@@ -365,11 +368,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             size: file.size,
             depth: file.depth,
             expanded: expandedFiles.has(file.id),
+            x: pos?.x,
+            y: pos?.y,
           });
 
           // Add component nodes only if file is expanded
           if (expandedFiles.has(file.id) && file.components) {
             file.components.forEach(component => {
+              const pos = existingPositions.get(component.id);
               allNodes.push({
                 id: component.id,
                 name: component.name,
@@ -379,12 +385,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                 size: 0, // Components don't have file size
                 depth: file.depth + 1,
                 parentId: file.id,
+                x: pos?.x,
+                y: pos?.y,
               });
 
               // Add nested component nodes recursively
               const addNestedComponents = (comp: any, currentDepth: number, parentId: string) => {
                 if (comp.components) {
                   comp.components.forEach((nestedComp: any) => {
+                    const pos = existingPositions.get(nestedComp.id);
                     allNodes.push({
                       id: nestedComp.id,
                       name: nestedComp.name,
@@ -394,6 +403,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
                       size: 0,
                       depth: currentDepth + 1,
                       parentId: parentId,
+                      x: pos?.x,
+                      y: pos?.y,
                     });
                     addNestedComponents(nestedComp, currentDepth + 1, parentId);
                   });
@@ -538,6 +549,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
 
       // Save simulation to ref for potential future interactions
       simulationRef.current = simulation;
+
+      // Store node positions on each tick
+      simulation.on('tick', () => {
+        const positions = nodePositionsRef.current;
+        simulation.nodes().forEach(node => {
+          if (node.x !== undefined && node.y !== undefined) {
+            positions.set(node.id, { x: node.x, y: node.y });
+          }
+        });
+      });
 
       // Create links
       const link = g
