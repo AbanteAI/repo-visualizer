@@ -6,6 +6,8 @@ import {
   DATA_SOURCES,
   getFeatureMapping,
   updateFeatureMapping,
+  updateFeatureThreshold,
+  updateGlobalThreshold,
   updateDirectoryInclusion,
 } from '../types/visualization';
 
@@ -177,6 +179,16 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
 
   const handleWeightChange = (dataSourceId: string, weight: number) => {
     const newConfig = updateFeatureMapping(config, selectedFeature, dataSourceId, weight);
+    onConfigChange(newConfig);
+  };
+
+  const handleThresholdChange = (featureId: string, threshold: number) => {
+    const newConfig = updateFeatureThreshold(config, featureId, threshold);
+    onConfigChange(newConfig);
+  };
+
+  const handleGlobalThresholdChange = (type: 'node' | 'edge', threshold: number) => {
+    const newConfig = updateGlobalThreshold(config, type, threshold);
     onConfigChange(newConfig);
   };
 
@@ -452,6 +464,104 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Feature Threshold */}
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium text-gray-700">Feature Threshold</h4>
+                <span className="text-xs text-gray-500">
+                  {Math.round((currentMapping?.threshold || 0) * 100)}%
+                </span>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs text-gray-500">
+                  Hide {activeSection === 'node' ? 'nodes' : 'edges'} with values below this
+                  threshold
+                </p>
+                <div className="relative">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round((currentMapping?.threshold || 0) * 100)}
+                    onChange={e =>
+                      handleThresholdChange(selectedFeature, Number(e.target.value) / 100)
+                    }
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${Math.round((currentMapping?.threshold || 0) * 100)}%, #e5e7eb ${Math.round((currentMapping?.threshold || 0) * 100)}%, #e5e7eb 100%)`,
+                    }}
+                    aria-label={`${selectedFeatureData?.name} threshold`}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Global Thresholds */}
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium text-gray-700">Global Thresholds</h4>
+
+              {/* Node Threshold */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-gray-600">🟢 All Nodes</label>
+                  <span className="text-xs text-gray-500 font-mono">
+                    {Math.round((config.nodeThreshold || 0) * 100)}%
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round((config.nodeThreshold || 0) * 100)}
+                    onChange={e =>
+                      handleGlobalThresholdChange('node', Number(e.target.value) / 100)
+                    }
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, #22c55e 0%, #22c55e ${Math.round((config.nodeThreshold || 0) * 100)}%, #e5e7eb ${Math.round((config.nodeThreshold || 0) * 100)}%, #e5e7eb 100%)`,
+                    }}
+                    aria-label="Global node threshold"
+                  />
+                </div>
+              </div>
+
+              {/* Edge Threshold */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-gray-600">🔗 All Edges</label>
+                  <span className="text-xs text-gray-500 font-mono">
+                    {Math.round((config.edgeThreshold || 0) * 100)}%
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round((config.edgeThreshold || 0) * 100)}
+                    onChange={e =>
+                      handleGlobalThresholdChange('edge', Number(e.target.value) / 100)
+                    }
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${Math.round((config.edgeThreshold || 0) * 100)}%, #e5e7eb ${Math.round((config.edgeThreshold || 0) * 100)}%, #e5e7eb 100%)`,
+                    }}
+                    aria-label="Global edge threshold"
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400 leading-tight">
+                Global thresholds apply to all {activeSection === 'node' ? 'node' : 'edge'}{' '}
+                features. Elements below the threshold disappear completely.
+              </p>
             </div>
           </div>
         </>
@@ -731,10 +841,14 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
                       ? {
                           ...mapping,
                           dataSourceWeights: resetWeights,
+                          threshold: 0,
                           includeDirectories: defaultIncludeDirectories,
                         }
                       : mapping
                   ),
+                  // Also reset global thresholds
+                  nodeThreshold: 0,
+                  edgeThreshold: 0,
                 };
                 onConfigChange(newConfig);
               }
