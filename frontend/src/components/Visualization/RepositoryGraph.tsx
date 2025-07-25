@@ -48,13 +48,13 @@ interface Link extends d3.SimulationLinkDatum<Node>, LinkData {
 
 // Helper function to create pie chart nodes
 const createPieChartNodes = (
-  nodeGroups: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>,
+  nodeGroups: d3.Selection<d3.BaseType, Node, d3.BaseType, unknown>,
   nodeMetrics: Map<string, ComputedNodeMetrics>,
   config: VisualizationConfig | undefined,
   allNodeMetrics: ComputedNodeMetrics[],
   extensionColors: Record<string, string>,
   onSelectFile: (fileId: string | null) => void
-): d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown> => {
+): d3.Selection<d3.BaseType, Node, d3.BaseType, unknown> => {
   // Create a group for each pie chart
   const pieGroups = nodeGroups.append('g').attr('class', 'pie-node');
 
@@ -458,10 +458,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('cursor', 'pointer');
 
       const pieChartMode = isPieChartEnabled(config);
-      let node: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>;
+      let node: d3.Selection<d3.BaseType, Node, d3.BaseType, unknown>;
       if (pieChartMode) {
         node = createPieChartNodes(
-          nodeGroups,
+          nodeGroups as d3.Selection<d3.BaseType, Node, d3.BaseType, unknown>,
           nodeMetrics,
           config,
           allNodeMetrics,

@@ -4,7 +4,8 @@ import { VisualizationConfig, DEFAULT_CONFIG } from './types/visualization';
 import FileUpload from './components/FileUpload';
 import RepositoryGraph, { RepositoryGraphHandle } from './components/Visualization/RepositoryGraph';
 import FileDetails from './components/FileDetails';
-import UnifiedVisualizationControls from './components/UnifiedVisualizationControls';
+import NodeControls from './components/NodeControls';
+import EdgeControls from './components/EdgeControls';
 import DynamicLegend from './components/DynamicLegend';
 
 // Import the example data for demonstration purposes
@@ -16,7 +17,8 @@ const App: React.FC = () => {
   const [isAutoLoading, setIsAutoLoading] = useState(true);
   const [autoLoadFailed, setAutoLoadFailed] = useState(false);
   const [config, setConfig] = useState<VisualizationConfig>(DEFAULT_CONFIG);
-  const [showControls, setShowControls] = useState(true);
+  const [showNodeControls, setShowNodeControls] = useState(false);
+  const [showEdgeControls, setShowEdgeControls] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
 
   const graphRef = useRef<RepositoryGraphHandle | null>(null);
@@ -75,8 +77,12 @@ const App: React.FC = () => {
     setConfig(newConfig);
   };
 
-  const handleToggleControls = () => {
-    setShowControls(!showControls);
+  const handleToggleNodeControls = () => {
+    setShowNodeControls(prev => !prev);
+  };
+
+  const handleToggleEdgeControls = () => {
+    setShowEdgeControls(prev => !prev);
   };
 
   const handleToggleLegend = () => {
@@ -259,49 +265,115 @@ const App: React.FC = () => {
                       📊
                     </button>
 
-                    {/* Controls Toggle Button */}
+                    {/* Node Controls Toggle Button */}
                     <button
-                      onClick={handleToggleControls}
+                      onClick={handleToggleNodeControls}
                       style={{
                         width: '32px',
                         height: '32px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: showControls ? '#f3f4f6' : 'transparent',
-                        border: showControls ? '1px solid #d1d5db' : 'none',
+                        backgroundColor: showNodeControls ? '#f3f4f6' : 'transparent',
+                        border: showNodeControls ? '1px solid #d1d5db' : 'none',
                         borderRadius: '4px',
-                        fontSize: '20px',
-                        color: showControls ? '#374151' : '#666',
+                        color: showNodeControls ? '#374151' : '#666',
                         cursor: 'pointer',
                         transition: 'all 0.2s',
                       }}
                       onMouseEnter={e => {
-                        if (!showControls) {
+                        if (!showNodeControls) {
                           e.currentTarget.style.backgroundColor = '#f3f4f6';
                           e.currentTarget.style.border = '1px solid #d1d5db';
                         }
                       }}
                       onMouseLeave={e => {
-                        if (!showControls) {
+                        if (!showNodeControls) {
                           e.currentTarget.style.backgroundColor = 'transparent';
                           e.currentTarget.style.border = 'none';
                         }
                       }}
-                      aria-label="Toggle controls"
-                      title="Controls"
+                      aria-label="Toggle Node Controls"
+                      title="Node Controls"
                     >
-                      ⚙
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={1.5}
+                        stroke="currentColor"
+                        style={{ width: '20px', height: '20px' }}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M21 7.5l-2.25-1.313M21 7.5v2.25m0-2.25l-2.25 1.313M3 7.5l2.25-1.313M3 7.5l2.25 1.313M3 7.5v2.25m9 3l2.25-1.313M12 12.75l-2.25 1.313M12 12.75V15m0 6.75l2.25-1.313M12 21.75V19.5m0 2.25l-2.25-1.313m0-16.875L12 2.25l2.25 1.313M12 7.5V5.25m0 2.25l-2.25 1.313M3 12.75l2.25-1.313M21 12.75l-2.25-1.313m0 0l-2.25 1.313m2.25-1.313l2.25-1.313m0 0l-2.25-1.313m-9 5.25l2.25-1.313"
+                        />
+                      </svg>
+                    </button>
+
+                    {/* Edge Controls Toggle Button */}
+                    <button
+                      onClick={handleToggleEdgeControls}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: showEdgeControls ? '#f3f4f6' : 'transparent',
+                        border: showEdgeControls ? '1px solid #d1d5db' : 'none',
+                        borderRadius: '4px',
+                        color: showEdgeControls ? '#374151' : '#666',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => {
+                        if (!showEdgeControls) {
+                          e.currentTarget.style.backgroundColor = '#f3f4f6';
+                          e.currentTarget.style.border = '1px solid #d1d5db';
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!showEdgeControls) {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.border = 'none';
+                        }
+                      }}
+                      aria-label="Toggle Edge Controls"
+                      title="Edge Controls"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={1.5}
+                        stroke="currentColor"
+                        style={{ width: '20px', height: '20px' }}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
+                        />
+                      </svg>
                     </button>
                   </div>
                 )}
 
                 {/* Visualization Controls */}
-                {showControls && (
-                  <UnifiedVisualizationControls
+                {showNodeControls && (
+                  <NodeControls
                     config={config}
                     onConfigChange={handleConfigChange}
-                    onClose={() => setShowControls(false)}
+                    onClose={() => setShowNodeControls(false)}
+                  />
+                )}
+                {showEdgeControls && (
+                  <EdgeControls
+                    config={config}
+                    onConfigChange={handleConfigChange}
+                    onClose={() => setShowEdgeControls(false)}
                   />
                 )}
 

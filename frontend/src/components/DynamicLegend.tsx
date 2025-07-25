@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import FloatingMenu from './FloatingMenu';
 import { RepositoryData } from '../types/schema';
 import {
   VisualizationConfig,
@@ -23,84 +24,6 @@ interface DynamicLegendProps {
 
 const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) => {
   const [selectedFeature, setSelectedFeature] = useState<string>('node_color');
-  const [position, setPosition] = useState({ x: 20, y: 20 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, elementX: 0, elementY: 0 });
-  const [isInitialized, setIsInitialized] = useState(false);
-  const legendRef = useRef<HTMLDivElement>(null);
-
-  // Initialize position to upper left corner
-  useEffect(() => {
-    const initializePosition = () => {
-      if (legendRef.current) {
-        setPosition({ x: 20, y: 80 }); // Below the controls button
-        setIsInitialized(true);
-      }
-    };
-
-    if (!isInitialized) {
-      initializePosition();
-    }
-  }, [isInitialized]);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!legendRef.current) return;
-
-    const target = e.target as HTMLElement;
-    if (
-      target.tagName === 'BUTTON' ||
-      target.tagName === 'SELECT' ||
-      target.tagName === 'OPTION' ||
-      target.closest('button, select')
-    ) {
-      return;
-    }
-
-    setDragStart({
-      mouseX: e.clientX,
-      mouseY: e.clientY,
-      elementX: position.x,
-      elementY: position.y,
-    });
-    setIsDragging(true);
-    e.preventDefault();
-  };
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isDragging || !legendRef.current) return;
-
-      const deltaX = e.clientX - dragStart.mouseX;
-      const deltaY = e.clientY - dragStart.mouseY;
-
-      const newX = dragStart.elementX + deltaX;
-      const newY = dragStart.elementY + deltaY;
-
-      const maxX = Math.max(0, window.innerWidth - legendRef.current.offsetWidth - 20);
-      const maxY = Math.max(0, window.innerHeight - legendRef.current.offsetHeight - 40);
-
-      setPosition({
-        x: Math.max(0, Math.min(maxX, newX)),
-        y: Math.max(0, Math.min(maxY, newY)),
-      });
-    },
-    [isDragging, dragStart]
-  );
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   const selectedFeatureData = VISUAL_FEATURES.find(f => f.id === selectedFeature);
   const currentMapping = getFeatureMapping(config, selectedFeature);
@@ -438,42 +361,14 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
   };
 
   return (
-    <div
-      ref={legendRef}
-      className="absolute transition-all duration-200"
-      onMouseDown={handleMouseDown}
-      style={{
-        position: 'absolute',
-        left: isInitialized ? position.x : '20px',
-        top: isInitialized ? position.y : '80px',
-        width: '200px',
-        pointerEvents: 'auto',
-        transform: 'translate3d(0, 0, 0)',
-        zIndex: 1000,
-        userSelect: 'none',
-        backgroundColor: 'white',
-        border: '2px solid #e5e7eb',
-        borderRadius: '12px',
-        boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-        cursor: isDragging ? 'grabbing' : 'grab',
-        padding: '16px',
-      }}
+    <FloatingMenu
+      title="Legend"
+      titleColor="indigo-500"
+      initialPosition={{ x: 20, y: 80 }}
+      initialSize={{ width: 200, height: 400 }}
+      minSize={{ width: 180, height: 250 }}
+      onClose={onClose}
     >
-      {/* Close button */}
-      <button
-        onClick={onClose}
-        className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-white hover:bg-red-50 border border-gray-200 text-gray-400 hover:text-red-500 transition-all duration-200"
-        style={{ cursor: 'pointer' }}
-        aria-label="Close legend"
-      >
-        <span className="text-sm font-bold">×</span>
-      </button>
-
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3 pr-8">
-        <h3 className="text-sm font-bold text-gray-900">Legend</h3>
-      </div>
-
       {/* Feature Selection */}
       <div className="mb-3">
         <label className="block text-xs font-medium text-gray-700 mb-1">Feature</label>
@@ -493,7 +388,7 @@ const DynamicLegend: React.FC<DynamicLegendProps> = ({ data, config, onClose }) 
 
       {/* Legend Content */}
       <div className="space-y-2">{renderLegendContent()}</div>
-    </div>
+    </FloatingMenu>
   );
 };
 
