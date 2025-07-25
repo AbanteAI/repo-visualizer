@@ -76,7 +76,7 @@ const EdgeControls: React.FC<EdgeControlsProps> = ({ config, onConfigChange, onC
           >
             {edgeFeatures.map(feature => (
               <option key={feature.id} value={feature.id}>
-                {getFeatureIcon(feature)} {feature.name}
+                {feature.name}
               </option>
             ))}
           </select>

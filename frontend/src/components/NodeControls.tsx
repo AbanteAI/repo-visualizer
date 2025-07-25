@@ -82,7 +82,7 @@ const NodeControls: React.FC<NodeControlsProps> = ({ config, onConfigChange, onC
           >
             {nodeFeatures.map(feature => (
               <option key={feature.id} value={feature.id}>
-                {getFeatureIcon(feature)} {feature.name}
+                {feature.name}
               </option>
             ))}
           </select>

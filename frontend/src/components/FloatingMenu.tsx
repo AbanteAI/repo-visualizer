@@ -46,18 +46,18 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
 
   // Clamp initial position to prevent off-screen rendering
   useEffect(() => {
-    if (menuRef.current) {
-      const parent = menuRef.current.parentElement;
-      if (parent) {
-        const maxX = Math.max(0, parent.offsetWidth - size.width);
-        const maxY = Math.max(0, window.innerHeight - size.height - 40);
+    if (typeof window === 'undefined' || !menuRef.current) return;
 
-        const clampedX = Math.max(0, Math.min(maxX, initialPosition.x));
-        const clampedY = Math.max(0, Math.min(maxY, initialPosition.y));
+    const parent = menuRef.current.parentElement;
+    if (parent) {
+      const maxX = Math.max(0, parent.offsetWidth - size.width);
+      const maxY = Math.max(0, window.innerHeight - size.height - 40);
 
-        if (clampedX !== initialPosition.x || clampedY !== initialPosition.y) {
-          setPosition({ x: clampedX, y: clampedY });
-        }
+      const clampedX = Math.max(0, Math.min(maxX, initialPosition.x));
+      const clampedY = Math.max(0, Math.min(maxY, initialPosition.y));
+
+      if (clampedX !== initialPosition.x || clampedY !== initialPosition.y) {
+        setPosition({ x: clampedX, y: clampedY });
       }
     }
   }, []); // Run once on mount, ignore deps to prevent re-clamping
