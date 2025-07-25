@@ -173,11 +173,16 @@ app.post('/api/search-content', async (req, res) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    repoRoot: REPO_ROOT 
-  });
+  try {
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      repoRoot: REPO_ROOT 
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({ error: 'Health check failed' });
+  }
 });
 
 // Search relevance calculation functions
