@@ -34,6 +34,7 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   onClose,
   children,
   className = '',
+  headerIcon,
 }) => {
   const [position, setPosition] = useState(initialPosition);
   const [size, setSize] = useState(initialSize);

@@ -42,7 +42,7 @@ const EdgeControls: React.FC<EdgeControlsProps> = ({ config, onConfigChange, onC
     <FloatingMenu
       title="Edge Controls"
       titleColor="blue-500"
-      initialPosition={{ x: window.innerWidth - 760, y: 20 }}
+      initialPosition={{ x: typeof window !== 'undefined' ? window.innerWidth - 760 : 20, y: 20 }}
       initialSize={{ width: 360, height: 500 }}
       minSize={{ width: 320, height: 300 }}
       maxSize={{ width: 500, height: 700 }}
