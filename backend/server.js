@@ -50,7 +50,7 @@ function isReadableFile(filePath) {
 // API Routes
 
 // Get content of a specific file
-app.get('/api/file-content', async (req, res) => {
+app.get('/file-content', async (req, res) => {
   try {
     const { path: filePath } = req.query;
     
@@ -98,7 +98,7 @@ app.get('/api/file-content', async (req, res) => {
 });
 
 // Search across multiple files' content
-app.post('/api/search-content', async (req, res) => {
+app.post('/search-content', async (req, res) => {
   try {
     console.log('Received search request:', req.body);
     const { files, searchTerm, searchType = 'keyword' } = req.body;
@@ -176,7 +176,7 @@ app.post('/api/search-content', async (req, res) => {
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/health', (req, res) => {
   try {
     res.json({ 
       status: 'ok', 
