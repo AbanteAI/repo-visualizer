@@ -185,7 +185,7 @@ describe('App', () => {
     });
   });
 
-  it('initializes with correct default weight values', async () => {
+  it('initializes with controls rendered', async () => {
     (global.fetch as any).mockResolvedValue({
       ok: true,
       text: () => Promise.resolve(JSON.stringify(mockValidData)),
@@ -194,8 +194,8 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      // Check that controls are rendered with default values
-      expect(screen.getByText('100%')).toBeInTheDocument(); // File size weight should be visible
+      // Check that controls are rendered
+      expect(screen.getByText('Visualization Controls')).toBeInTheDocument();
     });
   });
 

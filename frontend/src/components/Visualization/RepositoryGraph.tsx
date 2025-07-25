@@ -331,7 +331,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const allNodeMetrics = Array.from(nodeMetrics.values());
       const nodes = allNodes.filter(node => {
         const metrics = nodeMetrics.get(node.id);
-        return metrics ? isNodeVisible(metrics, config) : true;
+        return metrics ? isNodeVisible(metrics, config, allNodeMetrics, node.type) : true;
       });
       const nodeIds = new Set(nodes.map(n => n.id));
 
