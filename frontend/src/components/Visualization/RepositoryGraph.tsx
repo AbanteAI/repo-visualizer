@@ -19,7 +19,6 @@ import {
   calculateNodeSize,
   calculateEdgeStrength,
   getNodeColor,
-  getLinkColor,
   isNodeVisible,
   isEdgeVisible,
   calculatePieChartData,
@@ -148,7 +147,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-    const originalNodesRef = useRef<Node[]>([]);
     const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
     const [nodeMetrics, setNodeMetrics] = useState<Map<string, ComputedNodeMetrics>>(new Map());
@@ -220,27 +218,19 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const handleResize = () => {
         if (containerRef.current) {
           const newWidth = containerRef.current.clientWidth;
-
-          // Calculate available height dynamically
           const viewportHeight = window.innerHeight;
           const header = document.querySelector('header');
-          const repoInfo = document.querySelector('.max-w-7xl'); // repo info section
-          const controls = document.querySelector('.border-t'); // controls section
-
+          const repoInfo = document.querySelector('.max-w-7xl');
+          const controls = document.querySelector('.border-t');
           const headerHeight = header ? header.offsetHeight : 0;
           const repoInfoHeight = repoInfo ? repoInfo.offsetHeight : 0;
           const controlsHeight = controls ? controls.offsetHeight : 0;
+          const availableHeight = viewportHeight - headerHeight - repoInfoHeight - controlsHeight - 16;
+          const newHeight = Math.max(availableHeight, 400);
 
-          // Calculate available height for the graph
-          const availableHeight =
-            viewportHeight - headerHeight - repoInfoHeight - controlsHeight - 16; // 16px for padding
-          const newHeight = Math.max(availableHeight, 400); // minimum 400px
-
-          // Only update if dimensions actually changed significantly (avoid micro-changes)
           setDimensions(prev => {
             const widthChanged = Math.abs(prev.width - newWidth) > 2;
             const heightChanged = Math.abs(prev.height - newHeight) > 2;
-
             if (widthChanged || heightChanged) {
               return { width: newWidth, height: newHeight };
             }
@@ -254,21 +244,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         resizeTimeout = setTimeout(handleResize, 100);
       };
 
-      // Set initial dimensions
       handleResize();
 
-      // Use ResizeObserver for better detection of container size changes
       if (containerRef.current && window.ResizeObserver) {
         const resizeObserver = new ResizeObserver(debouncedResize);
         resizeObserver.observe(containerRef.current);
-
-        // Cleanup
         return () => {
           clearTimeout(resizeTimeout);
           resizeObserver.disconnect();
         };
       } else {
-        // Fallback to window resize listener
         window.addEventListener('resize', debouncedResize);
         return () => {
           clearTimeout(resizeTimeout);
@@ -277,363 +262,152 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }, []);
 
-    // Effect to handle dimension changes - only update simulation if it exists
+    // Effect to handle dimension changes
     useEffect(() => {
-      if (
-        !svgRef.current ||
-        !simulationRef.current ||
-        dimensions.width === 0 ||
-        dimensions.height === 0
-      )
-        return;
-
+      if (!svgRef.current || !simulationRef.current || dimensions.width === 0 || dimensions.height === 0) return;
       const svg = d3.select(svgRef.current);
       const simulation = simulationRef.current;
-      const width = dimensions.width;
-      const height = dimensions.height;
-
-      // Update SVG dimensions - ensure it doesn't expand beyond container
-      svg
-        .attr('width', width)
-        .attr('height', height)
-        .attr('viewBox', [0, 0, width, height])
-        .style('max-width', '100%')
-        .style('max-height', '100%');
-
-      // Update center force to new dimensions
+      const { width, height } = dimensions;
+      svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
       const centerForce = simulation.force('center') as d3.ForceCenter<Node>;
       if (centerForce) {
         centerForce.x(width / 2).y(height / 2);
       }
-
-      // Gently restart simulation to adjust to new dimensions (reduce alpha to minimize movement)
       simulation.alpha(0.05).restart();
     }, [dimensions]);
 
     // Compute metrics when data changes
     useEffect(() => {
       if (!data) return;
-
-      const computedNodeMetrics = computeNodeMetrics(data);
-      const computedLinkMetrics = computeLinkMetrics(data);
-
-      setNodeMetrics(computedNodeMetrics);
-      setLinkMetrics(computedLinkMetrics);
+      setNodeMetrics(computeNodeMetrics(data));
+      setLinkMetrics(computeLinkMetrics(data));
     }, [data]);
 
-    // Initial setup effect - runs when data changes
+    // Main drawing effect
     useEffect(() => {
-      if (
-        !svgRef.current ||
-        !containerRef.current ||
-        !data ||
-        dimensions.width === 0 ||
-        dimensions.height === 0 ||
-        nodeMetrics.size === 0
-      )
-        return;
+      if (!svgRef.current || !containerRef.current || !data || dimensions.width === 0 || dimensions.height === 0 || nodeMetrics.size === 0) return;
 
-      // Clear any existing visualization
       const svg = d3.select(svgRef.current);
       svg.selectAll('*').remove();
 
-      // Set up dimensions
-      const width = dimensions.width;
-      const height = dimensions.height;
-
-      // Update SVG dimensions
+      const { width, height } = dimensions;
       svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
 
-      // Create a group for the graph
       const g = svg.append('g');
 
-      // Extract nodes from files and their components
       const allNodes: Node[] = [];
-
-      // Add file and directory nodes
       data.files.forEach(file => {
-        // Only add file-level nodes (not components as separate nodes)
         if (file.type === 'file' || file.type === 'directory') {
-          allNodes.push({
-            id: file.id,
-            name: file.name,
-            path: file.path,
-            type: file.type,
-            extension: file.extension,
-            size: file.size,
-            depth: file.depth,
-            expanded: expandedFiles.has(file.id),
-          });
-
-          // Add component nodes only if file is expanded
+          allNodes.push({ ...file, expanded: expandedFiles.has(file.id) });
           if (expandedFiles.has(file.id) && file.components) {
             file.components.forEach(component => {
-              allNodes.push({
-                id: component.id,
-                name: component.name,
-                path: file.path,
-                type: component.type,
-                extension: file.extension,
-                size: 0, // Components don't have file size
-                depth: file.depth + 1,
-                parentId: file.id,
-              });
-
-              // Add nested component nodes recursively
-              const addNestedComponents = (comp: any, currentDepth: number, parentId: string) => {
-                if (comp.components) {
-                  comp.components.forEach((nestedComp: any) => {
-                    allNodes.push({
-                      id: nestedComp.id,
-                      name: nestedComp.name,
-                      path: file.path,
-                      type: nestedComp.type,
-                      extension: file.extension,
-                      size: 0,
-                      depth: currentDepth + 1,
-                      parentId: parentId,
-                    });
-                    addNestedComponents(nestedComp, currentDepth + 1, parentId);
-                  });
-                }
-              };
-              addNestedComponents(component, file.depth + 1, file.id);
+              allNodes.push({ ...component, path: file.path, parentId: file.id, depth: file.depth + 1, size: 0 });
             });
           }
         }
       });
 
-      // Get all node metrics for threshold calculations
       const allNodeMetrics = Array.from(nodeMetrics.values());
-
-      // Use all nodes initially - thresholding will be applied in config update effect
-      const nodes = allNodes;
-
-      // Create initial links with current weights, but only for visible nodes
+      const nodes = allNodes.filter(node => {
+        const metrics = nodeMetrics.get(node.id);
+        return metrics ? isNodeVisible(metrics, config) : true;
+      });
       const nodeIds = new Set(nodes.map(n => n.id));
+
       const createLinks = () => {
         const baseLinks = data.relationships
           .filter(rel => nodeIds.has(rel.source) && nodeIds.has(rel.target))
           .map(rel => {
             const linkKey = `${rel.source}-${rel.target}`;
             const linkMetric = linkMetrics.get(linkKey);
-
-            if (!linkMetric) {
-              return {
-                source: rel.source,
-                target: rel.target,
-                type: rel.type,
-                weight: 0,
-                originalStrength: rel.strength || 1,
-              };
-            }
-
-            const edgeStrength = calculateEdgeStrength(linkMetric, config);
-
-            return {
-              source: rel.source,
-              target: rel.target,
-              type: rel.type,
-              weight: edgeStrength,
-              originalStrength: rel.strength || 1,
-            };
+            const edgeStrength = linkMetric ? calculateEdgeStrength(linkMetric, config) : 0;
+            return { ...rel, weight: edgeStrength };
           })
           .filter(link => {
-            // Apply both existing weight check and new threshold check
             if (link.weight <= 0) return false;
-
             const linkKey = `${link.source}-${link.target}`;
             const linkMetric = linkMetrics.get(linkKey);
-            if (!linkMetric) return false;
-
-            return isEdgeVisible(linkMetric, config, link.type);
+            return linkMetric ? isEdgeVisible(linkMetric, config, link.type) : false;
           });
 
-        // Add dynamic "contains" relationships for expanded nodes
         const dynamicLinks: Link[] = [];
         nodes.forEach(node => {
           if (node.parentId && nodeIds.has(node.parentId)) {
-            // Create a synthetic link metric for contains relationships
-            const containsMetric: ComputedLinkMetrics = {
-              semantic_similarity: 0,
-              filesystem_proximity: 0,
-              code_references: 1, // Contains relationships are code references
-            };
-
+            const containsMetric: ComputedLinkMetrics = { semantic_similarity: 0, filesystem_proximity: 0, code_references: 1 };
             const edgeStrength = calculateEdgeStrength(containsMetric, config);
-
-            dynamicLinks.push({
-              source: node.parentId,
-              target: node.id,
-              type: 'contains',
-              weight: edgeStrength,
-              originalStrength: 1,
-            });
+            dynamicLinks.push({ source: node.parentId, target: node.id, type: 'contains', weight: edgeStrength, originalStrength: 1 });
           }
         });
-
         return [...baseLinks, ...dynamicLinks];
       };
-
       const links = createLinks();
 
-      // Store original nodes for threshold filtering
-      originalNodesRef.current = nodes;
-
-      // Create a force simulation
-      const simulation = d3
-        .forceSimulation<Node>(nodes)
-        .force(
-          'link',
-          d3
-            .forceLink<Node, Link>(links)
-            .id(d => d.id)
-            .distance(d => {
-              // Adjust distance based on connection type and weight
-              const baseDistance = 100;
-              const weight = d.weight || 0;
-              const strength = d.originalStrength || 1;
-
-              if (d.type === 'filesystem_proximity') {
-                // Filesystem connections should be closer
-                return baseDistance * (1 - weight * 0.5) * (1 / strength);
-              } else if (d.type === 'semantic_similarity') {
-                // Semantic connections should be moderately close
-                return baseDistance * (1 - weight * 0.4) * (1 / strength);
-              } else if (d.type === 'contains') {
-                // Containment relationships should be very close for clear hierarchy
-                return 50; // Much shorter distance for parent-child relationships
-              } else {
-                // Reference connections
-                return baseDistance * (1 - weight * 0.3);
-              }
-            })
-            .strength(d => {
-              // Adjust strength based on weight
-              const baseStrength = 1;
-              const weight = d.weight || 0;
-              const strength = d.originalStrength || 1;
-
-              if (d.type === 'contains') {
-                // Strong attraction for parent-child relationships
-                return 2; // Stronger force for containment
-              }
-
-              return baseStrength * weight * strength;
-            })
-        )
+      const simulation = d3.forceSimulation<Node>(nodes)
+        .force('link', d3.forceLink<Node, Link>(links).id(d => d.id)
+          .distance(d => {
+            const baseDistance = 100;
+            const weight = d.weight || 0;
+            const strength = d.originalStrength || 1;
+            if (d.type === 'filesystem_proximity') return baseDistance * (1 - weight * 0.5) * (1 / strength);
+            if (d.type === 'semantic_similarity') return baseDistance * (1 - weight * 0.4) * (1 / strength);
+            if (d.type === 'contains') return 50;
+            return baseDistance * (1 - weight * 0.3);
+          })
+          .strength(d => {
+            const baseStrength = 1;
+            const weight = d.weight || 0;
+            const strength = d.originalStrength || 1;
+            if (d.type === 'contains') return 2;
+            return baseStrength * weight * strength;
+          }))
         .force('charge', d3.forceManyBody().strength(-300))
         .force('center', d3.forceCenter(width / 2, height / 2))
-        .force(
-          'collision',
-          d3.forceCollide<Node>().radius(d => {
-            const metrics = nodeMetrics.get(d.id);
-            if (!metrics) return 10;
-            const allNodeMetrics = Array.from(nodeMetrics.values());
-            return calculateNodeSize(metrics, config, allNodeMetrics, d.type) + 5;
-          })
-        );
-
-      // Save simulation to ref for potential future interactions
+        .force('collision', d3.forceCollide<Node>().radius(d => {
+          const metrics = nodeMetrics.get(d.id);
+          return (metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5) + 5;
+        }));
       simulationRef.current = simulation;
 
-      // Create links grouped by skeleton
       const allLinkElements: d3.Selection<SVGLineElement, Link, SVGGElement, unknown>[] = [];
-
-      // Group links by skeleton
       (config.skeletons || []).forEach(skeleton => {
         if (!skeleton.enabled) return;
-
         const skeletonLinks = links.filter(link => skeleton.relationshipTypes.includes(link.type));
-
         if (skeletonLinks.length === 0) return;
 
         const linkGroup = g.append('g').attr('class', `skeleton-${skeleton.id}`);
-
-        const linkSelection = linkGroup
-          .selectAll('line')
-          .data(skeletonLinks)
-          .enter()
-          .append('line')
+        const linkSelection = linkGroup.selectAll('line').data(skeletonLinks).enter().append('line')
           .attr('stroke', skeleton.color)
           .attr('stroke-opacity', skeleton.opacity)
           .attr('stroke-width', d => {
             const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-            const linkMetric = linkMetrics.get(linkKey) ?? {
-              semantic_similarity: 0,
-              filesystem_proximity: 0,
-              code_references: d.type === 'contains' ? 1 : 0,
-            };
-
-            // Use skeleton-specific width calculation
-            if (d.type === 'contains') {
-              return 3;
-            } else if (skeleton.id === 'code_references') {
-              return 1.5 + (linkMetric.code_references || 0) * 1.5;
-            } else if (skeleton.id === 'semantic_similarity') {
-              return 1 + (linkMetric.semantic_similarity || 0) * 2;
-            } else if (skeleton.id === 'filesystem_proximity') {
-              return 1 + (linkMetric.filesystem_proximity || 0) * 1.5;
-            }
+            const linkMetric = linkMetrics.get(linkKey);
+            if (d.type === 'contains') return 3;
+            if (!linkMetric) return 1;
+            if (skeleton.id === 'code_references') return 1.5 + (linkMetric.code_references || 0) * 1.5;
+            if (skeleton.id === 'semantic_similarity') return 1 + (linkMetric.semantic_similarity || 0) * 2;
+            if (skeleton.id === 'filesystem_proximity') return 1 + (linkMetric.filesystem_proximity || 0) * 1.5;
             return 1.5;
           });
 
-        // Add tooltips to skeleton links
         linkSelection.append('title').text(d => {
           const sourceName = (d.source as any).name || (d.source as any).id || d.source;
           const targetName = (d.target as any).name || (d.target as any).id || d.target;
           const strength = d.originalStrength || 1;
           const referenceText = strength > 1 ? `${strength} references` : '1 reference';
-
           return `${sourceName} → ${targetName}\nType: ${d.type}\nReferences: ${referenceText}`;
         });
-
-<<<<<<< HEAD
         allLinkElements.push(linkSelection);
-||||||| 5d30f50
-=======
-      // Add tooltips to edges showing reference counts
-      link.append('title').text(d => {
-        const sourceName = (d.source as any).name || (d.source as any).id || d.source;
-        const targetName = (d.target as any).name || (d.target as any).id || d.target;
-        const strength = d.originalStrength || 1;
-        const referenceText = strength > 1 ? `${strength} references` : '1 reference';
-
-        return `${sourceName} → ${targetName}\nType: ${d.type}\nReferences: ${referenceText}`;
->>>>>>> origin/main
       });
 
-      // Create node groups (to hold both circles and expand/collapse indicators)
-      const nodeGroups = g
-        .append('g')
-        .attr('class', 'nodes')
-        .selectAll('g')
-        .data(nodes)
-        .enter()
-        .append('g')
-        .style('cursor', 'pointer')
-        .call(dragBehavior(simulation));
+      const nodeGroups = g.append('g').attr('class', 'nodes').selectAll('g').data(nodes).enter().append('g')
+        .style('cursor', 'pointer');
 
-      // Check if pie chart mode is enabled
       const pieChartMode = isPieChartEnabled(config);
-
       let node: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>;
-
       if (pieChartMode) {
-        // Create pie chart nodes
-        node = createPieChartNodes(
-          nodeGroups,
-          nodeMetrics,
-          config,
-          allNodeMetrics,
-          EXTENSION_COLORS,
-          onSelectFile
-        );
+        node = createPieChartNodes(nodeGroups, nodeMetrics, config, allNodeMetrics, EXTENSION_COLORS, onSelectFile);
       } else {
-        // Create regular circle nodes
-        node = nodeGroups
-          .append('circle')
-          .attr('class', 'node')
+        node = nodeGroups.append('circle')
           .attr('r', d => {
             const metrics = nodeMetrics.get(d.id);
             return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
@@ -643,702 +417,26 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
           })
           .attr('stroke', '#fff')
-          .attr('stroke-width', 1.5)
-          .on('mouseover', function (_event, _d) {
-            d3.select(this).attr('stroke-width', 3);
-          })
-          .on('mouseout', function (_event, _d) {
-            // Reset to default hover state, but preserve selection highlighting
-            const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
-            d3.select(this).attr('stroke-width', isSelected ? 3 : 1.5);
-          })
-          .on('click', (event, d) => {
-            event.stopPropagation();
-            onSelectFile(d.id);
-          });
+          .attr('stroke-width', 1.5);
       }
 
-      // Add expand/collapse indicators for files with components
-      nodeGroups
-        .filter(d => d.type === 'file' && hasComponents(d.id))
-        .append('text')
-        .attr('x', 0)
-        .attr('y', -12)
-        .attr('text-anchor', 'middle')
-        .attr('font-size', '12px')
-        .attr('font-weight', 'bold')
-        .attr('fill', '#333')
-        .text(d => (expandedFiles.has(d.id) ? '−' : '+'))
-        .style('pointer-events', 'none');
-
-      // Add click handler for expand/collapse
-      nodeGroups
-        .filter(d => d.type === 'file' && hasComponents(d.id))
-        .on('dblclick', (event, d) => {
-          event.stopPropagation();
-          toggleNodeExpansion(d.id);
-        });
-
-      // Add node labels
-      const label = nodeGroups
-        .append('text')
-        .attr('dx', d => {
-          const metrics = nodeMetrics.get(d.id);
-          const radius = metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-          return radius + 5;
-        })
-        .attr('dy', 4)
-        .text(d => d.name)
-        .style('font-size', '10px')
-        .style('pointer-events', 'none')
-        .style('fill', '#333');
-
-      // Add hover titles to nodes
       nodeGroups.append('title').text(d => d.path);
-
-      // Click on background to clear selection
-      svg.on('click', () => {
-        onSelectFile(null);
-      });
-
-      // Create zoom behavior
-      const zoom = d3
-        .zoom<SVGSVGElement, unknown>()
-        .scaleExtent([0.1, 10])
-        .on('zoom', event => {
-          g.attr('transform', event.transform);
-        });
-
-      // Save zoom to ref for external access
-      zoomRef.current = zoom;
-
-      svg.call(zoom);
-
-      // Update positions on each tick
-      simulation.on('tick', () => {
-        // Update all skeleton link groups
-        allLinkElements.forEach(linkSelection => {
-          linkSelection
-            .attr('x1', d => (d.source as Node).x || 0)
-            .attr('y1', d => (d.source as Node).y || 0)
-            .attr('x2', d => (d.target as Node).x || 0)
-            .attr('y2', d => (d.target as Node).y || 0);
-        });
-
-        nodeGroups.attr('transform', d => `translate(${d.x || 0}, ${d.y || 0})`);
-      });
-
-      // Legend is now handled by DynamicLegend component
-
-      // Clean up on unmount
-      return () => {
-        if (simulationRef.current) {
-          simulationRef.current.stop();
-        }
-        // Clean up event listeners
-        svg.on('.zoom', null);
-        svg.on('click', null);
-      };
-    }, [
-      data,
-      dimensions,
-      expandedFiles,
-      toggleNodeExpansion,
-      hasComponents,
-      config?.mappings,
-      nodeMetrics,
-      linkMetrics,
-    ]);
-
-    // Separate effect for handling selection highlighting
-    useEffect(() => {
-      if (!svgRef.current || !data) return;
-
-      const svg = d3.select(svgRef.current);
-      const pieChartMode = isPieChartEnabled(config);
-
-      // Select appropriate node elements based on mode
-      const nodes = pieChartMode ? svg.selectAll('g.pie-node') : svg.selectAll('circle.node');
-
-      // Only proceed if nodes exist
-      if (nodes.empty()) return;
-
-      // Reset all nodes to default stroke
-      if (pieChartMode) {
-        nodes.selectAll('.pie-segment').attr('stroke', '#fff').attr('stroke-width', 1);
-      } else {
-        nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
-      }
-
-      // Highlight selected file
-      if (selectedFile) {
-        const selectedNodes = nodes.filter(function (d) {
-          return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
-        });
-
-        if (pieChartMode) {
-          selectedNodes.selectAll('.pie-segment').attr('stroke', '#e74c3c').attr('stroke-width', 2);
+      nodeGroups.on('click', (event, d) => {
+        event.stopPropagation();
+        if (hasComponents(d.id)) {
+          toggleNodeExpansion(d.id);
         } else {
-          selectedNodes.attr('stroke', '#e74c3c').attr('stroke-width', 3);
-        }
-      }
-    }, [selectedFile, data, expandedFiles, config]);
-
-<<<<<<< HEAD
-||||||| 5d30f50
-    // Config update effect - runs when visualization config changes
-    useEffect(() => {
-      if (!simulationRef.current || !data || nodeMetrics.size === 0) return;
-
-      const simulation = simulationRef.current;
-      const linkSelection = (simulation as any).__linkSelection;
-      const nodeSelection = (simulation as any).__nodeSelection;
-
-      if (!linkSelection || !nodeSelection) return;
-
-      // Get current visible node IDs
-      const nodes = simulation.nodes();
-      const currentNodeIds = new Set(nodes.map(n => n.id));
-
-      // Recreate links with new weights, but only for visible nodes
-      const baseUpdatedLinks = data.relationships
-        .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
-        .map(rel => {
-          const linkKey = `${rel.source}-${rel.target}`;
-          const linkMetric = linkMetrics.get(linkKey);
-
-          if (!linkMetric) {
-            return {
-              source: rel.source,
-              target: rel.target,
-              type: rel.type,
-              weight: 0,
-              originalStrength: rel.strength || 1,
-            };
-          }
-
-          const edgeStrength = calculateEdgeStrength(linkMetric, config);
-
-          return {
-            source: rel.source,
-            target: rel.target,
-            type: rel.type,
-            weight: edgeStrength,
-            originalStrength: rel.strength || 1,
-          };
-        })
-        .filter(link => link.weight > 0);
-
-      // Add dynamic "contains" relationships for expanded nodes
-      const dynamicUpdatedLinks: Link[] = [];
-      nodes.forEach(node => {
-        if (node.parentId && currentNodeIds.has(node.parentId)) {
-          const containsMetric: ComputedLinkMetrics = {
-            semantic_similarity: 0,
-            filesystem_proximity: 0,
-            code_references: 1,
-          };
-
-          const edgeStrength = calculateEdgeStrength(containsMetric, config);
-
-          dynamicUpdatedLinks.push({
-            source: node.parentId,
-            target: node.id,
-            type: 'contains',
-            weight: edgeStrength,
-            originalStrength: 1,
-          });
+          onSelectFile(d.id);
         }
       });
 
-      const updatedLinks = [...baseUpdatedLinks, ...dynamicUpdatedLinks];
+      const label = g.append('g').attr('class', 'labels').selectAll('text').data(nodes).enter().append('text')
+        .attr('class', 'node-label')
+        .attr('font-size', 10)
+        .attr('fill', '#333')
+        .text(d => d.name);
 
-      // Update the force simulation with new link data
-      const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
-      linkForce
-        .links(updatedLinks)
-        .distance(d => {
-          const baseDistance = 100;
-          const weight = d.weight || 0;
-          const strength = d.originalStrength || 1;
-
-          if (d.type === 'filesystem_proximity') {
-            return baseDistance * (1 - weight * 0.5) * (1 / strength);
-          } else if (d.type === 'semantic_similarity') {
-            return baseDistance * (1 - weight * 0.4) * (1 / strength);
-          } else if (d.type === 'contains') {
-            return 50;
-          } else {
-            return baseDistance * (1 - weight * 0.3);
-          }
-        })
-        .strength(d => {
-          const baseStrength = 1;
-          const weight = d.weight || 0;
-          const strength = d.originalStrength || 1;
-
-          if (d.type === 'contains') {
-            return 2;
-          }
-
-          return baseStrength * weight * strength;
-        });
-
-      // Update link visual properties with proper enter/update/exit handling
-      const newLinkSelection = linkSelection
-        .data(
-          updatedLinks,
-          (d: Link) => `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`
-        )
-        .join(
-          enter =>
-            enter
-              .append('line')
-              .attr('stroke', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeColor(linkMetric, config, d.type);
-              })
-              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
-              .attr('stroke-width', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeWidth(linkMetric, config, d.type);
-              }),
-          update =>
-            update
-              .attr('stroke', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeColor(linkMetric, config, d.type);
-              })
-              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
-              .attr('stroke-width', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeWidth(linkMetric, config, d.type);
-              }),
-          exit => exit.remove()
-        );
-
-      // Store the new selection for future updates
-      (simulation as any).__linkSelection = newLinkSelection;
-
-      // Get all node metrics for normalization (compute once)
-      const allNodeMetrics = Array.from(nodeMetrics.values());
-
-      // Update node visual properties based on mode
-      const pieChartMode = isPieChartEnabled(config);
-
-      if (pieChartMode) {
-        // In pie chart mode, nodeSelection refers to the pie groups
-        // We need to recreate the pie charts with updated data
-        nodeSelection.each(function (d: Node) {
-          const group = d3.select(this);
-          const metrics = nodeMetrics.get(d.id);
-
-          if (!metrics) return;
-
-          const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
-          const pieData = calculatePieChartData(metrics, config);
-
-          // Remove old segments
-          group.selectAll('.pie-segment').remove();
-          group.selectAll('circle').remove();
-
-          if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
-            // No coverage data, show regular circle
-            group
-              .append('circle')
-              .attr('r', radius)
-              .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS))
-              .attr('stroke', '#fff')
-              .attr('stroke-width', 1.5);
-          } else {
-            // Recreate pie chart
-            const pie = d3
-              .pie<{ label: string; value: number }>()
-              .value(d => d.value)
-              .sort(null);
-
-            const arc = d3
-              .arc<d3.PieArcDatum<{ label: string; value: number }>>()
-              .innerRadius(0)
-              .outerRadius(radius);
-
-            const pieChartData = pie([
-              { label: 'covered', value: pieData.covered },
-              { label: 'uncovered', value: pieData.uncovered },
-            ]);
-
-            group
-              .selectAll('.pie-segment')
-              .data(pieChartData)
-              .enter()
-              .append('path')
-              .attr('class', 'pie-segment')
-              .attr('d', arc)
-              .attr('fill', (_, i) => {
-                if (i === 0) {
-                  return '#22c55e'; // Covered portion - green
-                } else {
-                  return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
-                }
-              })
-              .attr('stroke', '#fff')
-              .attr('stroke-width', 1);
-          }
-        });
-      } else {
-        // Regular circle mode
-        nodeSelection
-          .attr('r', (d: Node) => {
-            const metrics = nodeMetrics.get(d.id);
-            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-          })
-          .attr('fill', (d: Node) => {
-            const metrics = nodeMetrics.get(d.id);
-            return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
-          });
-      }
-
-      // Update label positions to match new node sizes
-      const labelSelection = (simulation as any).__labelSelection;
-      if (labelSelection) {
-        labelSelection.attr('dx', (d: Node) => {
-          const metrics = nodeMetrics.get(d.id);
-          const radius = metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-          return radius + 5;
-        });
-      }
-
-      // Update collision force with new node sizes
-      const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
-      collisionForce.radius((d: Node) => {
-        const metrics = nodeMetrics.get(d.id);
-        if (!metrics) return 10;
-        return calculateNodeSize(metrics, config, allNodeMetrics, d.type) + 5;
-      });
-
-      // Don't update center force during config changes - preserve current zoom/pan
-      // The center force should remain at the original center (width/2, height/2)
-
-      // Restart simulation with gentle animation
-      simulation.alpha(0.1).restart();
-    }, [config, data, nodeMetrics, linkMetrics]);
-
-=======
-    // Config update effect - runs when visualization config changes
-    useEffect(() => {
-      if (!simulationRef.current || !data || nodeMetrics.size === 0) return;
-
-      const simulation = simulationRef.current;
-      const linkSelection = (simulation as any).__linkSelection;
-      const nodeSelection = (simulation as any).__nodeSelection;
-
-      if (!linkSelection || !nodeSelection) return;
-
-      // Get original nodes and apply threshold filtering
-      const nodes = originalNodesRef.current;
-      const currentNodeMetrics = Array.from(nodeMetrics.values());
-
-      // Filter nodes based on thresholds while preserving positions
-      const visibleNodes = nodes.filter(node => {
-        const nodeMetric = nodeMetrics.get(node.id);
-        if (!nodeMetric) return true; // Keep nodes without metrics
-        return isNodeVisible(nodeMetric, config, currentNodeMetrics, node.type);
-      });
-
-      // Update simulation with filtered nodes
-      simulation.nodes(visibleNodes);
-
-      // Update visual representation
-      const svg = d3.select(svgRef.current);
-      const nodeGroups = svg.selectAll('g.nodes g');
-
-      nodeGroups.style('display', function (d: any) {
-        const nodeMetric = nodeMetrics.get(d.id);
-        if (!nodeMetric) return 'block';
-        return isNodeVisible(nodeMetric, config, currentNodeMetrics, d.type) ? 'block' : 'none';
-      });
-
-      const currentNodeIds = new Set(visibleNodes.map(n => n.id));
-
-      // Recreate links with new weights, but only for visible nodes
-      const baseUpdatedLinks = data.relationships
-        .filter(rel => currentNodeIds.has(rel.source) && currentNodeIds.has(rel.target))
-        .map(rel => {
-          const linkKey = `${rel.source}-${rel.target}`;
-          const linkMetric = linkMetrics.get(linkKey);
-
-          if (!linkMetric) {
-            return {
-              source: rel.source,
-              target: rel.target,
-              type: rel.type,
-              weight: 0,
-              originalStrength: rel.strength || 1,
-            };
-          }
-
-          const edgeStrength = calculateEdgeStrength(linkMetric, config);
-
-          return {
-            source: rel.source,
-            target: rel.target,
-            type: rel.type,
-            weight: edgeStrength,
-            originalStrength: rel.strength || 1,
-          };
-        })
-        .filter(link => {
-          // Apply both existing weight check and new threshold check
-          if (link.weight <= 0) return false;
-
-          const linkKey = `${link.source}-${link.target}`;
-          const linkMetric = linkMetrics.get(linkKey);
-          if (!linkMetric) return false;
-
-          return isEdgeVisible(linkMetric, config, link.type);
-        });
-
-      // Add dynamic "contains" relationships for expanded nodes
-      const dynamicUpdatedLinks: Link[] = [];
-      visibleNodes.forEach(node => {
-        if (node.parentId && currentNodeIds.has(node.parentId) && currentNodeIds.has(node.id)) {
-          const containsMetric: ComputedLinkMetrics = {
-            semantic_similarity: 0,
-            filesystem_proximity: 0,
-            code_references: 1,
-          };
-
-          const edgeStrength = calculateEdgeStrength(containsMetric, config);
-
-          dynamicUpdatedLinks.push({
-            source: node.parentId,
-            target: node.id,
-            type: 'contains',
-            weight: edgeStrength,
-            originalStrength: 1,
-          });
-        }
-      });
-
-      const updatedLinks = [...baseUpdatedLinks, ...dynamicUpdatedLinks];
-
-      // Update the force simulation with new link data
-      const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
-      linkForce
-        .links(updatedLinks)
-        .distance(d => {
-          const baseDistance = 100;
-          const weight = d.weight || 0;
-          const strength = d.originalStrength || 1;
-
-          if (d.type === 'filesystem_proximity') {
-            return baseDistance * (1 - weight * 0.5) * (1 / strength);
-          } else if (d.type === 'semantic_similarity') {
-            return baseDistance * (1 - weight * 0.4) * (1 / strength);
-          } else if (d.type === 'contains') {
-            return 50;
-          } else {
-            return baseDistance * (1 - weight * 0.3);
-          }
-        })
-        .strength(d => {
-          const baseStrength = 1;
-          const weight = d.weight || 0;
-          const strength = d.originalStrength || 1;
-
-          if (d.type === 'contains') {
-            return 2;
-          }
-
-          return baseStrength * weight * strength;
-        });
-
-      // Update link visual properties with proper enter/update/exit handling
-      const newLinkSelection = linkSelection
-        .data(
-          updatedLinks,
-          (d: Link) => `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`
-        )
-        .join(
-          enter =>
-            enter
-              .append('line')
-              .attr('stroke', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeColor(linkMetric, config, d.type);
-              })
-              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
-              .attr('stroke-width', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeWidth(linkMetric, config, d.type);
-              }),
-          update =>
-            update
-              .attr('stroke', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeColor(linkMetric, config, d.type);
-              })
-              .attr('stroke-opacity', (d: Link) => (d.type === 'contains' ? 0.8 : 0.4))
-              .attr('stroke-width', (d: Link) => {
-                const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-                const linkMetric = linkMetrics.get(linkKey) ?? {
-                  semantic_similarity: 0,
-                  filesystem_proximity: 0,
-                  code_references: d.type === 'contains' ? 1 : 0,
-                };
-                return calculateEdgeWidth(linkMetric, config, d.type);
-              }),
-          exit => exit.remove()
-        );
-
-      // Store the new selection for future updates
-      (simulation as any).__linkSelection = newLinkSelection;
-
-      // Get all node metrics for normalization (compute once)
-      const allNodeMetrics = Array.from(nodeMetrics.values());
-
-      // Update node visual properties based on mode
-      const pieChartMode = isPieChartEnabled(config);
-
-      if (pieChartMode) {
-        // In pie chart mode, nodeSelection refers to the pie groups
-        // We need to recreate the pie charts with updated data
-        nodeSelection.each(function (d: Node) {
-          const group = d3.select(this);
-          const metrics = nodeMetrics.get(d.id);
-
-          if (!metrics) return;
-
-          const radius = calculateNodeSize(metrics, config, currentNodeMetrics, d.type);
-          const pieData = calculatePieChartData(metrics, config);
-
-          // Remove old segments
-          group.selectAll('.pie-segment').remove();
-          group.selectAll('circle').remove();
-
-          if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
-            // No coverage data, show regular circle
-            group
-              .append('circle')
-              .attr('r', radius)
-              .attr('fill', getNodeColor(d, metrics, config, currentNodeMetrics, EXTENSION_COLORS))
-              .attr('stroke', '#fff')
-              .attr('stroke-width', 1.5);
-          } else {
-            // Recreate pie chart
-            const pie = d3
-              .pie<{ label: string; value: number }>()
-              .value(d => d.value)
-              .sort(null);
-
-            const arc = d3
-              .arc<d3.PieArcDatum<{ label: string; value: number }>>()
-              .innerRadius(0)
-              .outerRadius(radius);
-
-            const pieChartData = pie([
-              { label: 'covered', value: pieData.covered },
-              { label: 'uncovered', value: pieData.uncovered },
-            ]);
-
-            group
-              .selectAll('.pie-segment')
-              .data(pieChartData)
-              .enter()
-              .append('path')
-              .attr('class', 'pie-segment')
-              .attr('d', arc)
-              .attr('fill', (_, i) => {
-                if (i === 0) {
-                  return '#22c55e'; // Covered portion - green
-                } else {
-                  return getNodeColor(d, metrics, config, currentNodeMetrics, EXTENSION_COLORS);
-                }
-              })
-              .attr('stroke', '#fff')
-              .attr('stroke-width', 1);
-          }
-        });
-      } else {
-        // Regular circle mode
-        nodeSelection
-          .attr('r', (d: Node) => {
-            const metrics = nodeMetrics.get(d.id);
-            return metrics ? calculateNodeSize(metrics, config, currentNodeMetrics, d.type) : 5;
-          })
-          .attr('fill', (d: Node) => {
-            const metrics = nodeMetrics.get(d.id);
-            return getNodeColor(d, metrics, config, currentNodeMetrics, EXTENSION_COLORS);
-          });
-      }
-
-      // Update label positions to match new node sizes
-      const labelSelection = (simulation as any).__labelSelection;
-      if (labelSelection) {
-        labelSelection.attr('dx', (d: Node) => {
-          const metrics = nodeMetrics.get(d.id);
-          const radius = metrics
-            ? calculateNodeSize(metrics, config, currentNodeMetrics, d.type)
-            : 5;
-          return radius + 5;
-        });
-      }
-
-      // Update collision force with new node sizes
-      const collisionForce = simulation.force('collision') as d3.ForceCollide<Node>;
-      collisionForce.radius((d: Node) => {
-        const metrics = nodeMetrics.get(d.id);
-        if (!metrics) return 10;
-        return calculateNodeSize(metrics, config, currentNodeMetrics, d.type) + 5;
-      });
-
-      // Don't update center force during config changes - preserve current zoom/pan
-      // The center force should remain at the original center (width/2, height/2)
-
-      // Restart simulation with gentle animation
-      simulation.alpha(0.1).restart();
-    }, [config, data, nodeMetrics, linkMetrics]);
-
->>>>>>> origin/main
-    // Create a drag behavior
-    const dragBehavior = (simulation: d3.Simulation<Node, Link>) => {
-      return d3
-        .drag<SVGGElement, Node>()
+      const dragBehavior = (simulation: d3.Simulation<Node, Link>) => d3.drag<any, Node>()
         .on('start', (event, d) => {
           if (!event.active) simulation.alphaTarget(0.3).restart();
           d.fx = d.x;
@@ -1353,15 +451,53 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d.fx = null;
           d.fy = null;
         });
-    };
+      nodeGroups.call(dragBehavior(simulation));
+
+      simulation.on('tick', () => {
+        allLinkElements.forEach(linkSelection => {
+          linkSelection
+            .attr('x1', d => (d.source as any).x)
+            .attr('y1', d => (d.source as any).y)
+            .attr('x2', d => (d.target as any).x)
+            .attr('y2', d => (d.target as any).y);
+        });
+        nodeGroups.attr('transform', d => `translate(${d.x},${d.y})`);
+        label.attr('x', d => d.x! + 10).attr('y', d => d.y! + 4);
+      });
+
+      const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.1, 10])
+        .on('zoom', event => {
+          g.attr('transform', event.transform);
+        });
+      svg.call(zoomBehavior);
+      zoomRef.current = zoomBehavior;
+
+      const updateSelectionHighlight = () => {
+        nodeGroups.selectAll('circle, .pie-node').transition().duration(200)
+          .attr('stroke', d => (d.id === selectedFile ? '#3b82f6' : '#fff'))
+          .attr('stroke-width', d => (d.id === selectedFile ? 3 : 1.5));
+      };
+      updateSelectionHighlight();
+
+      return () => {
+        simulation.stop();
+      };
+    }, [data, dimensions, config, expandedFiles, nodeMetrics, linkMetrics, onSelectFile, selectedFile, hasComponents, toggleNodeExpansion]);
+
+    // Effect for selection highlight only
+    useEffect(() => {
+      if (!svgRef.current) return;
+      const svg = d3.select(svgRef.current);
+      svg.selectAll('g.nodes g').selectAll('circle, .pie-node')
+        .transition().duration(200)
+        .attr('stroke', d => ((d as Node).id === selectedFile ? '#3b82f6' : '#fff'))
+        .attr('stroke-width', d => ((d as Node).id === selectedFile ? 3 : 1.5));
+    }, [selectedFile]);
 
     return (
-      <div
-        ref={containerRef}
-        className="w-full h-full relative overflow-hidden"
-        style={{ flex: 1, minHeight: '400px' }}
-      >
-        <svg ref={svgRef} className="w-full h-full bg-white" style={{ display: 'block' }}></svg>
+      <div ref={containerRef} className="w-full h-full relative overflow-hidden">
+        <svg ref={svgRef}></svg>
       </div>
     );
   }

@@ -252,7 +252,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         test_coverage_ratio: 0,
       },
       threshold: 0,
-      includeDirectories: false, // Directories excluded by default to prevent crowding
+      includeDirectories: false,
     },
     {
       featureId: 'node_color',
@@ -269,7 +269,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         test_coverage_ratio: 0,
       },
       threshold: 0,
-      includeDirectories: false, // Keep directories with consistent gray color by default
+      includeDirectories: false,
     },
     {
       featureId: 'edge_strength',
@@ -286,7 +286,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         test_coverage_ratio: 0,
       },
       threshold: 0,
-      includeDirectories: true, // Directories can participate in edge relationships
+      includeDirectories: true,
     },
     {
       featureId: 'edge_width',
@@ -319,7 +319,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         test_coverage_ratio: 100,
       },
       threshold: 0,
-      includeDirectories: true, // Directories can participate in edge relationships
+      includeDirectories: true,
     },
     {
       featureId: 'edge_color',
@@ -410,7 +410,7 @@ export const getSkeletonConfig = (
   config: VisualizationConfig,
   skeletonId: string
 ): RelationshipSkeleton | undefined => {
-  return config.skeletons.find(s => s.id === skeletonId);
+  return (config.skeletons || []).find(s => s.id === skeletonId);
 };
 
 export const updateFeatureThreshold = (
