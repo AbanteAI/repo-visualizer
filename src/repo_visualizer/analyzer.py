@@ -2261,7 +2261,8 @@ class RepositoryAnalyzer:
         self, commit_hash: str
     ) -> Tuple[List[File], List[Relationship]]:
         """
-        Analyze the repository state at a specific commit and return files and relationships.
+        Analyze the repository state at a specific commit.
+
         Uses git ls-tree to avoid modifying the working directory.
         """
         files: List[File] = []
