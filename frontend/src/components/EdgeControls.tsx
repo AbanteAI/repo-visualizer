@@ -7,6 +7,7 @@ import {
   DATA_SOURCES,
   getFeatureMapping,
   updateFeatureMapping,
+  updateGlobalThreshold,
 } from '../types/visualization';
 
 interface EdgeControlsProps {
@@ -163,6 +164,27 @@ const EdgeControls: React.FC<EdgeControlsProps> = ({ config, onConfigChange, onC
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+        {/* Threshold Slider */}
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Edge Visibility Threshold
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={config.edgeThreshold || 0}
+            onChange={e =>
+              onConfigChange(updateGlobalThreshold(config, 'edge', Number(e.target.value)))
+            }
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+          />
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>Show All</span>
+            <span>Show Important</span>
           </div>
         </div>
       </div>
