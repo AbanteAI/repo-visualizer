@@ -44,8 +44,7 @@ const App: React.FC = () => {
             Array.isArray(jsonData.files) &&
             Array.isArray(jsonData.relationships)
           ) {
-            setRepositoryData(jsonData);
-            setSelectedFile(null);
+            handleDataLoaded(jsonData); // Use the handler to set data and timeline
             setIsAutoLoading(false);
             return;
           }
