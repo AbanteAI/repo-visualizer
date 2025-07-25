@@ -339,13 +339,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       zoomRef.current = zoom;
 
       simulation.on('tick', () => {
-        const positions = nodePositionsRef.current;
-        simulation.nodes().forEach(node => {
-          if (node.x !== undefined && node.y !== undefined) {
-            positions.set(node.id, { x: node.x, y: node.y });
-          }
-        });
-
         g.selectAll<SVGLineElement, Link>('.link')
           .attr('x1', d => (d.source as Node).x!)
           .attr('y1', d => (d.source as Node).y!)
@@ -506,7 +499,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         d3
           .drag<SVGGElement, Node>()
           .on('start', (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
+            if (!event.active) simulation.alphaTarget(0.1).restart();
             d.fx = d.x;
             d.fy = d.y;
           })
