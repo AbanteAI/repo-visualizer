@@ -49,7 +49,7 @@ export interface FileMetrics {
   commentLines?: number;
   emptyLines?: number;
   commitCount?: number;
-  lastCommitDaysAgo?: number;
+  lastModified?: number;
   lastCommitDate?: string;
   topLevelIdentifiers?: number;
   testCoverage?: TestCoverage;

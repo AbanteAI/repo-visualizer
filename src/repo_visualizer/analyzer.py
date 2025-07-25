@@ -695,6 +695,8 @@ class RepositoryAnalyzer:
                         "id": f"{rel_path}::{component_name}",
                         "name": component_name,
                         "type": component_type,
+                        "lineStart": 0,
+                        "lineEnd": 0,
                     }
                 )
 
@@ -714,6 +716,8 @@ class RepositoryAnalyzer:
                         "id": f"{rel_path}::{component_name}",
                         "name": component_name,
                         "type": component_type,
+                        "lineStart": 0,
+                        "lineEnd": 0,
                     }
                 )
 
@@ -821,8 +825,12 @@ class RepositoryAnalyzer:
 
     def _add_relationship(self, source: str, target: str, type: str) -> None:
         """Add a relationship, handling duplicates and counting."""
-        # Ensure consistent ordering for relationship key
-        rel_key = (source, target, type)
+        # For undirected relationships, ensure consistent key ordering
+        if type in ("semantic_similarity", "filesystem_proximity"):
+            rel_key = (*tuple(sorted((source, target))), type)
+        else:
+            rel_key = (source, target, type)
+
         if rel_key in self.relationship_counts:
             self.relationship_counts[rel_key] += 1
         else:
@@ -836,7 +844,10 @@ class RepositoryAnalyzer:
         consolidated: List[Relationship] = []
         for rel in self.relationships:
             source, target, type = rel["source"], rel["target"], rel["type"]
-            rel_key = (source, target, type)
+            if type in ("semantic_similarity", "filesystem_proximity"):
+                rel_key = (*tuple(sorted((source, target))), type)
+            else:
+                rel_key = (source, target, type)
             strength = self.relationship_counts.get(rel_key, 1)
             consolidated.append(
                 {"source": source, "target": target, "type": type, "strength": strength}

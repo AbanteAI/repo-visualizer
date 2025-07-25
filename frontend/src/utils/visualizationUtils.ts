@@ -61,10 +61,11 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
 
     // Calculate recency score (0-1, where 1 is most recent)
     let recencyScore = 0;
-    if (fileMetrics.lastCommitDaysAgo !== undefined) {
-      // Convert days ago to a score (fresher = higher score)
-      const daysAgo = fileMetrics.lastCommitDaysAgo;
-      recencyScore = Math.max(0, 1 - daysAgo / 365); // Normalize to 0-1 over a year
+    if (fileMetrics.lastModified) {
+      const now = Date.now() / 1000; // current time in seconds
+      const ageInSeconds = now - fileMetrics.lastModified;
+      const maxAge = 365 * 24 * 60 * 60; // 1 year in seconds
+      recencyScore = Math.max(0, 1 - ageInSeconds / maxAge);
     }
 
     // For directories, use 'directory' as the file_type for categorical coloring
