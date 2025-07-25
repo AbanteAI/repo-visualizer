@@ -1,6 +1,6 @@
 // API client for backend content operations
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = '';
 
 export interface FileContentResponse {
   path: string;
@@ -30,9 +30,7 @@ class ApiClient {
   }
 
   async getFileContent(filePath: string): Promise<FileContentResponse> {
-    const response = await fetch(
-      `${this.baseUrl}/file-content?path=${encodeURIComponent(filePath)}`
-    );
+    const response = await fetch(`/api/file-content?path=${encodeURIComponent(filePath)}`);
 
     if (!response.ok) {
       const error = await response.json();
@@ -47,7 +45,7 @@ class ApiClient {
     searchTerm: string,
     searchType: 'keyword' | 'semantic'
   ): Promise<SearchContentResponse> {
-    const response = await fetch(`${this.baseUrl}/search-content`, {
+    const response = await fetch(`/api/search-content`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -68,7 +66,7 @@ class ApiClient {
   }
 
   async checkHealth(): Promise<{ status: string; timestamp: string; repoRoot: string }> {
-    const response = await fetch(`${this.baseUrl}/health`);
+    const response = await fetch(`/api/health`);
 
     if (!response.ok) {
       throw new Error(`Health check failed: HTTP ${response.status}`);
