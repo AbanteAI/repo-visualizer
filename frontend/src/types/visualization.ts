@@ -25,24 +25,37 @@ export interface VisualFeature {
 export interface FeatureMapping {
   featureId: string;
   dataSourceWeights: Record<string, number>; // dataSourceId -> weight (0-100)
+  threshold?: number; // Optional threshold (0-1) for this feature - elements below this are hidden
   includeDirectories?: boolean; // Whether directories should participate in this feature
 }
 
 export interface VisualizationConfig {
   mappings: FeatureMapping[];
   searchTerm?: string;
+  nodeThreshold?: number; // Global node threshold (0-1)
+  edgeThreshold?: number; // Global edge threshold (0-1)
 }
 
 // Available data sources
 export const DATA_SOURCES: DataSource[] = [
   {
-    id: 'file_type',
-    name: 'File Type',
-    description: 'File extension/type for categorical coloring',
-    color: '#6b7280',
-    defaultWeight: 100,
-    category: 'file',
-    dataType: 'categorical',
+    id: 'code_references',
+    name: 'Code References',
+    description: 'Direct code references like imports and calls',
+    color: '#3b82f6',
+    defaultWeight: 70,
+    category: 'relationship',
+    dataType: 'continuous',
+    applicableTo: 'edge',
+  },
+  {
+    id: 'commit_count',
+    name: 'Commit Count',
+    description: 'Number of commits affecting this file',
+    color: '#f59e0b',
+    defaultWeight: 0,
+    category: 'git',
+    dataType: 'continuous',
     applicableTo: 'node',
   },
   {
@@ -56,12 +69,32 @@ export const DATA_SOURCES: DataSource[] = [
     applicableTo: 'node',
   },
   {
-    id: 'commit_count',
-    name: 'Commit Count',
-    description: 'Number of commits affecting this file',
-    color: '#f59e0b',
+    id: 'file_type',
+    name: 'File Type',
+    description: 'File extension/type for categorical coloring',
+    color: '#6b7280',
+    defaultWeight: 100,
+    category: 'file',
+    dataType: 'categorical',
+    applicableTo: 'node',
+  },
+  {
+    id: 'filesystem_proximity',
+    name: 'Filesystem Proximity',
+    description: 'How close files are in the filesystem',
+    color: '#ef4444',
+    defaultWeight: 30,
+    category: 'file',
+    dataType: 'continuous',
+    applicableTo: 'edge',
+  },
+  {
+    id: 'identifiers',
+    name: 'Identifiers',
+    description: 'Number of top-level identifiers in the file',
+    color: '#ec4899',
     defaultWeight: 0,
-    category: 'git',
+    category: 'file',
     dataType: 'continuous',
     applicableTo: 'node',
   },
@@ -72,16 +105,6 @@ export const DATA_SOURCES: DataSource[] = [
     color: '#06b6d4',
     defaultWeight: 0,
     category: 'git',
-    dataType: 'continuous',
-    applicableTo: 'node',
-  },
-  {
-    id: 'identifiers',
-    name: 'Identifiers',
-    description: 'Number of top-level identifiers in the file',
-    color: '#ec4899',
-    defaultWeight: 0,
-    category: 'file',
     dataType: 'continuous',
     applicableTo: 'node',
   },
@@ -102,26 +125,6 @@ export const DATA_SOURCES: DataSource[] = [
     color: '#22c55e',
     defaultWeight: 30,
     category: 'semantic',
-    dataType: 'continuous',
-    applicableTo: 'edge',
-  },
-  {
-    id: 'filesystem_proximity',
-    name: 'Filesystem Proximity',
-    description: 'How close files are in the filesystem',
-    color: '#ef4444',
-    defaultWeight: 30,
-    category: 'file',
-    dataType: 'continuous',
-    applicableTo: 'edge',
-  },
-  {
-    id: 'code_references',
-    name: 'Code References',
-    description: 'Direct code references like imports and calls',
-    color: '#3b82f6',
-    defaultWeight: 70,
-    category: 'relationship',
     dataType: 'continuous',
     applicableTo: 'edge',
   },
@@ -160,20 +163,12 @@ export const DATA_SOURCES: DataSource[] = [
 // Available visual features
 export const VISUAL_FEATURES: VisualFeature[] = [
   {
-    id: 'node_size',
-    name: 'Node Size',
-    description: 'Size of the nodes in the graph',
-    icon: '●',
-    category: 'node',
-    defaultDataSources: ['file_size'],
-  },
-  {
-    id: 'node_color',
-    name: 'Node Color',
-    description: 'Color intensity of the nodes',
-    icon: '🎨',
-    category: 'node',
-    defaultDataSources: ['file_type'],
+    id: 'edge_color',
+    name: 'Edge Color',
+    description: 'Color of the edges',
+    icon: '🌈',
+    category: 'edge',
+    defaultDataSources: ['code_references'],
   },
   {
     id: 'edge_strength',
@@ -192,20 +187,28 @@ export const VISUAL_FEATURES: VisualFeature[] = [
     defaultDataSources: ['code_references'],
   },
   {
+    id: 'node_color',
+    name: 'Node Color',
+    description: 'Color intensity of the nodes',
+    icon: '🎨',
+    category: 'node',
+    defaultDataSources: ['file_type'],
+  },
+  {
+    id: 'node_size',
+    name: 'Node Size',
+    description: 'Size of the nodes in the graph',
+    icon: '●',
+    category: 'node',
+    defaultDataSources: ['file_size'],
+  },
+  {
     id: 'pie_chart_ratio',
     name: 'Pie Chart Ratio',
     description: 'Display nodes as pie charts showing data ratios',
     icon: '◐',
     category: 'node',
     defaultDataSources: ['test_coverage_ratio'],
-  },
-  {
-    id: 'edge_color',
-    name: 'Edge Color',
-    description: 'Color of the edges',
-    icon: '🌈',
-    category: 'edge',
-    defaultDataSources: ['code_references'],
   },
 ];
 
@@ -228,6 +231,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         keyword_search: 0,
         semantic_search: 0,
       },
+      threshold: 0,
       includeDirectories: false, // Directories excluded by default to prevent crowding
     },
     {
@@ -246,6 +250,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         keyword_search: 0,
         semantic_search: 0,
       },
+      threshold: 0,
       includeDirectories: false, // Keep directories with consistent gray color by default
     },
     {
@@ -264,6 +269,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         keyword_search: 0,
         semantic_search: 0,
       },
+      threshold: 0,
       includeDirectories: true, // Directories can participate in edge relationships
     },
     {
@@ -282,6 +288,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         keyword_search: 0,
         semantic_search: 0,
       },
+      threshold: 0,
     },
     {
       featureId: 'pie_chart_ratio',
@@ -297,6 +304,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         code_references: 0,
         test_coverage_ratio: 100,
       },
+      threshold: 0,
       includeDirectories: true, // Directories can participate in edge relationships
     },
     {
@@ -312,8 +320,11 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 100,
       },
+      threshold: 0,
     },
   ],
+  nodeThreshold: 0,
+  edgeThreshold: 0,
 };
 
 // Helper functions
@@ -355,6 +366,38 @@ export const updateFeatureMapping = (
   return {
     ...config,
     mappings: newMappings,
+  };
+};
+
+export const updateFeatureThreshold = (
+  config: VisualizationConfig,
+  featureId: string,
+  threshold: number
+): VisualizationConfig => {
+  const newMappings = config.mappings.map(mapping => {
+    if (mapping.featureId === featureId) {
+      return {
+        ...mapping,
+        threshold,
+      };
+    }
+    return mapping;
+  });
+
+  return {
+    ...config,
+    mappings: newMappings,
+  };
+};
+
+export const updateGlobalThreshold = (
+  config: VisualizationConfig,
+  type: 'node' | 'edge',
+  threshold: number
+): VisualizationConfig => {
+  return {
+    ...config,
+    [type === 'node' ? 'nodeThreshold' : 'edgeThreshold']: threshold,
   };
 };
 
