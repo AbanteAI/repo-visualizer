@@ -127,16 +127,6 @@ export const DATA_SOURCES: DataSource[] = [
     dataType: 'continuous',
     applicableTo: 'edge',
   },
-  {
-    id: 'test_coverage_ratio',
-    name: 'Test Coverage Ratio',
-    description: 'Percentage of code covered by tests',
-    color: '#16a34a',
-    defaultWeight: 0,
-    category: 'file',
-    dataType: 'continuous',
-    applicableTo: 'node',
-  },
 ];
 
 // Available visual features
@@ -187,7 +177,7 @@ export const VISUAL_FEATURES: VisualFeature[] = [
     description: 'Display nodes as pie charts showing data ratios',
     icon: '◐',
     category: 'node',
-    defaultDataSources: ['test_coverage_ratio'],
+    defaultDataSources: [],
   },
 ];
 
@@ -206,7 +196,6 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
-        test_coverage_ratio: 0,
       },
       threshold: 0,
       includeDirectories: false, // Directories excluded by default to prevent crowding
@@ -223,7 +212,6 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
-        test_coverage_ratio: 0,
       },
       threshold: 0,
       includeDirectories: false, // Keep directories with consistent gray color by default
@@ -240,7 +228,6 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 30,
         filesystem_proximity: 30,
         code_references: 70,
-        test_coverage_ratio: 0,
       },
       threshold: 0,
       includeDirectories: true, // Directories can participate in edge relationships
@@ -257,7 +244,6 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 100,
-        test_coverage_ratio: 0,
       },
       threshold: 0,
     },
@@ -273,7 +259,6 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
-        test_coverage_ratio: 100,
       },
       threshold: 0,
       includeDirectories: true, // Directories can participate in edge relationships
