@@ -5,6 +5,7 @@ import {
   DATA_SOURCES,
   VISUAL_FEATURES,
 } from '../types/visualization';
+import apiClient from './apiClient';
 import { NODE_COLORS } from './extensionColors';
 
 export interface NodeData {
@@ -37,6 +38,8 @@ export interface ComputedNodeMetrics {
   identifiers: number;
   references: number;
   test_coverage_ratio?: number;
+  keyword_search: number;
+  semantic_search: number;
 }
 
 export interface ComputedLinkMetrics {
@@ -46,7 +49,10 @@ export interface ComputedLinkMetrics {
 }
 
 // Compute metrics for all nodes from repository data
-export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNodeMetrics> => {
+export const computeNodeMetrics = async (
+  data: RepositoryData,
+  searchTerm?: string
+): Promise<Map<string, ComputedNodeMetrics>> => {
   const metrics = new Map<string, ComputedNodeMetrics>();
 
   // Calculate incoming references count
@@ -55,6 +61,49 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
     const count = incomingReferences.get(rel.target) || 0;
     incomingReferences.set(rel.target, count + 1);
   });
+
+  // If we have a search term, get content-based relevance scores
+  const contentRelevanceMap: Map<string, { keyword: number; semantic: number }> = new Map();
+
+  if (searchTerm && searchTerm.trim()) {
+    try {
+      console.log(`🔍 Starting content search for term: "${searchTerm}"`);
+      const isBackendAvailable = await apiClient.isAvailable();
+
+      if (isBackendAvailable) {
+        const filePaths = data.files.map(f => f.path);
+        console.log(`📂 Searching ${filePaths.length} files`);
+
+        // Get keyword relevance
+        const keywordResults = await apiClient.searchContent(filePaths, searchTerm, 'keyword');
+        const semanticResults = await apiClient.searchContent(filePaths, searchTerm, 'semantic');
+
+        console.log(`🎯 Keyword results:`, keywordResults.results.slice(0, 3));
+        console.log(`🧠 Semantic results:`, semanticResults.results.slice(0, 3));
+
+        // Build relevance map
+        keywordResults.results.forEach(result => {
+          const existing = contentRelevanceMap.get(result.path) || { keyword: 0, semantic: 0 };
+          contentRelevanceMap.set(result.path, { ...existing, keyword: result.relevance });
+        });
+
+        semanticResults.results.forEach(result => {
+          const existing = contentRelevanceMap.get(result.path) || { keyword: 0, semantic: 0 };
+          contentRelevanceMap.set(result.path, { ...existing, semantic: result.relevance });
+        });
+
+        console.log(`✅ Built relevance map for ${contentRelevanceMap.size} files`);
+      } else {
+        console.warn('🚫 Backend API not available, using path-based search');
+      }
+    } catch (error) {
+      console.error('❌ Search API error:', error);
+      console.warn(
+        'Failed to get content-based search results, falling back to path-based search:',
+        error
+      );
+    }
+  }
 
   // Process each file and directory
   data.files.forEach(file => {
@@ -71,6 +120,19 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
     // For directories, use 'directory' as the file_type for categorical coloring
     const fileType = file.type === 'directory' ? 'directory' : file.extension || 'unknown';
 
+    // Get content-based relevance or fallback to path-based
+    const contentRelevance = contentRelevanceMap.get(file.path);
+    const keywordRelevance =
+      contentRelevance?.keyword ??
+      (searchTerm
+        ? calculateKeywordRelevance(file.path, searchTerm)
+        : (fileMetrics.custom?.keywordRelevance as number) || 0);
+    const semanticRelevance =
+      contentRelevance?.semantic ??
+      (searchTerm
+        ? calculateSemanticRelevance(file.path, searchTerm)
+        : (fileMetrics.custom?.semanticRelevance as number) || 0);
+
     metrics.set(file.id, {
       file_type: fileType,
       file_size: file.size || 0,
@@ -79,11 +141,14 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
       test_coverage_ratio: fileMetrics.testCoverageRatio,
+      keyword_search: keywordRelevance,
+      semantic_search: semanticRelevance,
     });
 
     // Add metrics for components (classes, functions, methods) - only for files, not directories
     if (file.type === 'file' && file.components) {
       file.components.forEach(component => {
+        // For components, use the parent file's content relevance (since components are part of the file)
         metrics.set(component.id, {
           file_type: component.type, // Use component type as the categorical value
           file_size: file.size || 0, // Use parent file size
@@ -92,6 +157,8 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
           identifiers: fileMetrics.topLevelIdentifiers || 0,
           references: incomingReferences.get(component.id) || 0,
           test_coverage_ratio: fileMetrics.testCoverageRatio,
+          keyword_search: keywordRelevance,
+          semantic_search: semanticRelevance,
         });
       });
     }
@@ -119,6 +186,49 @@ export const computeLinkMetrics = (data: RepositoryData): Map<string, ComputedLi
   });
 
   return metrics;
+};
+
+// Calculate keyword relevance score for a file/component
+export const calculateKeywordRelevance = (text: string, term: string): number => {
+  const lowerText = text.toLowerCase();
+  const lowerTerm = term.toLowerCase();
+
+  if (lowerText.includes(lowerTerm)) {
+    // Exact match gets high score
+    return 100;
+  }
+
+  // Partial matches get lower scores
+  const words = lowerTerm.split(/\s+/);
+  const matches = words.filter(word => lowerText.includes(word)).length;
+  return (matches / words.length) * 80;
+};
+
+// Calculate semantic relevance score for a file/component
+export const calculateSemanticRelevance = (text: string, term: string): number => {
+  // Mock semantic similarity - in real implementation would use embeddings
+  const semanticPairs: Record<string, string[]> = {
+    user: ['auth', 'login', 'profile', 'account'],
+    data: ['database', 'model', 'schema', 'store'],
+    api: ['endpoint', 'route', 'service', 'client'],
+    ui: ['component', 'view', 'render', 'display'],
+    test: ['spec', 'mock', 'assert', 'verify'],
+  };
+
+  const lowerText = text.toLowerCase();
+  const lowerTerm = term.toLowerCase();
+
+  for (const [concept, related] of Object.entries(semanticPairs)) {
+    if (lowerTerm.includes(concept)) {
+      for (const relatedWord of related) {
+        if (lowerText.includes(relatedWord)) {
+          return Math.random() * 60 + 40; // 40-100 for semantic matches
+        }
+      }
+    }
+  }
+
+  return Math.random() * 30; // Low baseline semantic relevance
 };
 
 // Calculate weighted value for a visual feature (for numerical data)

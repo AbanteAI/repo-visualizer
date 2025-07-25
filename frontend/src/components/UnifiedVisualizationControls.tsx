@@ -44,6 +44,12 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
   const selectedFeatureData = VISUAL_FEATURES.find(f => f.id === selectedFeature);
   const selectedDataSourceData = DATA_SOURCES.find(ds => ds.id === selectedDataSource);
   const currentMapping = getFeatureMapping(config, selectedFeature);
+  const [localSearchTerm, setLocalSearchTerm] = useState(config.searchTerm || '');
+
+  // Keep local search term in sync with config changes
+  useEffect(() => {
+    setLocalSearchTerm(config.searchTerm || '');
+  }, [config.searchTerm]);
 
   // Helper functions for transposed view
   const getDataSourceFeatures = (dataSourceId: string) => {
@@ -182,6 +188,19 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
     onConfigChange(newConfig);
   };
 
+  const handleSearchTermChange = (searchTerm: string) => {
+    setLocalSearchTerm(searchTerm);
+    const newConfig = { ...config, searchTerm };
+    onConfigChange(newConfig);
+  };
+
+  const hasActiveSearchSources = () => {
+    if (!currentMapping) return false;
+    const keywordWeight = currentMapping.dataSourceWeights.keyword_search || 0;
+    const semanticWeight = currentMapping.dataSourceWeights.semantic_search || 0;
+    return keywordWeight > 0 || semanticWeight > 0;
+  };
+
   const handleThresholdChange = (featureId: string, threshold: number) => {
     const newConfig = updateFeatureThreshold(config, featureId, threshold);
     onConfigChange(newConfig);
@@ -288,6 +307,23 @@ const UnifiedVisualizationControls: React.FC<UnifiedVisualizationControlsProps> 
             : 'Select visual feature first, then assign data sources'}
         </p>
       </div>
+
+      {/* Search Term Input */}
+      {hasActiveSearchSources() && (
+        <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Search Term</label>
+          <input
+            type="text"
+            value={localSearchTerm}
+            onChange={e => handleSearchTermChange(e.target.value)}
+            placeholder="Enter search term for relevance calculation..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+          />
+          <p className="text-xs text-gray-600 mt-1">
+            This term is used to calculate keyword and semantic search relevance scores.
+          </p>
+        </div>
+      )}
 
       {!isTransposed ? (
         // Feature-First Mode (Original)

@@ -31,6 +31,7 @@ export interface FeatureMapping {
 
 export interface VisualizationConfig {
   mappings: FeatureMapping[];
+  searchTerm?: string;
   nodeThreshold?: number; // Global node threshold (0-1)
   edgeThreshold?: number; // Global edge threshold (0-1)
 }
@@ -137,6 +138,26 @@ export const DATA_SOURCES: DataSource[] = [
     dataType: 'continuous',
     applicableTo: 'node',
   },
+  {
+    id: 'keyword_search',
+    name: 'Keyword Search',
+    description: 'Relevance based on keyword matching',
+    color: '#f97316',
+    defaultWeight: 0,
+    category: 'semantic',
+    dataType: 'continuous',
+    applicableTo: 'node',
+  },
+  {
+    id: 'semantic_search',
+    name: 'Semantic Search',
+    description: 'Relevance based on semantic similarity to search term',
+    color: '#a855f7',
+    defaultWeight: 0,
+    category: 'semantic',
+    dataType: 'continuous',
+    applicableTo: 'node',
+  },
 ];
 
 // Available visual features
@@ -207,6 +228,8 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 0,
         test_coverage_ratio: 0,
+        keyword_search: 0,
+        semantic_search: 0,
       },
       threshold: 0,
       includeDirectories: false, // Directories excluded by default to prevent crowding
@@ -224,6 +247,8 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 0,
         test_coverage_ratio: 0,
+        keyword_search: 0,
+        semantic_search: 0,
       },
       threshold: 0,
       includeDirectories: false, // Keep directories with consistent gray color by default
@@ -241,6 +266,8 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 30,
         code_references: 70,
         test_coverage_ratio: 0,
+        keyword_search: 0,
+        semantic_search: 0,
       },
       threshold: 0,
       includeDirectories: true, // Directories can participate in edge relationships
@@ -258,6 +285,8 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         filesystem_proximity: 0,
         code_references: 100,
         test_coverage_ratio: 0,
+        keyword_search: 0,
+        semantic_search: 0,
       },
       threshold: 0,
     },
