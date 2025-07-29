@@ -226,7 +226,7 @@ class ExampleClass:
         analyze_repository("/path/to/repo", "output.json")
 
         # Check that methods were called
-        mock_analyzer_class.assert_called_once_with("/path/to/repo")
+        mock_analyzer_class.assert_called_once_with("/path/to/repo", branch=None)
         mock_instance.analyze.assert_called_once()
         mock_instance.save_to_file.assert_called_once_with("output.json")
 
