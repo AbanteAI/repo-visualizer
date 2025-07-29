@@ -490,9 +490,7 @@ class RepositoryAnalyzer:
     def _read_file_content(self, file_path: str) -> Optional[str]:
         """Read file content, returning None if it fails."""
         try:
-            with open(
-                os.path.join(self.repo_path, file_path), encoding="utf-8"
-            ) as f:
+            with open(os.path.join(self.repo_path, file_path), encoding="utf-8") as f:
                 return f.read()
         except Exception:
             return None
@@ -1156,9 +1154,7 @@ class RepositoryAnalyzer:
     def _read_file_content(self, file_path: str) -> Optional[str]:
         """Read file content, returning None if it fails."""
         try:
-            with open(
-                os.path.join(self.repo_path, file_path), encoding="utf-8"
-            ) as f:
+            with open(os.path.join(self.repo_path, file_path), encoding="utf-8") as f:
                 return f.read()
         except Exception:
             return None
@@ -1266,9 +1262,7 @@ class RepositoryAnalyzer:
     def _read_file_content(self, file_path: str) -> Optional[str]:
         """Read file content, returning None if it fails."""
         try:
-            with open(
-                os.path.join(self.repo_path, file_path), encoding="utf-8"
-            ) as f:
+            with open(os.path.join(self.repo_path, file_path), encoding="utf-8") as f:
                 return f.read()
         except Exception:
             return None
