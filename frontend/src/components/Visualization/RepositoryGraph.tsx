@@ -466,7 +466,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           d.fx = null;
           d.fy = null;
         }
-        return d3.drag<any, Node>().on('start', dragstarted).on('drag', dragged).on('end', dragended);
+        return d3
+          .drag<any, Node>()
+          .on('start', dragstarted)
+          .on('drag', dragged)
+          .on('end', dragended);
       }
 
       return () => {
