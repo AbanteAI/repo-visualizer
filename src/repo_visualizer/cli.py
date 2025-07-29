@@ -65,6 +65,18 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
     )
 
+    parser.add_argument(
+        "--github",
+        help="Enable GitHub integration to fetch PR activity data",
+        action="store_true",
+    )
+
+    parser.add_argument(
+        "--github-token",
+        help="GitHub personal access token (can also be set via GITHUB_TOKEN env var)",
+        type=str,
+    )
+
     return parser.parse_args(args)
 
 
@@ -104,7 +116,24 @@ def main(args: Optional[List[str]] = None) -> int:
 
         # Analyze repository
         logger.info(f"Analyzing repository at {repo_path}")
-        analyze_repository(repo_path, output_path)
+
+        # GitHub integration
+        enable_github = parsed_args.github
+        github_token = parsed_args.github_token
+
+        if enable_github:
+            logger.info("GitHub integration enabled - fetching PR activity data")
+            if not github_token and not os.getenv("GITHUB_TOKEN"):
+                logger.warning(
+                    "No GitHub token provided. API requests will be rate-limited."
+                )
+
+        analyze_repository(
+            repo_path,
+            output_path,
+            enable_github=enable_github,
+            github_token=github_token,
+        )
 
         logger.info(f"Analysis complete. Output saved to {output_path}")
         return 0

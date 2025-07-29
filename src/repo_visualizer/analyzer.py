@@ -30,6 +30,7 @@ try:
 except ImportError:
     NUMPY_AVAILABLE = False
 
+from .github_client import GitHubClient
 from .schema import (
     Component,
     File,
@@ -42,12 +43,19 @@ from .schema import (
 class RepositoryAnalyzer:
     """Analyzes a local git repository and generates visualization data."""
 
-    def __init__(self, repo_path: str):
+    def __init__(
+        self,
+        repo_path: str,
+        enable_github: bool = False,
+        github_token: Optional[str] = None,
+    ):
         """
         Initialize the repository analyzer.
 
         Args:
             repo_path: Path to the local git repository
+            enable_github: Whether to fetch GitHub activity data
+            github_token: GitHub personal access token for API requests
         """
         self.repo_path = os.path.abspath(repo_path)
         if not os.path.isdir(self.repo_path):
@@ -63,6 +71,11 @@ class RepositoryAnalyzer:
         self.relationships: List[Relationship] = []
         self.relationship_counts: Dict[Tuple[str, str, str], int] = {}
 
+        # GitHub integration
+        self.enable_github = enable_github
+        self.github_client = GitHubClient(github_token) if enable_github else None
+        self.github_activity_data: Optional[Dict[str, Dict]] = None
+
         # Load gitignore patterns
         self.gitignore_spec = self._load_gitignore_patterns()
 
@@ -76,6 +89,12 @@ class RepositoryAnalyzer:
         Returns:
             RepositoryData: The complete repository data structure
         """
+        # Fetch GitHub activity data if enabled
+        if self.enable_github and self.github_client:
+            self.github_activity_data = self.github_client.analyze_repository_activity(
+                self.repo_path
+            )
+
         # Extract repository metadata
         self._extract_metadata()
 
@@ -713,6 +732,10 @@ class RepositoryAnalyzer:
                 coverage_ratio = self._get_file_coverage(rel_path)
                 if coverage_ratio is not None:
                     metrics["testCoverageRatio"] = coverage_ratio
+
+                # Add GitHub activity data if available
+                if self.github_activity_data and rel_path in self.github_activity_data:
+                    metrics["githubActivity"] = self.github_activity_data[rel_path]
 
                 return components, metrics
         except Exception as e:
@@ -2339,15 +2362,24 @@ class RepositoryAnalyzer:
         print(f"Repository data saved to {output_path}")
 
 
-def analyze_repository(repo_path: str, output_path: str) -> None:
+def analyze_repository(
+    repo_path: str,
+    output_path: str,
+    enable_github: bool = False,
+    github_token: Optional[str] = None,
+) -> None:
     """
     Analyze a repository and generate visualization data.
 
     Args:
         repo_path: Path to the local git repository
         output_path: Path to output JSON file
+        enable_github: Whether to fetch GitHub activity data
+        github_token: GitHub personal access token for API requests
     """
-    analyzer = RepositoryAnalyzer(repo_path)
+    analyzer = RepositoryAnalyzer(
+        repo_path, enable_github=enable_github, github_token=github_token
+    )
     analyzer.analyze()
     analyzer.save_to_file(output_path)
 

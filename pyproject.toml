@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "pathspec>=0.11.0",
+    "requests>=2.25.0",
 ]
 
 [project.optional-dependencies]
