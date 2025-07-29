@@ -839,7 +839,8 @@ class RepositoryAnalyzer:
                 elif isinstance(node, ast.ImportFrom):
                     module = node.module
                     if module:
-                        for alias in node.names:
+
+                        def handle_alias(alias):
                             resolved_path = self._resolve_python_import(
                                 module, file_path, node.level
                             )
@@ -862,6 +863,9 @@ class RepositoryAnalyzer:
                                     self._add_relationship(
                                         file_path, resolved_path, "import"
                                     )
+
+                        for alias in node.names:
+                            handle_alias(alias)
         except Exception as e:
             print(f"Warning: Could not parse Python file for imports {file_path}: {e}")
 
