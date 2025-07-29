@@ -159,6 +159,12 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   };
 
   handleMouseUpRef.current = () => {
+    // Cancel any pending resize animation frame
+    if (resizeAnimationFrameRef.current) {
+      cancelAnimationFrame(resizeAnimationFrameRef.current);
+      resizeAnimationFrameRef.current = null;
+    }
+
     if (isDragging && menuRef.current) {
       const transform = menuRef.current.style.transform;
       const match = /translate3d\(([^,]+)px, ([^,]+)px, 0px\)/.exec(transform);
