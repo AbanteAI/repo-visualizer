@@ -37,6 +37,7 @@ export interface ComputedNodeMetrics {
   identifiers: number;
   references: number;
   test_coverage_ratio?: number;
+  github_activity?: number;
 }
 
 export interface ComputedLinkMetrics {
@@ -71,6 +72,12 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
     // For directories, use 'directory' as the file_type for categorical coloring
     const fileType = file.type === 'directory' ? 'directory' : file.extension || 'unknown';
 
+    // Calculate GitHub activity score (0-1)
+    let githubActivityScore = 0;
+    if (fileMetrics.githubActivity) {
+      githubActivityScore = fileMetrics.githubActivity.activity_score || 0;
+    }
+
     metrics.set(file.id, {
       file_type: fileType,
       file_size: file.size || 0,
@@ -79,6 +86,7 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
       test_coverage_ratio: fileMetrics.testCoverageRatio,
+      github_activity: githubActivityScore,
     });
 
     // Add metrics for components (classes, functions, methods) - only for files, not directories
@@ -92,6 +100,7 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
           identifiers: fileMetrics.topLevelIdentifiers || 0,
           references: incomingReferences.get(component.id) || 0,
           test_coverage_ratio: fileMetrics.testCoverageRatio,
+          github_activity: githubActivityScore,
         });
       });
     }

@@ -17,6 +17,7 @@ class FileMetrics(TypedDict, total=False):
     linesOfCode: int
     commentLines: int
     emptyLines: int
+    githubActivity: Optional[Dict[str, Any]]
     custom: Dict[str, Any]
 
 

@@ -45,6 +45,8 @@ export interface FileMetrics {
   lastCommitDaysAgo?: number;
   lastCommitDate?: string;
   topLevelIdentifiers?: number;
+  testCoverageRatio?: number;
+  githubActivity?: Record<string, any>;
   custom?: Record<string, any>;
 }
 

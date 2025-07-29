@@ -113,6 +113,7 @@ Array of all files and directories in the repository:
 | lastCommitDaysAgo | Days since the last commit to this file | No |
 | lastCommitDate | Date of the last commit to this file (ISO format) | No |
 | topLevelIdentifiers | Number of top-level identifiers (classes, functions, variables) | No |
+| githubActivity | GitHub activity data from open pull requests | No |
 | custom | Object for custom metrics | No |
 
 #### File Components

@@ -36,6 +36,9 @@ semantic = [
     "openai>=1.0.0",
     "numpy>=1.20.0",
 ]
+github = [
+    "requests>=2.25.0",
+]
 
 [project.scripts]
 repo-visualizer = "src.repo_visualizer.cli:main"
