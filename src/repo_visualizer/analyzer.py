@@ -23,12 +23,6 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
-try:
-    import numpy as np
-
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
 
 from .schema import (
     File,
