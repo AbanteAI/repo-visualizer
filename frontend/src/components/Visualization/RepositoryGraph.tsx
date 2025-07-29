@@ -338,7 +338,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       svg.call(zoom);
       zoomRef.current = zoom;
 
-      simulation.on('tick', () => {
+      const ticked = () => {
         g.selectAll<SVGLineElement, Link>('.link')
           .attr('x1', d => (d.source as Node).x!)
           .attr('y1', d => (d.source as Node).y!)
@@ -346,8 +346,9 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           .attr('y2', d => (d.target as Node).y!);
 
         g.selectAll<SVGGElement, Node>('.node').attr('transform', d => `translate(${d.x},${d.y})`);
-      });
-    }, [dimensions]);
+      };
+      simulation.on('tick', ticked);
+    }, [dimensions, g]);
 
     // Effect for updating the visualization with new data
     useEffect(() => {
@@ -461,68 +462,64 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         });
       }
 
-      const linkSelection = g
+      const link = g
         .select('.links')
-        .selectAll<SVGLineElement, Link>('line.link')
-        .data(links, d => `${(d.source as Node).id}-${(d.target as Node).id}`);
+        .selectAll('line')
+        .data(links, d => `${(d.source as Node).id}-${(d.target as Node).id}`)
+        .join(
+          enter => enter.append('line').attr('stroke-opacity', 0),
+          update => update,
+          exit => exit.transition().duration(300).attr('stroke-opacity', 0).remove()
+        );
 
-      linkSelection.exit().transition().duration(300).attr('stroke-opacity', 0).remove();
-
-      const linkEnter = linkSelection
-        .enter()
-        .append('line')
+      link
         .attr('class', 'link')
-        .attr('stroke-opacity', 0);
-
-      linkEnter
-        .merge(linkSelection)
         .transition()
         .duration(300)
         .attr('stroke-opacity', 0.6)
         .attr('stroke', '#999');
 
-      const nodeSelection = g
+      const node = g
         .select('.nodes')
-        .selectAll<SVGGElement, Node>('g.node')
-        .data(nodes, d => d.id);
+        .selectAll('g')
+        .data(nodes, d => d.id)
+        .join(
+          enter => {
+            const g = enter.append('g').attr('transform', 'scale(0)');
+            g.append('circle');
+            g.append('text');
+            g.call(
+              d3
+                .drag<SVGGElement, Node>()
+                .on('start', (event, d) => {
+                  if (!event.active) simulation.alphaTarget(0.1).restart();
+                  d.fx = d.x;
+                  d.fy = d.y;
+                })
+                .on('drag', (event, d) => {
+                  d.fx = event.x;
+                  d.fy = event.y;
+                })
+                .on('end', (event, d) => {
+                  if (!event.active) simulation.alphaTarget(0);
+                  d.fx = null;
+                  d.fy = null;
+                }) as any
+            );
+            g.on('click', (event, d) => {
+              event.stopPropagation();
+              onSelectFile(d.id);
+            });
+            return g;
+          },
+          update => update,
+          exit => exit.transition().duration(300).attr('transform', 'scale(0)').remove()
+        );
 
-      nodeSelection.exit().transition().duration(300).attr('transform', 'scale(0)').remove();
+      node.transition().duration(300).attr('transform', 'scale(1)');
 
-      const nodeEnter = nodeSelection
-        .enter()
-        .append('g')
-        .attr('class', 'node')
-        .attr('transform', 'scale(0)');
-      nodeEnter.append('circle');
-      nodeEnter.append('text');
-      nodeEnter.call(
-        d3
-          .drag<SVGGElement, Node>()
-          .on('start', (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.1).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-          })
-          .on('drag', (event, d) => {
-            d.fx = event.x;
-            d.fy = event.y;
-          })
-          .on('end', (event, d) => {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-          }) as any
-      );
-      nodeEnter.on('click', (event, d) => {
-        event.stopPropagation();
-        onSelectFile(d.id);
-      });
-
-      const nodeMerge = nodeEnter.merge(nodeSelection);
-      nodeMerge.transition().duration(300).attr('transform', 'scale(1)');
-
-      nodeMerge
-        .select<SVGCircleElement>('circle')
+      node
+        .select('circle')
         .attr('r', d => {
           const metrics = nodeMetrics.get(d.id);
           return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
@@ -536,8 +533,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5);
 
-      nodeMerge
-        .select<SVGTextElement>('text')
+      node
+        .select('text')
         .text(d => d.name)
         .attr('x', 12)
         .attr('y', 4)
@@ -546,7 +543,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('pointer-events', 'none');
 
       simulation.alpha(0.1).restart();
-    }, [data, nodeMetrics, linkMetrics, expandedFiles, config, onSelectFile, dimensions]);
+    }, [data, nodeMetrics, linkMetrics, expandedFiles, config, onSelectFile, dimensions, g]);
 
     // Cleanup on unmount
     useEffect(() => {
