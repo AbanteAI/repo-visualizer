@@ -45,6 +45,14 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
   // Clamp initial position to prevent off-screen rendering
   useEffect(() => {
     if (typeof window === 'undefined' || !menuRef.current) return;
@@ -131,16 +139,24 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
         menuRef.current.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
       });
     } else if (isResizing) {
-      const deltaX = e.clientX - resizeStart.mouseX;
-      const deltaY = e.clientY - resizeStart.mouseY;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      animationFrameRef.current = requestAnimationFrame(() => {
+        const deltaX = e.clientX - resizeStart.mouseX;
+        const deltaY = e.clientY - resizeStart.mouseY;
 
-      const newWidth = Math.max(minSize.width, Math.min(maxSize.width, resizeStart.width + deltaX));
-      const newHeight = Math.max(
-        minSize.height,
-        Math.min(maxSize.height, resizeStart.height + deltaY)
-      );
+        const newWidth = Math.max(
+          minSize.width,
+          Math.min(maxSize.width, resizeStart.width + deltaX)
+        );
+        const newHeight = Math.max(
+          minSize.height,
+          Math.min(maxSize.height, resizeStart.height + deltaY)
+        );
 
-      setSize({ width: newWidth, height: newHeight });
+        setSize({ width: newWidth, height: newHeight });
+      });
     }
   };
 
