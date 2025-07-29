@@ -840,20 +840,16 @@ class RepositoryAnalyzer:
                     module = node.module
                     if module:
                         for alias in node.names:
-                            # Pass alias as a default argument to a lambda to capture it
-                            handler = (
-                                lambda captured_alias: lambda: self._handle_import_from_alias(
-                                    module, file_path, node.level, captured_alias
-                                )
-                            )(alias)
-                            handler()
+                            self._handle_import_from_alias(
+                                module, file_path, node.level, alias
+                            )
         except Exception as e:
             print(f"Warning: Could not parse Python file for imports {file_path}: {e}")
 
     def _handle_import_from_alias(self, module, file_path, level, alias):
         resolved_path = self._resolve_python_import(module, file_path, level)
         if resolved_path:
-            # If resolved to a package, find module
+            # If resolved to a package, find the specific module.
             if os.path.basename(resolved_path) == "__init__.py":
                 module_dir = os.path.dirname(resolved_path)
                 imported_file = os.path.join(module_dir, alias.name + ".py")
