@@ -42,12 +42,13 @@ from .schema import (
 class RepositoryAnalyzer:
     """Analyzes a local git repository and generates visualization data."""
 
-    def __init__(self, repo_path: str):
+    def __init__(self, repo_path: str, branch: Optional[str] = None):
         """
         Initialize the repository analyzer.
 
         Args:
             repo_path: Path to the local git repository
+            branch: Specific branch to analyze (defaults to current branch)
         """
         self.repo_path = os.path.abspath(repo_path)
         if not os.path.isdir(self.repo_path):
@@ -62,6 +63,7 @@ class RepositoryAnalyzer:
         self.file_ids: Set[str] = set()
         self.relationships: List[Relationship] = []
         self.relationship_counts: Dict[Tuple[str, str, str], int] = {}
+        self.branch = branch
 
         # Load gitignore patterns
         self.gitignore_spec = self._load_gitignore_patterns()
@@ -1839,39 +1841,70 @@ class RepositoryAnalyzer:
             return 0.0
 
     def _analyze_history(self) -> None:
-        """Analyze git history."""
-        # Extract commit history
-        commits = self._extract_commits()
+        """Analyze git history with full snapshots at timeline points."""
+        # Save current git state
+        current_branch = self._get_current_branch()
+        current_commit = self._get_current_commit()
+        has_changes = self._has_uncommitted_changes()
 
-        # Create timeline points (simplified for now)
-        timeline_points = self._create_timeline_points(commits)
+        if has_changes:
+            print("Warning: Uncommitted changes detected. Stashing changes...")
+            self._stash_changes()
 
-        # Set history data
-        if commits:
-            self.data["history"] = {
-                "commits": commits,
-                "timelinePoints": timeline_points,
-            }
+        try:
+            # Use specified branch or current branch
+            branch_to_analyze = self.branch or current_branch
 
-    def _extract_commits(self) -> List[Dict[str, Any]]:
+            # Extract commit history for the branch
+            commits = self._extract_commits(branch_to_analyze)
+
+            # Create timeline points with full snapshots
+            timeline_points = self._create_timeline_points_with_snapshots(
+                commits, branch_to_analyze
+            )
+
+            # Set history data
+            if commits:
+                self.data["history"] = {
+                    "commits": commits,
+                    "timelinePoints": timeline_points,
+                }
+        finally:
+            # Restore original state
+            print("Restoring original repository state...")
+            self._checkout_commit(current_commit)
+            if has_changes:
+                self._pop_stash()
+
+    def _extract_commits(self, branch: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Extract commit history from the git repository.
+
+        Args:
+            branch: Specific branch to analyze
 
         Returns:
             List of commit data
         """
         try:
+            # Build git log command
+            cmd = [
+                "git",
+                "log",
+                "--pretty=format:%H|||%an <%ae>|||%ad|||%s",
+                "--date=iso",
+                "--name-status",
+                "-n",
+                "100",  # Limit to 100 commits for performance
+            ]
+
+            # Add branch if specified
+            if branch:
+                cmd.append(branch)
+
             # Get commit logs
             result = subprocess.run(
-                [
-                    "git",
-                    "log",
-                    "--pretty=format:%H|||%an <%ae>|||%ad|||%s",
-                    "--date=iso",
-                    "--name-status",
-                    "-n",
-                    "100",  # Limit to 100 commits for performance
-                ],
+                cmd,
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
@@ -1969,42 +2002,66 @@ class RepositoryAnalyzer:
             print(f"Error extracting commits: {e}")
             return []
 
-    def _create_timeline_points(
-        self, commits: List[Dict[str, Any]]
+    def _create_timeline_points_with_snapshots(
+        self, commits: List[Dict[str, Any]], branch: str
     ) -> List[Dict[str, Any]]:
         """
-        Create timeline points from commits.
+        Create timeline points with full repository snapshots.
 
         Args:
             commits: List of commit data
+            branch: Branch being analyzed
 
         Returns:
-            List of timeline points
+            List of timeline points with snapshots
         """
-        # This is a simplified implementation that creates a timeline point
-        # for every 10th commit (or fewer if there aren't many commits)
         timeline_points = []
 
         if not commits:
             return timeline_points
 
-        step = max(1, len(commits) // 10)
+        # Select commits for timeline points
+        # For now, take every 10th commit plus first and last
+        total_commits = len(commits)
+        indices = set([0, total_commits - 1])  # Always include first and last
 
-        for i in range(0, len(commits), step):
+        # Add intermediate points
+        step = max(1, total_commits // 10)
+        for i in range(step, total_commits - 1, step):
+            indices.add(i)
+
+        # Sort indices
+        sorted_indices = sorted(indices)
+
+        print(
+            f"Creating {len(sorted_indices)} timeline points from {total_commits} commits..."
+        )
+
+        for idx, i in enumerate(sorted_indices):
             commit = commits[i]
+            print(
+                f"Analyzing commit {idx + 1}/{len(sorted_indices)}: {commit['id'][:8]} - {commit['message'][:50]}..."
+            )
 
-            # Create a simplified snapshot
+            # Checkout this commit
+            self._checkout_commit(commit["id"])
+
+            # Analyze repository state at this commit
+            snapshot_data = self._create_snapshot()
+
+            # Create timeline point
             timeline_points.append(
                 {
                     "commitId": commit["id"],
                     "state": {
                         "commitIndex": i,
                         "timestamp": commit["date"],
+                        "message": commit["message"],
+                        "author": commit["author"],
+                        "fileCount": len(snapshot_data["files"]),
+                        "relationshipCount": len(snapshot_data["relationships"]),
                     },
-                    "snapshot": {
-                        "files": [],  # Simplified for now
-                        "relationships": [],  # Simplified for now
-                    },
+                    "snapshot": snapshot_data,
                 }
             )
 
@@ -2318,6 +2375,276 @@ class RepositoryAnalyzer:
 
         return coverage_data
 
+    def _create_snapshot(self) -> Dict[str, Any]:
+        """
+        Create a snapshot of the current repository state.
+
+        Returns:
+            Dictionary with files and relationships
+        """
+        # Create a temporary analyzer for this snapshot
+        snapshot_files = []
+        snapshot_relationships = []
+        snapshot_file_ids = set()
+
+        # Analyze files at this commit
+        for root, dirs, file_names in os.walk(self.repo_path):
+            rel_root = os.path.relpath(root, self.repo_path)
+            if rel_root == ".":
+                rel_root = ""
+
+            # Filter directories
+            i = 0
+            while i < len(dirs):
+                dir_name = dirs[i]
+                dir_path = os.path.join(rel_root, dir_name)
+
+                if dir_name.startswith(".") or self._is_ignored(
+                    dir_path, is_directory=True
+                ):
+                    dirs.pop(i)
+                else:
+                    i += 1
+
+            # Process files
+            for file_name in file_names:
+                if file_name.startswith("."):
+                    continue
+
+                rel_path = os.path.join(rel_root, file_name)
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                file_path = os.path.join(root, file_name)
+                rel_path = rel_path.replace(os.path.sep, "/")
+
+                # Get basic file info
+                _, ext = os.path.splitext(file_name)
+                ext = ext.lstrip(".")
+
+                try:
+                    size = os.path.getsize(file_path)
+                except Exception:
+                    size = 0
+
+                # Extract components for this file
+                components, _ = self._analyze_file_content(file_path, rel_path, ext)
+
+                # Create file entry
+                file_entry = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": file_name,
+                    "extension": ext if ext else None,
+                    "size": size,
+                    "type": "file",
+                    "depth": len(os.path.dirname(rel_path).split("/")),
+                    "components": components,
+                }
+
+                snapshot_files.append(file_entry)
+                snapshot_file_ids.add(rel_path)
+
+        # Extract relationships for this snapshot
+        for file_data in snapshot_files:
+            if file_data["extension"] in ["py", "js", "ts", "jsx", "tsx"]:
+                file_path = os.path.join(self.repo_path, file_data["path"])
+                try:
+                    with open(file_path, encoding="utf-8") as f:
+                        content = f.read()
+
+                    imports = []
+                    if file_data["extension"] == "py":
+                        imports = self._extract_python_imports(
+                            content, file_data["path"]
+                        )
+                    elif file_data["extension"] in ["js", "ts", "jsx", "tsx"]:
+                        imports = self._extract_js_imports(content, file_data["path"])
+
+                    for imp in imports:
+                        if imp in snapshot_file_ids:
+                            snapshot_relationships.append(
+                                {
+                                    "source": file_data["id"],
+                                    "target": imp,
+                                    "type": "import",
+                                }
+                            )
+                except Exception:
+                    # Skip files that can't be read
+                    continue
+
+        return {
+            "files": snapshot_files,
+            "relationships": snapshot_relationships,
+        }
+
+    def _get_current_branch(self) -> str:
+        """Get the current git branch."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return "main"
+        except Exception:
+            return "main"
+
+    def _get_current_commit(self) -> str:
+        """Get the current commit SHA."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return ""
+        except Exception:
+            return ""
+
+    def _has_uncommitted_changes(self) -> bool:
+        """Check if there are uncommitted changes."""
+        try:
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return result.returncode == 0 and len(result.stdout.strip()) > 0
+        except Exception:
+            return False
+
+    def _stash_changes(self) -> None:
+        """Stash uncommitted changes."""
+        try:
+            subprocess.run(
+                ["git", "stash", "push", "-m", "repo-visualizer-temp-stash"],
+                cwd=self.repo_path,
+                check=True,
+            )
+        except Exception as e:
+            print(f"Warning: Failed to stash changes: {e}")
+
+    def _pop_stash(self) -> None:
+        """Pop the most recent stash."""
+        try:
+            subprocess.run(
+                ["git", "stash", "pop"],
+                cwd=self.repo_path,
+                check=True,
+            )
+        except Exception as e:
+            print(f"Warning: Failed to pop stash: {e}")
+
+    def _checkout_commit(self, commit_sha: str) -> None:
+        """Checkout a specific commit."""
+        try:
+            subprocess.run(
+                ["git", "checkout", commit_sha, "--quiet"],
+                cwd=self.repo_path,
+                check=True,
+            )
+        except Exception as e:
+            print(f"Error checking out commit {commit_sha}: {e}")
+
+    def _extract_python_imports(self, content: str, file_path: str) -> List[str]:
+        """
+        Extract Python imports from file content.
+
+        Args:
+            content: File content
+            file_path: Relative file path
+
+        Returns:
+            List of resolved import paths
+        """
+        imports = []
+
+        # Find all import statements
+        all_import_matches = []
+
+        # Standard imports: import module1, module2
+        for match in re.finditer(
+            r"^import\s+([\w\.]+(?:\s*,\s*[\w\.]+)*)\s*(?:$|#)",
+            content,
+            re.MULTILINE,
+        ):
+            modules = [m.strip() for m in match.group(1).split(",")]
+            for module in modules:
+                all_import_matches.append(module)
+
+        # Import with alias: import module as alias
+        for match in re.finditer(
+            r"^import\s+([\w\.]+)\s+as\s+\w+\s*(?:$|#)", content, re.MULTILINE
+        ):
+            all_import_matches.append(match.group(1))
+
+        # From imports: from module import items
+        for match in re.finditer(
+            r"^from\s+([\w\.\*]+)\s+import\s+", content, re.MULTILINE
+        ):
+            all_import_matches.append(match.group(1))
+
+        # Resolve imports
+        for module in all_import_matches:
+            try:
+                import_paths = self._resolve_python_import(module, file_path)
+                imports.extend(import_paths)
+            except Exception:
+                continue
+
+        return imports
+
+    def _extract_js_imports(self, content: str, file_path: str) -> List[str]:
+        """
+        Extract JavaScript/TypeScript imports from file content.
+
+        Args:
+            content: File content
+            file_path: Relative file path
+
+        Returns:
+            List of resolved import paths
+        """
+        imports = []
+
+        import_patterns = [
+            # ES6 imports
+            r"import\s+(?:(?:[\w{},$\s*]+\s+from\s+)|(?:[\w*]*\s*))['\"](.+?)['\"]",
+            # Dynamic imports
+            r"import\s*\(\s*['\"](.+?)['\"]\s*\)",
+            # CommonJS requires
+            r"require\s*\(\s*['\"](.+?)['\"]\s*\)",
+            # ES6 re-exports
+            r"export\s+(?:{[\s\w,]+})?\s+from\s+['\"](.+?)['\"]",
+        ]
+
+        for pattern in import_patterns:
+            try:
+                matches = re.finditer(pattern, content)
+                for match in matches:
+                    module = match.group(1)
+
+                    # Try to resolve the import to a file in the repository
+                    import_path = self._resolve_js_import(module, file_path)
+                    if import_path:
+                        imports.append(import_path)
+            except Exception:
+                continue
+
+        return imports
+
     def save_to_file(self, output_path: str) -> None:
         """
         Save the repository data to a JSON file.
@@ -2339,15 +2666,18 @@ class RepositoryAnalyzer:
         print(f"Repository data saved to {output_path}")
 
 
-def analyze_repository(repo_path: str, output_path: str) -> None:
+def analyze_repository(
+    repo_path: str, output_path: str, branch: Optional[str] = None
+) -> None:
     """
     Analyze a repository and generate visualization data.
 
     Args:
         repo_path: Path to the local git repository
         output_path: Path to output JSON file
+        branch: Specific branch to analyze (defaults to current branch)
     """
-    analyzer = RepositoryAnalyzer(repo_path)
+    analyzer = RepositoryAnalyzer(repo_path, branch=branch)
     analyzer.analyze()
     analyzer.save_to_file(output_path)
 
