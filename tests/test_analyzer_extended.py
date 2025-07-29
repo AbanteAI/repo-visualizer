@@ -52,9 +52,9 @@ class TestRepositoryAnalyzerExtended:
             "metrics": {},
         }
         analyzer._analyze_file_content(python_content, file_info)
-        assert len(file_info["components"]) == 1
-        assert file_info["components"][0]["name"] == "MyClass"
-        assert "linesOfCode" in file_info["metrics"]
+        assert len(file_info.get("components", [])) == 1
+        assert file_info.get("components", [])[0].get("name") == "MyClass"
+        assert "linesOfCode" in file_info.get("metrics", {})
 
     def test_analyze_js_file_content(self):
         """Test analysis of JavaScript file content."""
@@ -74,9 +74,9 @@ class TestRepositoryAnalyzerExtended:
             "metrics": {},
         }
         analyzer._analyze_file_content(js_content, file_info)
-        assert len(file_info["components"]) == 1
-        assert file_info["components"][0]["name"] == "MyComponent"
-        assert "linesOfCode" in file_info["metrics"]
+        assert len(file_info.get("components", [])) == 1
+        assert file_info.get("components", [])[0].get("name") == "MyComponent"
+        assert "linesOfCode" in file_info.get("metrics", {})
 
     def test_resolve_python_import(self):
         """Test Python import resolution."""

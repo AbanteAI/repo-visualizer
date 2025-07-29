@@ -688,9 +688,10 @@ class RepositoryAnalyzer:
                         if file_info.get("metrics") is None:
                             file_info["metrics"] = {}
 
-                        metrics = file_info["metrics"]
-                        metrics["lastModified"] = current_commit_timestamp
-                        metrics["commitCount"] = metrics.get("commitCount", 0) + 1
+                        metrics = file_info.get("metrics")
+                        if metrics:
+                            metrics["lastModified"] = current_commit_timestamp
+                            metrics["commitCount"] = metrics.get("commitCount", 0) + 1
 
 
 def analyze_repository(
