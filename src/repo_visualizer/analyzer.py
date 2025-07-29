@@ -781,7 +781,7 @@ class RepositoryAnalyzer:
     ) -> Tuple[List[Dict], Dict]:
         """Analyze JavaScript/TypeScript file to extract components."""
         components = []
-        # This is a simplified analysis. A more robust solution would use a proper JS/TS parser.
+        # Simplified analysis. A better solution would use a proper JS/TS parser.
         function_patterns = [
             r"function\s+([a-zA-Z0-9_]+)\s*\(",  # function myFunction()
             r"const\s+([a-zA-Z0-9_]+)\s*=\s*\(",  # const myFunction = () =>
@@ -840,12 +840,17 @@ class RepositoryAnalyzer:
 
     def _extract_js_imports(self, content: str, file_path: str) -> None:
         """Extract import relationships from a JavaScript/TypeScript file."""
-        # This is a simplified analysis. A more robust solution would use a proper JS/TS parser.
-        import_pattern = r"""(?:import|export)\s+(?:(?P<imports>[\w\s{},*]+)\s+from\s+)?['"](?P<path>[^'"]+)['"]|import\s+['"](?P<path2>[^'"]+)['"]|require\(['"](?P<path3>[^'"]+)['"]\)"""
-        for match in re.finditer(import_pattern, content):
-            import_path = (
-                match.group("path") or match.group("path2") or match.group("path3")
-            )
+        # Simplified analysis for JS/TS files.
+        import_pattern = re.compile(
+            r"""
+            (?:import|export) .*? from \s* ['"]([^'"]+)['"] | # import/export ... from
+            import \s* ['"]([^'"]+)['"] | # import "..."
+            require \s* \( \s* ['"]([^'"]+)['"] \s* \) # require("...")
+            """,
+            re.VERBOSE,
+        )
+        for match in import_pattern.finditer(content):
+            import_path = next((g for g in match.groups() if g is not None), None)
             if import_path:
                 resolved_path = self._resolve_js_import(import_path, file_path)
                 if resolved_path:
