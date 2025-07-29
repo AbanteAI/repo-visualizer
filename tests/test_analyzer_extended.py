@@ -53,7 +53,12 @@ class TestRepositoryAnalyzerExtended:
     def test_analyze_js_file_content(self):
         """Test analysis of JavaScript file content."""
         analyzer = RepositoryAnalyzer(self.repo_path)
-        js_content = "import React from 'react';\n\nfunction MyComponent() {\n    return <div></div>;\n}"
+        js_content = (
+            "import React from 'react';\n\n"
+            "function MyComponent() {\n"
+            "    return <div></div>;\n"
+            "}"
+        )
         components, metrics = analyzer._analyze_js_file(js_content, "test.js", {})
         assert len(components) == 1
         assert components[0]["name"] == "MyComponent"
