@@ -667,6 +667,7 @@ class RepositoryAnalyzer:
 
     def _add_relationship(self, source: str, target: str, type: str) -> None:
         """Add a relationship, handling duplicates and counting."""
+        # print(f"Adding relationship: {source} -> {target} ({type})")
         # For undirected relationships, ensure consistent key ordering
         if type in ("semantic_similarity", "filesystem_proximity"):
             rel_key_tuple = (*tuple(sorted((source, target))), type)
@@ -839,14 +840,28 @@ class RepositoryAnalyzer:
                     module = node.module
                     if module:
                         for alias in node.names:
-                            full_module_name = f"{module}.{alias.name}"
                             resolved_path = self._resolve_python_import(
-                                full_module_name, file_path, node.level
+                                module, file_path, node.level
                             )
                             if resolved_path:
-                                self._add_relationship(
-                                    file_path, resolved_path, "import"
-                                )
+                                # If the resolved path is a directory, the import is of a module within that package
+                                if os.path.basename(resolved_path) == "__init__.py":
+                                    module_dir = os.path.dirname(resolved_path)
+                                    imported_file = os.path.join(
+                                        module_dir, alias.name + ".py"
+                                    )
+                                    if imported_file in self.file_ids:
+                                        self._add_relationship(
+                                            file_path, imported_file, "import"
+                                        )
+                                    else:
+                                        self._add_relationship(
+                                            file_path, resolved_path, "import"
+                                        )
+                                else:
+                                    self._add_relationship(
+                                        file_path, resolved_path, "import"
+                                    )
         except Exception as e:
             print(f"Warning: Could not parse Python file for imports {file_path}: {e}")
 
@@ -856,38 +871,36 @@ class RepositoryAnalyzer:
         """Resolve a Python import to a file path."""
         if level > 0:
             # Relative import
-            base_dir = os.path.dirname(file_path)
+            base_path = os.path.dirname(file_path)
             for _ in range(level - 1):
-                base_dir = os.path.dirname(base_dir)
+                base_path = os.path.dirname(base_path)
         else:
             # Absolute import from repo root
-            base_dir = self.repo_path
+            base_path = ""
 
         parts = import_name.split(".")
 
-        # Case 1: from a.b import c -> a/b/c.py
-        possible_file_path = os.path.join(base_dir, *parts) + ".py"
-        rel_path = os.path.relpath(possible_file_path, self.repo_path).replace(
-            os.path.sep, "/"
-        )
-        if rel_path in self.file_ids:
-            return rel_path
-
-        # Case 2: from a import b -> a/b/__init__.py
-        possible_dir_path = os.path.join(base_dir, *parts)
-        init_path = os.path.join(possible_dir_path, "__init__.py")
-        rel_path = os.path.relpath(init_path, self.repo_path).replace(os.path.sep, "/")
-        if rel_path in self.file_ids:
-            return rel_path
-
-        # Case 3: import a -> a/__init__.py
-        if len(parts) == 1:
-            init_path = os.path.join(base_dir, parts[0], "__init__.py")
-            rel_path = os.path.relpath(init_path, self.repo_path).replace(
+        # Try resolving as a file (e.g. from . import a)
+        possible_path = os.path.join(self.repo_path, base_path, *parts) + ".py"
+        if os.path.exists(possible_path):
+            return os.path.relpath(possible_path, self.repo_path).replace(
                 os.path.sep, "/"
             )
-            if rel_path in self.file_ids:
-                return rel_path
+
+        # Try resolving as a directory/package (e.g. import a)
+        possible_path = os.path.join(self.repo_path, base_path, *parts, "__init__.py")
+        if os.path.exists(possible_path):
+            return os.path.relpath(possible_path, self.repo_path).replace(
+                os.path.sep, "/"
+            )
+
+        # Try resolving relative to file path
+        if level > 0:
+            possible_path = os.path.join(os.path.dirname(file_path), *parts) + ".py"
+            if os.path.exists(possible_path):
+                return os.path.relpath(possible_path, self.repo_path).replace(
+                    os.path.sep, "/"
+                )
 
         return None
 
