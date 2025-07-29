@@ -487,6 +487,69 @@ class RepositoryAnalyzer:
         # Round percentages to 2 decimal places
         return {lang: round(pct, 4) for lang, pct in language_stats.items()}
 
+    def _resolve_python_import(
+        self, import_name: str, file_path: str, level: int = 0
+    ) -> Optional[str]:
+        """Resolve a Python import to a file path."""
+        # Reconstruct the absolute path of the importing file's directory
+        current_dir = os.path.dirname(os.path.join(self.repo_path, file_path))
+
+        # Handle relative imports
+        if level > 0:
+            # Move up the directory tree for each level
+            for _ in range(level):
+                current_dir = os.path.dirname(current_dir)
+
+        # Convert import name to path segments
+        import_parts = import_name.split(".")
+
+        # Attempt to resolve as a .py file
+        possible_file_path = os.path.join(current_dir, *import_parts) + ".py"
+        if os.path.isfile(possible_file_path):
+            return os.path.relpath(possible_file_path, self.repo_path).replace(
+                os.path.sep, "/"
+            )
+
+        # Attempt to resolve as a package (directory with __init__.py)
+        possible_package_path = os.path.join(current_dir, *import_parts)
+        if os.path.isdir(possible_package_path):
+            init_file = os.path.join(possible_package_path, "__init__.py")
+            if os.path.isfile(init_file):
+                return os.path.relpath(init_file, self.repo_path).replace(
+                    os.path.sep, "/"
+                )
+
+        # Handle absolute imports from the repo root
+        if level == 0:
+            possible_path_from_root = os.path.join(self.repo_path, *import_parts)
+            # As a file
+            if os.path.isfile(possible_path_from_root + ".py"):
+                return os.path.relpath(
+                    possible_path_from_root + ".py", self.repo_path
+                ).replace(os.path.sep, "/")
+            # As a package
+            if os.path.isdir(possible_path_from_root):
+                init_file = os.path.join(possible_path_from_root, "__init__.py")
+                if os.path.isfile(init_file):
+                    return os.path.relpath(init_file, self.repo_path).replace(
+                        os.path.sep, "/"
+                    )
+
+        return None
+
+    def _extract_relationships(self) -> None:
+        """Extract relationships between files."""
+        for file_id, file_data in self.file_ids.items():
+            if file_data["type"] == "file":
+                content = self._read_file_content(file_id)
+                if content:
+                    # Extract relationships based on file type
+                    ext = file_id.split(".")[-1]
+                    if ext == "py":
+                        self._extract_python_imports(file_id, content)
+                    elif ext in ["js", "ts", "jsx", "tsx"]:
+                        self._extract_js_imports(file_id, content)
+
     def _analyze_files(self) -> None:
         """Analyze file structure and content."""
         dir_file_map: Dict[
@@ -660,6 +723,47 @@ class RepositoryAnalyzer:
         elif extension in ("js", "ts", "jsx", "tsx"):
             self._extract_js_imports(content, file_path)
 
+    def _extract_python_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from Python files."""
+        # Regex for `from . import ...` and `import ...`
+        import_regex = re.compile(
+            r"^(?:from\s+([.\w]+)\s+)?import\s+(?:\S+|\([^)]+\))", re.MULTILINE
+        )
+        # Regex for `from ... import (...)`
+        from_import_regex = re.compile(
+            r"^from\s+([.\w]+)\s+import\s+\(([^)]+)\)", re.MULTILINE | re.DOTALL
+        )
+
+        # Handle `from .module import something`
+        for match in import_regex.finditer(content):
+            if match.group(1):
+                import_path = match.group(1)
+                level = 0
+                if import_path.startswith("."):
+                    # Count leading dots for relative imports
+                    level = len(import_path) - len(import_path.lstrip("."))
+                    import_path = import_path.lstrip(".")
+
+                if import_path:
+                    target_file = self._resolve_python_import(
+                        import_path, file_path, level
+                    )
+                    if target_file:
+                        self._add_relationship(file_path, target_file, "import")
+
+        # Handle multi-line `from ... import (a, b, c)`
+        for match in from_import_regex.finditer(content):
+            import_path = match.group(1)
+            level = 0
+            if import_path.startswith("."):
+                level = len(import_path) - len(import_path.lstrip("."))
+                import_path = import_path.lstrip(".")
+
+            if import_path:
+                target_file = self._resolve_python_import(import_path, file_path, level)
+                if target_file:
+                    self._add_relationship(file_path, target_file, "import")
+
     def _extract_relationships(self) -> None:
         """Extract relationships between files."""
         # This is a placeholder for future relationship extraction logic
@@ -667,7 +771,6 @@ class RepositoryAnalyzer:
 
     def _add_relationship(self, source: str, target: str, type: str) -> None:
         """Add a relationship, handling duplicates and counting."""
-        # print(f"Adding relationship: {source} -> {target} ({type})")
         # For undirected relationships, ensure consistent key ordering
         if type in ("semantic_similarity", "filesystem_proximity"):
             rel_key_tuple = (*tuple(sorted((source, target))), type)
@@ -856,6 +959,7 @@ class RepositoryAnalyzer:
                 if imported_file in self.file_ids:
                     self._add_relationship(file_path, imported_file, "import")
                 else:
+                    # Fallback to package if module not found
                     self._add_relationship(file_path, resolved_path, "import")
             else:
                 self._add_relationship(file_path, resolved_path, "import")
