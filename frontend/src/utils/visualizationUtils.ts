@@ -36,7 +36,7 @@ export interface ComputedNodeMetrics {
   recency: number;
   identifiers: number;
   references: number;
-  test_coverage_ratio?: number;
+  test_coverage: number;
 }
 
 export interface ComputedLinkMetrics {
@@ -62,14 +62,20 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
 
     // Calculate recency score (0-1, where 1 is most recent)
     let recencyScore = 0;
-    if (fileMetrics.lastCommitDaysAgo !== undefined) {
-      // Convert days ago to a score (fresher = higher score)
-      const daysAgo = fileMetrics.lastCommitDaysAgo;
-      recencyScore = Math.max(0, 1 - daysAgo / 365); // Normalize to 0-1 over a year
+    if (fileMetrics.lastModified) {
+      const now = Date.now() / 1000; // current time in seconds
+      const ageInSeconds = now - fileMetrics.lastModified;
+      const maxAge = 365 * 24 * 60 * 60; // 1 year in seconds
+      recencyScore = Math.max(0, 1 - ageInSeconds / maxAge);
     }
 
     // For directories, use 'directory' as the file_type for categorical coloring
     const fileType = file.type === 'directory' ? 'directory' : file.extension || 'unknown';
+
+    const testCoverage = fileMetrics.testCoverage
+      ? Object.values(fileMetrics.testCoverage).reduce((a, b) => a + b, 0) /
+        Object.values(fileMetrics.testCoverage).length
+      : 0;
 
     metrics.set(file.id, {
       file_type: fileType,
@@ -78,12 +84,17 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       recency: recencyScore,
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
-      test_coverage_ratio: fileMetrics.testCoverageRatio,
+      test_coverage: testCoverage,
     });
 
     // Add metrics for components (classes, functions, methods) - only for files, not directories
     if (file.type === 'file' && file.components) {
       file.components.forEach(component => {
+        const testCoverage = fileMetrics.testCoverage
+          ? Object.values(fileMetrics.testCoverage).reduce((a, b) => a + b, 0) /
+            Object.values(fileMetrics.testCoverage).length
+          : 0;
+
         metrics.set(component.id, {
           file_type: component.type, // Use component type as the categorical value
           file_size: file.size || 0, // Use parent file size
@@ -91,7 +102,7 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
           recency: recencyScore,
           identifiers: fileMetrics.topLevelIdentifiers || 0,
           references: incomingReferences.get(component.id) || 0,
-          test_coverage_ratio: fileMetrics.testCoverageRatio,
+          test_coverage: testCoverage,
         });
       });
     }
@@ -595,52 +606,4 @@ export const getNormalizedFeatureValue = (
     // For other features, use the weighted value normalized to 0-1
     return Math.min(1, calculateWeightedValue(nodeMetrics, config, featureId));
   }
-};
-
-// Calculate pie chart data for a node based on weighted metrics
-export const calculatePieChartData = (
-  nodeMetrics: ComputedNodeMetrics,
-  config: VisualizationConfig | undefined
-): { covered: number; uncovered: number } | null => {
-  if (!config) return null;
-
-  const mapping = getFeatureMapping(config, 'pie_chart_ratio');
-  if (!mapping) return null;
-
-  // Check if pie chart ratio feature is active
-  const totalWeight = Object.values(mapping.dataSourceWeights).reduce(
-    (sum, weight) => sum + weight,
-    0
-  );
-  if (totalWeight === 0) return null;
-
-  // Check if coverage data is actually available
-  if (nodeMetrics.test_coverage_ratio === undefined || nodeMetrics.test_coverage_ratio === null) {
-    return null; // No coverage data available, don't show pie chart
-  }
-
-  // Calculate the coverage ratio
-  const coverageRatio = calculateWeightedValue(nodeMetrics, config, 'pie_chart_ratio');
-
-  // Ensure coverage ratio is between 0 and 1
-  const normalizedCoverage = Math.max(0, Math.min(1, coverageRatio));
-
-  return {
-    covered: normalizedCoverage,
-    uncovered: 1 - normalizedCoverage,
-  };
-};
-
-// Check if pie chart rendering is enabled for a node
-export const isPieChartEnabled = (config: VisualizationConfig | undefined): boolean => {
-  if (!config) return false;
-
-  const mapping = getFeatureMapping(config, 'pie_chart_ratio');
-  if (!mapping) return false;
-
-  const totalWeight = Object.values(mapping.dataSourceWeights).reduce(
-    (sum, weight) => sum + weight,
-    0
-  );
-  return totalWeight > 0;
 };

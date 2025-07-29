@@ -65,6 +65,15 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
     )
 
+    parser.add_argument(
+        "--python-coverage",
+        help="Path to Python coverage.json file",
+    )
+    parser.add_argument(
+        "--frontend-coverage",
+        help="Path to frontend coverage.json file",
+    )
+
     return parser.parse_args(args)
 
 
@@ -104,7 +113,12 @@ def main(args: Optional[List[str]] = None) -> int:
 
         # Analyze repository
         logger.info(f"Analyzing repository at {repo_path}")
-        analyze_repository(repo_path, output_path)
+        analyze_repository(
+            repo_path,
+            output_path,
+            python_coverage_path=parsed_args.python_coverage,
+            frontend_coverage_path=parsed_args.frontend_coverage,
+        )
 
         logger.info(f"Analysis complete. Output saved to {output_path}")
         return 0

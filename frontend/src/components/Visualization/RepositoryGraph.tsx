@@ -21,10 +21,11 @@ import {
   getNodeColor,
   isNodeVisible,
   isEdgeVisible,
-  calculatePieChartData,
-  isPieChartEnabled,
+  calculateEdgeWidth,
+  calculateEdgeColor,
 } from '../../utils/visualizationUtils';
 import { EXTENSION_COLORS } from '../../utils/extensionColors';
+import { createPieChartNodes, isPieChartEnabled } from './RepositoryGraph.helpers';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
@@ -45,101 +46,6 @@ interface Link extends d3.SimulationLinkDatum<Node>, LinkData {
   source: string | Node;
   target: string | Node;
 }
-
-// Helper function to create pie chart nodes
-const createPieChartNodes = (
-  nodeGroups: d3.Selection<d3.BaseType, Node, d3.BaseType, unknown>,
-  nodeMetrics: Map<string, ComputedNodeMetrics>,
-  config: VisualizationConfig | undefined,
-  allNodeMetrics: ComputedNodeMetrics[],
-  extensionColors: Record<string, string>,
-  onSelectFile: (fileId: string | null) => void
-): d3.Selection<d3.BaseType, Node, d3.BaseType, unknown> => {
-  // Create a group for each pie chart
-  const pieGroups = nodeGroups.append('g').attr('class', 'pie-node');
-
-  pieGroups.each(function (d) {
-    const group = d3.select(this);
-    const metrics = nodeMetrics.get(d.id);
-
-    if (!metrics) {
-      // Fallback to regular circle if no metrics
-      group
-        .append('circle')
-        .attr('r', 5)
-        .attr('fill', '#ccc')
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5);
-      return;
-    }
-
-    const radius = calculateNodeSize(metrics, config, allNodeMetrics, d.type);
-    const pieData = calculatePieChartData(metrics, config);
-
-    if (!pieData || (pieData.covered === 0 && pieData.uncovered === 0)) {
-      // No coverage data available, show regular circle
-      group
-        .append('circle')
-        .attr('r', radius)
-        .attr('fill', getNodeColor(d, metrics, config, allNodeMetrics, extensionColors))
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5);
-      return;
-    }
-
-    // Create pie generator
-    const pie = d3
-      .pie<{ label: string; value: number }>()
-      .value(d => d.value)
-      .sort(null);
-
-    const arc = d3
-      .arc<d3.PieArcDatum<{ label: string; value: number }>>()
-      .innerRadius(0)
-      .outerRadius(radius);
-
-    const pieChartData = pie([
-      { label: 'covered', value: pieData.covered },
-      { label: 'uncovered', value: pieData.uncovered },
-    ]);
-
-    // Add pie chart segments
-    group
-      .selectAll('.pie-segment')
-      .data(pieChartData)
-      .enter()
-      .append('path')
-      .attr('class', 'pie-segment')
-      .attr('d', arc)
-      .attr('fill', (_, i) => {
-        if (i === 0) {
-          // Covered portion - use green
-          return '#22c55e';
-        } else {
-          // Uncovered portion - use the node's regular color or red
-          return getNodeColor(d, metrics, config, allNodeMetrics, extensionColors);
-        }
-      })
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1);
-  });
-
-  // Add event handlers to the pie groups
-  pieGroups
-    .style('cursor', 'pointer')
-    .on('mouseover', function () {
-      d3.select(this).selectAll('.pie-segment').attr('stroke-width', 2);
-    })
-    .on('mouseout', function () {
-      d3.select(this).selectAll('.pie-segment').attr('stroke-width', 1);
-    })
-    .on('click', (event, d) => {
-      event.stopPropagation();
-      onSelectFile(d.id);
-    });
-
-  return pieGroups;
-};
 
 const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
   ({ data, onSelectFile, selectedFile, config }, ref) => {
@@ -410,42 +316,38 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         );
       simulationRef.current = simulation;
 
-      const allLinkElements: d3.Selection<SVGLineElement, Link, SVGGElement, unknown>[] = [];
-      (config.skeletons || []).forEach(skeleton => {
-        if (!skeleton.enabled) return;
-        const skeletonLinks = links.filter(link => skeleton.relationshipTypes.includes(link.type));
-        if (skeletonLinks.length === 0) return;
-
-        const linkGroup = g.append('g').attr('class', `skeleton-${skeleton.id}`);
-        const linkSelection = linkGroup
-          .selectAll('line')
-          .data(skeletonLinks)
-          .enter()
-          .append('line')
-          .attr('stroke', skeleton.color)
-          .attr('stroke-opacity', skeleton.opacity)
-          .attr('stroke-width', d => {
-            const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
-            const linkMetric = linkMetrics.get(linkKey);
-            if (d.type === 'contains') return 3;
-            if (!linkMetric) return 1;
-            if (skeleton.id === 'code_references')
-              return 1.5 + (linkMetric.code_references || 0) * 1.5;
-            if (skeleton.id === 'semantic_similarity')
-              return 1 + (linkMetric.semantic_similarity || 0) * 2;
-            if (skeleton.id === 'filesystem_proximity')
-              return 1 + (linkMetric.filesystem_proximity || 0) * 1.5;
-            return 1.5;
-          });
-
-        linkSelection.append('title').text(d => {
-          const sourceName = (d.source as any).name || (d.source as any).id || d.source;
-          const targetName = (d.target as any).name || (d.target as any).id || d.target;
-          const strength = d.originalStrength || 1;
-          const referenceText = strength > 1 ? `${strength} references` : '1 reference';
-          return `${sourceName} → ${targetName}\nType: ${d.type}\nReferences: ${referenceText}`;
+      const link = g
+        .append('g')
+        .selectAll('line')
+        .data(links)
+        .enter()
+        .append('line')
+        .attr('stroke', d => {
+          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+          const linkMetric = linkMetrics.get(linkKey) ?? {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: d.type === 'contains' ? 1 : 0,
+          };
+          return calculateEdgeColor(linkMetric, config, d.type);
+        })
+        .attr('stroke-opacity', d => (d.type === 'contains' ? 0.8 : 0.4))
+        .attr('stroke-width', d => {
+          const linkKey = `${(d.source as any).id || d.source}-${(d.target as any).id || d.target}`;
+          const linkMetric = linkMetrics.get(linkKey) ?? {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: d.type === 'contains' ? 1 : 0,
+          };
+          return calculateEdgeWidth(linkMetric, config, d.type);
         });
-        allLinkElements.push(linkSelection);
+
+      link.append('title').text(d => {
+        const sourceName = (d.source as any).name || (d.source as any).id || d.source;
+        const targetName = (d.target as any).name || (d.target as any).id || d.target;
+        const strength = d.originalStrength || 1;
+        const referenceText = strength > 1 ? `${strength} references` : '1 reference';
+        return `${sourceName} → ${targetName}\nType: ${d.type}\nReferences: ${referenceText}`;
       });
 
       const nodeGroups = g
@@ -455,13 +357,15 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .data(nodes)
         .enter()
         .append('g')
-        .style('cursor', 'pointer');
+        .style('cursor', 'pointer')
+        .call(dragBehavior(simulation));
 
       const pieChartMode = isPieChartEnabled(config);
       let node: d3.Selection<d3.BaseType, Node, d3.BaseType, unknown>;
+
       if (pieChartMode) {
         node = createPieChartNodes(
-          nodeGroups as d3.Selection<d3.BaseType, Node, d3.BaseType, unknown>,
+          nodeGroups,
           nodeMetrics,
           config,
           allNodeMetrics,
@@ -471,6 +375,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       } else {
         node = nodeGroups
           .append('circle')
+          .attr('class', 'node')
           .attr('r', d => {
             const metrics = nodeMetrics.get(d.id);
             return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
@@ -480,112 +385,196 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
           })
           .attr('stroke', '#fff')
-          .attr('stroke-width', 1.5);
+          .attr('stroke-width', 1.5)
+          .on('mouseover', function (_event, _d) {
+            d3.select(this).attr('stroke-width', 3);
+          })
+          .on('mouseout', function (_event, _d) {
+            const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
+            d3.select(this).attr('stroke-width', isSelected ? 2 : 1.5);
+          })
+          .on('click', (event, d) => {
+            event.stopPropagation();
+            onSelectFile(d.id);
+          });
       }
 
-      nodeGroups.append('title').text(d => d.path);
-      nodeGroups.on('click', (event, d) => {
-        event.stopPropagation();
-        if (hasComponents(d.id)) {
-          toggleNodeExpansion(d.id);
-        } else {
-          onSelectFile(d.id);
-        }
-      });
+      node.append('title').text(d => `${d.name}\nPath: ${d.path}\nType: ${d.type}`);
 
-      const label = g
+      nodeGroups
+        .filter(d => hasComponents(d.id))
+        .on('dblclick', (event, d) => {
+          event.stopPropagation();
+          toggleNodeExpansion(d.id);
+        });
+
+      nodeGroups
+        .filter(d => hasComponents(d.id))
+        .append('text')
+        .attr('class', 'expand-indicator')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .style('font-size', '12px')
+        .style('fill', '#fff')
+        .style('pointer-events', 'none')
+        .text(d => (expandedFiles.has(d.id) ? '-' : '+'));
+
+      const labels = g
         .append('g')
-        .attr('class', 'labels')
         .selectAll('text')
         .data(nodes)
         .enter()
         .append('text')
-        .attr('class', 'node-label')
+        .attr('class', 'label')
+        .text(d => d.name)
         .attr('font-size', 10)
-        .attr('fill', '#333')
-        .text(d => d.name);
+        .attr('dx', 12)
+        .attr('dy', 4)
+        .attr('fill', '#333');
 
-      const dragBehavior = (simulation: d3.Simulation<Node, Link>) =>
-        d3
-          .drag<any, Node>()
-          .on('start', (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-          })
-          .on('drag', (event, d) => {
-            d.fx = event.x;
-            d.fy = event.y;
-          })
-          .on('end', (event, d) => {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-          });
-      nodeGroups.call(dragBehavior(simulation));
-
-      simulation.on('tick', () => {
-        allLinkElements.forEach(linkSelection => {
-          linkSelection
-            .attr('x1', d => (d.source as any).x)
-            .attr('y1', d => (d.source as any).y)
-            .attr('x2', d => (d.target as any).x)
-            .attr('y2', d => (d.target as any).y);
-        });
-        nodeGroups.attr('transform', d => `translate(${d.x},${d.y})`);
-        label.attr('x', d => d.x! + 10).attr('y', d => d.y! + 4);
-      });
-
-      const zoomBehavior = d3
+      const zoom = d3
         .zoom<SVGSVGElement, unknown>()
-        .scaleExtent([0.1, 10])
+        .scaleExtent([0.1, 8])
         .on('zoom', event => {
           g.attr('transform', event.transform);
         });
-      svg.call(zoomBehavior);
-      zoomRef.current = zoomBehavior;
+      svg.call(zoom);
+      zoomRef.current = zoom;
 
-      const updateSelectionHighlight = () => {
-        nodeGroups
-          .selectAll('circle, .pie-node')
-          .transition()
-          .duration(200)
-          .attr('stroke', d => (d.id === selectedFile ? '#3b82f6' : '#fff'))
-          .attr('stroke-width', d => (d.id === selectedFile ? 3 : 1.5));
-      };
-      updateSelectionHighlight();
+      simulation.on('tick', () => {
+        link
+          .attr('x1', d => (d.source as any).x)
+          .attr('y1', d => (d.source as any).y)
+          .attr('x2', d => (d.target as any).x)
+          .attr('y2', d => (d.target as any).y);
+        nodeGroups.attr('transform', d => `translate(${d.x},${d.y})`);
+        labels.attr('x', d => d.x!).attr('y', d => d.y!);
+      });
+
+      function dragBehavior(simulation: d3.Simulation<Node, Link>) {
+        function dragstarted(event: any, d: Node) {
+          if (!event.active) simulation.alphaTarget(0.3).restart();
+          d.fx = d.x;
+          d.fy = d.y;
+        }
+        function dragged(event: any, d: Node) {
+          d.fx = event.x;
+          d.fy = event.y;
+        }
+        function dragended(event: any, d: Node) {
+          if (!event.active) simulation.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+        }
+        return d3
+          .drag<any, Node>()
+          .on('start', dragstarted)
+          .on('drag', dragged)
+          .on('end', dragended);
+      }
 
       return () => {
         simulation.stop();
       };
-    }, [
-      data,
-      dimensions,
-      config,
-      expandedFiles,
-      nodeMetrics,
-      linkMetrics,
-      onSelectFile,
-      selectedFile,
-      hasComponents,
-      toggleNodeExpansion,
-    ]);
+    }, [data, dimensions, expandedFiles, nodeMetrics, linkMetrics, config]);
 
-    // Effect for selection highlight only
+    useEffect(() => {
+      if (!svgRef.current || !simulationRef.current || nodeMetrics.size === 0) return;
+      const svg = d3.select(svgRef.current);
+      const allNodeMetrics = Array.from(nodeMetrics.values());
+
+      svg
+        .selectAll('.node')
+        .transition()
+        .duration(300)
+        .attr('r', d => {
+          const metrics = nodeMetrics.get((d as Node).id);
+          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, (d as Node).type) : 5;
+        })
+        .attr('fill', d => {
+          const metrics = nodeMetrics.get((d as Node).id);
+          return getNodeColor(d as Node, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+        })
+        .style('display', d => {
+          const metrics = nodeMetrics.get((d as Node).id);
+          return metrics && isNodeVisible(metrics, config, allNodeMetrics, (d as Node).type)
+            ? ''
+            : 'none';
+        });
+
+      svg
+        .selectAll('line')
+        .transition()
+        .duration(300)
+        .attr('stroke-width', d => {
+          const linkKey = `${((d as Link).source as any).id || (d as Link).source}-${
+            ((d as Link).target as any).id || (d as Link).target
+          }`;
+          const linkMetric = linkMetrics.get(linkKey) ?? {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: (d as Link).type === 'contains' ? 1 : 0,
+          };
+          return calculateEdgeWidth(linkMetric, config, (d as Link).type);
+        })
+        .attr('stroke', d => {
+          const linkKey = `${((d as Link).source as any).id || (d as Link).source}-${
+            ((d as Link).target as any).id || (d as Link).target
+          }`;
+          const linkMetric = linkMetrics.get(linkKey) ?? {
+            semantic_similarity: 0,
+            filesystem_proximity: 0,
+            code_references: (d as Link).type === 'contains' ? 1 : 0,
+          };
+          return calculateEdgeColor(linkMetric, config, (d as Link).type);
+        })
+        .style('display', d => {
+          const linkKey = `${((d as Link).source as any).id || (d as Link).source}-${
+            ((d as Link).target as any).id || (d as Link).target
+          }`;
+          const linkMetric = linkMetrics.get(linkKey);
+          return linkMetric && isEdgeVisible(linkMetric, config, (d as Link).type) ? '' : 'none';
+        });
+
+      const simulation = simulationRef.current;
+      if (simulation) {
+        const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
+        if (linkForce) {
+          linkForce.strength(d => {
+            const linkKey = `${(d.source as any).id}-${(d.target as any).id}`;
+            const linkMetric = linkMetrics.get(linkKey);
+            return linkMetric ? calculateEdgeStrength(linkMetric, config) : 0;
+          });
+        }
+        simulation.alpha(0.1).restart();
+      }
+    }, [config, nodeMetrics, linkMetrics]);
+
     useEffect(() => {
       if (!svgRef.current) return;
       const svg = d3.select(svgRef.current);
-      svg
-        .selectAll('g.nodes g')
-        .selectAll('circle, .pie-node')
-        .transition()
-        .duration(200)
-        .attr('stroke', d => ((d as Node).id === selectedFile ? '#3b82f6' : '#fff'))
-        .attr('stroke-width', d => ((d as Node).id === selectedFile ? 3 : 1.5));
-    }, [selectedFile]);
+      const pieChartMode = isPieChartEnabled(config);
+      const nodes = pieChartMode ? svg.selectAll('g.pie-node') : svg.selectAll('circle.node');
+      if (nodes.empty()) return;
+      if (pieChartMode) {
+        nodes.selectAll('.pie-segment').attr('stroke', '#fff').attr('stroke-width', 1);
+      } else {
+        nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+      }
+      if (selectedFile) {
+        const selectedNodes = nodes.filter(function (d) {
+          return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
+        });
+        if (pieChartMode) {
+          selectedNodes.selectAll('.pie-segment').attr('stroke', '#e74c3c').attr('stroke-width', 2);
+        } else {
+          selectedNodes.attr('stroke', '#e74c3c').attr('stroke-width', 2);
+        }
+      }
+    }, [selectedFile, config, expandedFiles]);
 
     return (
-      <div ref={containerRef} className="w-full h-full relative overflow-hidden">
+      <div ref={containerRef} className="w-full h-full bg-gray-50 rounded-lg overflow-hidden">
         <svg ref={svgRef}></svg>
       </div>
     );

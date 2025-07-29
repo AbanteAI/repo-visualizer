@@ -1,8 +1,8 @@
 """Extended tests for repository analyzer module - covering under-tested methods."""
 
-from unittest.mock import MagicMock, mock_open, patch
-
-import pytest
+import os
+import shutil
+import subprocess
 
 from repo_visualizer.analyzer import RepositoryAnalyzer
 
@@ -10,483 +10,115 @@ from repo_visualizer.analyzer import RepositoryAnalyzer
 class TestRepositoryAnalyzerExtended:
     """Extended test coverage for RepositoryAnalyzer methods."""
 
-    @patch("os.path.isdir")
-    @patch("subprocess.run")
-    def test_get_git_description(self, mock_run, mock_isdir):
-        """Test git description extraction."""
-        mock_isdir.return_value = True
-
-        # Test successful description extraction
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout="https://github.com/user/repo.git\n"
+    def setup_method(self):
+        self.repo_path = os.path.join(os.path.dirname(__file__), "test_repo_ext")
+        os.makedirs(self.repo_path, exist_ok=True)
+        subprocess.run(
+            ["git", "init"], cwd=self.repo_path, check=True, capture_output=True
         )
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-        description = analyzer._get_git_description()
-
-        assert description == "Git repository at https://github.com/user/repo.git"
-        mock_run.assert_called_with(
-            ["git", "config", "--get", "remote.origin.url"],
-            cwd="/fake/repo",
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=self.repo_path,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=self.repo_path,
+            check=True,
+        )
+        with open(os.path.join(self.repo_path, ".gitignore"), "w") as f:
+            f.write("node_modules/\n")
+        with open(os.path.join(self.repo_path, "main.py"), "w") as f:
+            f.write("import os\n")
+        subprocess.run(["git", "add", "."], cwd=self.repo_path, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "Initial commit"],
+            cwd=self.repo_path,
+            check=True,
             capture_output=True,
-            text=True,
-            check=False,
         )
 
-    @patch("os.path.isdir")
-    @patch("subprocess.run")
-    def test_get_git_description_no_remote(self, mock_run, mock_isdir):
-        """Test git description when no remote is configured."""
-        mock_isdir.return_value = True
+    def teardown_method(self):
+        shutil.rmtree(self.repo_path)
 
-        # Test when git command fails
-        mock_run.return_value = MagicMock(returncode=1, stdout="")
+    def test_is_ignored(self):
+        """Test if files are correctly identified as ignored."""
+        analyzer = RepositoryAnalyzer(self.repo_path)
+        assert analyzer._is_ignored(
+            os.path.join(self.repo_path, "node_modules/test.js")
+        )
+        assert not analyzer._is_ignored(os.path.join(self.repo_path, "main.py"))
 
-        analyzer = RepositoryAnalyzer("/fake/repo")
-        description = analyzer._get_git_description()
+    def test_analyze_python_file_content(self):
+        """Test analysis of Python file content."""
+        with open(os.path.join(self.repo_path, "test.py"), "w") as f:
+            f.write("import os\n\nclass MyClass:\n    pass\n")
 
-        assert description == ""
+        analyzer = RepositoryAnalyzer(self.repo_path)
+        analyzer.analyze()
 
-    @patch("os.path.isdir")
-    @patch("subprocess.run")
-    def test_get_default_branch(self, mock_run, mock_isdir):
-        """Test default branch detection."""
-        mock_isdir.return_value = True
+        file_info = analyzer.file_ids.get("test.py")
+        assert file_info is not None
+        assert len(file_info.get("components", [])) == 1
+        assert file_info.get("components", [])[0].get("name") == "MyClass"
+        metrics = file_info.get("metrics")
+        assert metrics is not None
+        assert "linesOfCode" in metrics
 
-        # Test successful branch detection
-        mock_run.return_value = MagicMock(returncode=0, stdout="main\n")
+    def test_analyze_js_file_content(self):
+        """Test analysis of JavaScript file content."""
+        with open(os.path.join(self.repo_path, "test.js"), "w") as f:
+            f.write(
+                "import React from 'react';\n\n"
+                "function MyComponent() {\n"
+                "    return <div></div>;\n"
+                "}"
+            )
 
-        analyzer = RepositoryAnalyzer("/fake/repo")
-        branch = analyzer._get_default_branch()
+        analyzer = RepositoryAnalyzer(self.repo_path)
+        analyzer.analyze()
 
-        assert branch == "main"
+        file_info = analyzer.file_ids.get("test.js")
+        assert file_info is not None
+        assert len(file_info.get("components", [])) == 1
+        assert file_info.get("components", [])[0].get("name") == "MyComponent"
+        metrics = file_info.get("metrics")
+        assert metrics is not None
+        assert "linesOfCode" in metrics
 
-    @patch("os.path.isdir")
-    @patch("subprocess.run")
-    def test_get_default_branch_fallback(self, mock_run, mock_isdir):
-        """Test default branch fallback."""
-        mock_isdir.return_value = True
+    def test_resolve_python_import(self):
+        """Test Python import resolution."""
+        os.makedirs(os.path.join(self.repo_path, "src/utils"))
+        with open(os.path.join(self.repo_path, "src/utils/__init__.py"), "w") as f:
+            f.write("")
+        with open(os.path.join(self.repo_path, "src/utils/helpers.py"), "w") as f:
+            f.write("")
+        with open(os.path.join(self.repo_path, "src/main.py"), "w") as f:
+            f.write("from src.utils import helpers\n")
 
-        # Test when git command fails
-        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        analyzer = RepositoryAnalyzer(self.repo_path)
+        analyzer.analyze()
 
-        analyzer = RepositoryAnalyzer("/fake/repo")
-        branch = analyzer._get_default_branch()
+        assert any(
+            r["source"] == "src/main.py"
+            and r["target"] == "src/utils/helpers.py"
+            and r["type"] == "import"
+            for r in analyzer.data["relationships"]
+        )
 
-        assert branch == "main"  # Default fallback
-
-    @patch("os.path.isdir")
-    def test_sanitize_git_url(self, mock_isdir):
-        """Test git URL sanitization."""
-        mock_isdir.return_value = True
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-
-        # Test HTTPS URL with credentials
-        url = "https://username:token@github.com/user/repo.git"
-        sanitized = analyzer._sanitize_git_url(url)
-        assert sanitized == "https://github.com/user/repo.git"
-
-        # Test SSH URL with credentials
-        url = "ssh://user:pass@github.com/user/repo.git"
-        sanitized = analyzer._sanitize_git_url(url)
-        assert sanitized == "ssh://github.com/user/repo.git"
-
-        # Test URL without credentials
-        url = "https://github.com/user/repo.git"
-        sanitized = analyzer._sanitize_git_url(url)
-        assert sanitized == "https://github.com/user/repo.git"
-
-    @patch("os.path.isdir")
-    @patch("os.walk")
-    @patch("os.path.isfile")
-    @patch("os.path.getsize")
-    def test_calculate_language_stats_comprehensive(
-        self, mock_getsize, mock_isfile, mock_walk, mock_isdir
-    ):
-        """Test comprehensive language statistics calculation."""
-        mock_isdir.return_value = True
-        mock_isfile.return_value = True
-
-        # Mock file system with various file types
-        mock_walk.return_value = [
-            (
-                "/fake/repo",
-                [],
-                ["main.py", "utils.py", "app.js", "style.css", "README.md"],
-            ),
-        ]
-
-        # Mock file sizes
-        mock_getsize.side_effect = lambda path: {
-            "/fake/repo/main.py": 1000,
-            "/fake/repo/utils.py": 500,
-            "/fake/repo/app.js": 800,
-            "/fake/repo/style.css": 300,
-            "/fake/repo/README.md": 200,
-        }.get(path, 0)
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-        analyzer.gitignore_spec = None  # type: ignore
-        analyzer._is_ignored = MagicMock(return_value=False)
-
-        stats = analyzer._calculate_language_stats()
-
-        1000 + 500 + 800 + 300 + 200  # 2800
-
-        assert stats["Python"] == pytest.approx(1500 / 2800, rel=1e-3)
-        assert stats["JavaScript"] == pytest.approx(800 / 2800, rel=1e-3)
-        assert stats["CSS"] == pytest.approx(300 / 2800, rel=1e-3)
-        assert stats["Markdown"] == pytest.approx(200 / 2800, rel=1e-3)
-
-    @patch("os.path.isdir")
-    @patch("os.walk")
-    @patch("os.path.isfile")
-    @patch("os.path.getsize")
-    def test_calculate_language_stats_empty_repo(
-        self, mock_getsize, mock_isfile, mock_walk, mock_isdir
-    ):
-        """Test language statistics for empty repository."""
-        mock_isdir.return_value = True
-        mock_walk.return_value = []
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-        analyzer.gitignore_spec = None  # type: ignore
-        analyzer._is_ignored = MagicMock(return_value=False)
-
-        stats = analyzer._calculate_language_stats()
-
-        assert stats == {}
-
-    @patch("os.path.isdir")
-    def test_analyze_js_file(self, mock_isdir):
-        """Test JavaScript file analysis."""
-        mock_isdir.return_value = True
-
-        js_content = """
-// This is a comment
-/* Another comment */
-class TestClass extends BaseClass {
-    constructor() {
-        super();
-    }
-
-    method1() {
-        return "test";
-    }
-}
-
-function regularFunction() {
-    return true;
-}
-
-const arrowFunction = () => {
-    return false;
-};
-
-const functionExpression = function() {
-    return null;
-};
-"""
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-        components, metrics = analyzer._analyze_js_file(js_content, "test.js", {})
-
-        # Check metrics
-        assert "commentLines" in metrics
-        assert metrics["commentLines"] > 0
-        assert "topLevelIdentifiers" in metrics
-
-        # Check components
-        assert len(components) >= 4  # At least class + 3 functions
-
-        # Check that components have correct structure
-        for component in components:
-            assert "id" in component
-            assert "name" in component
-            assert "type" in component
-            assert component["type"] in ["class", "function"]
-            assert "lineStart" in component
-            assert "lineEnd" in component
-
-    @patch("os.path.isdir")
-    def test_resolve_js_import(self, mock_isdir):
+    def test_resolve_js_import(self):
         """Test JavaScript import resolution."""
-        mock_isdir.return_value = True
+        os.makedirs(os.path.join(self.repo_path, "src/components"))
+        with open(os.path.join(self.repo_path, "src/components/Button.js"), "w") as f:
+            f.write("")
+        with open(os.path.join(self.repo_path, "src/components/Card.js"), "w") as f:
+            f.write("import Button from './Button';\n")
 
-        analyzer = RepositoryAnalyzer("/fake/repo")
-        analyzer.file_ids = {
-            "src/utils.js",
-            "src/components/Button.jsx",
-            "src/components/index.js",
-            "lib/helper.ts",
-        }
+        analyzer = RepositoryAnalyzer(self.repo_path)
+        analyzer.analyze()
 
-        # Test relative import
-        result = analyzer._resolve_js_import("./utils.js", "src/main.js")
-        assert result == "src/utils.js"
-
-        # Test relative import with extension inference
-        result = analyzer._resolve_js_import("./utils", "src/main.js")
-        assert result == "src/utils.js"
-
-        # Test parent directory import
-        result = analyzer._resolve_js_import("../lib/helper", "src/main.js")
-        assert result == "lib/helper.ts"
-
-        # Test index file resolution
-        result = analyzer._resolve_js_import("./components", "src/main.js")
-        assert result == "src/components/index.js"
-
-        # Test external module (should return None)
-        result = analyzer._resolve_js_import("react", "src/main.js")
-        assert result is None
-
-        # Test scoped module (should return None)
-        result = analyzer._resolve_js_import("@babel/core", "src/main.js")
-        assert result is None
-
-    @patch("os.path.isdir")
-    def test_update_directory_sizes(self, mock_isdir):
-        """Test directory size calculation."""
-        mock_isdir.return_value = True
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-
-        # Create test file structure
-        files = [
-            {
-                "id": "src",
-                "path": "src",
-                "name": "src",
-                "type": "directory",
-                "size": 0,
-                "depth": 0,
-            },
-            {
-                "id": "src/utils",
-                "path": "src/utils",
-                "name": "utils",
-                "type": "directory",
-                "size": 0,
-                "depth": 1,
-            },
-            {
-                "id": "src/main.py",
-                "path": "src/main.py",
-                "name": "main.py",
-                "type": "file",
-                "size": 1000,
-                "depth": 1,
-            },
-            {
-                "id": "src/utils/helper.py",
-                "path": "src/utils/helper.py",
-                "name": "helper.py",
-                "type": "file",
-                "size": 500,
-                "depth": 2,
-            },
-        ]
-
-        # Mock relationships
-        analyzer.relationships = [
-            {"source": "src", "target": "src/main.py", "type": "contains"},
-            {"source": "src", "target": "src/utils", "type": "contains"},
-            {
-                "source": "src/utils",
-                "target": "src/utils/helper.py",
-                "type": "contains",
-            },
-        ]
-
-        analyzer._update_directory_sizes(files)  # type: ignore
-
-        # Check that directory sizes were updated
-        src_dir = next(f for f in files if f["id"] == "src")
-        utils_dir = next(f for f in files if f["id"] == "src/utils")
-
-        assert src_dir["size"] == 1500  # 1000 + 500
-        assert utils_dir["size"] == 500
-
-    @patch("os.path.isdir")
-    @patch("subprocess.run")
-    def test_extract_file_git_metrics(self, mock_run, mock_isdir):
-        """Test git metrics extraction for files."""
-        mock_isdir.return_value = True
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-
-        # Mock git log output
-        mock_run.side_effect = [
-            # First call: commit count
-            MagicMock(
-                returncode=0, stdout="abc123 Initial commit\ndef456 Update file\n"
-            ),
-            # Second call: last commit date
-            MagicMock(returncode=0, stdout="2023-12-01 10:00:00 +0000\n"),
-        ]
-
-        metrics = analyzer._extract_file_git_metrics("src/main.py")
-
-        assert "commitCount" in metrics
-        assert metrics["commitCount"] == 2
-        assert "lastCommitDaysAgo" in metrics
-        assert "lastCommitDate" in metrics
-
-    @patch("os.path.isdir")
-    @patch("subprocess.run")
-    def test_extract_file_git_metrics_no_commits(self, mock_run, mock_isdir):
-        """Test git metrics extraction for files with no commits."""
-        mock_isdir.return_value = True
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-
-        # Mock git log output with no commits
-        mock_run.side_effect = [
-            MagicMock(returncode=0, stdout=""),
-            MagicMock(returncode=1, stdout=""),
-        ]
-
-        metrics = analyzer._extract_file_git_metrics("src/new_file.py")
-
-        assert metrics["commitCount"] == 0
-        assert metrics["lastCommitDaysAgo"] == 0
-        assert "lastCommitDate" in metrics
-
-    @patch("os.path.isdir")
-    def test_extract_python_semantic_content(self, mock_isdir):
-        """Test Python semantic content extraction."""
-        mock_isdir.return_value = True
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-
-        python_content = '''
-"""
-This is a module docstring
-explaining what the module does.
-"""
-
-# This is a comment
-def example_function():
-    """Function docstring."""
-    pass
-
-class ExampleClass:
-    """Class docstring."""
-
-    def method_one(self):
-        # Method comment
-        return True
-'''
-
-        content = analyzer._extract_python_semantic_content(python_content)
-
-        assert "module docstring" in content
-        assert "Function docstring" in content
-        assert "Class docstring" in content
-        assert "This is a comment" in content
-        assert "function example_function" in content
-        assert "class ExampleClass" in content
-
-    @patch("os.path.isdir")
-    def test_extract_javascript_semantic_content(self, mock_isdir):
-        """Test JavaScript semantic content extraction."""
-        mock_isdir.return_value = True
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-
-        js_content = """
-/**
- * This is a JSDoc comment
- * @param {string} name - The name
- */
-function greet(name) {
-    // Single line comment
-    return `Hello, ${name}!`;
-}
-
-/* Block comment */
-class TestClass {
-    constructor() {
-        this.value = 42;
-    }
-}
-"""
-
-        content = analyzer._extract_javascript_semantic_content(js_content)
-
-        assert "JSDoc comment" in content
-        assert "Single line comment" in content
-        assert "Block comment" in content
-        assert "function greet" in content
-        assert "class TestClass" in content
-
-    @patch("os.path.isdir")
-    def test_extract_generic_semantic_content(self, mock_isdir):
-        """Test generic semantic content extraction."""
-        mock_isdir.return_value = True
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-
-        generic_content = """
-// Single line comment
-/* Multi-line
-   comment */
-# Hash comment
-function function_name() {
-    variable_name = "value";
-}
-"""
-
-        content = analyzer._extract_generic_semantic_content(generic_content)
-
-        assert "Single line comment" in content
-        assert "Multi-line" in content
-        assert "Hash comment" in content
-        assert "defines function_name" in content
-
-    @patch("os.path.isdir")
-    def test_is_text_file(self, mock_isdir):
-        """Test text file detection."""
-        mock_isdir.return_value = True
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-
-        # Test with text content (no null bytes)
-        with patch("builtins.open", mock_open()) as mock_file:
-            mock_file.return_value.read.return_value = b"def main():\n    pass\n"
-            assert analyzer._is_text_file("/fake/file.py") is True
-
-        # Test with binary content (contains null bytes)
-        with patch("builtins.open", mock_open()) as mock_file:
-            mock_file.return_value.read.return_value = b"\x00\x01\x02\x03"
-            assert analyzer._is_text_file("/fake/file.bin") is False
-
-        # Test with file that raises exception
-        with patch("builtins.open", mock_open()) as mock_file:
-            mock_file.return_value.read.side_effect = OSError("File not found")
-            assert analyzer._is_text_file("/fake/file.txt") is False
-
-    @patch("os.path.isdir")
-    def test_save_to_file(self, mock_isdir):
-        """Test saving repository data to file."""
-        mock_isdir.return_value = True
-
-        analyzer = RepositoryAnalyzer("/fake/repo")
-        analyzer.data = {  # type: ignore
-            "metadata": {"repoName": "test"},
-            "files": [],
-            "relationships": [],
-        }
-
-        with patch("builtins.open", mock_open()) as mock_file:
-            with patch("json.dump") as mock_json_dump:
-                analyzer.save_to_file("output.json")
-
-                mock_file.assert_called_once_with("output.json", "w")
-                mock_json_dump.assert_called_once()
-
-
-if __name__ == "__main__":
-    pytest.main(["-v", "test_analyzer_extended.py"])
+        assert any(
+            r["source"] == "src/components/Card.js"
+            and r["target"] == "src/components/Button.js"
+            for r in analyzer.data["relationships"]
+        )

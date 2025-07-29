@@ -1,6 +1,53 @@
 import React from 'react';
+import { RepositoryData, File, TestCoverage } from '../types/schema';
 import FloatingMenu from './FloatingMenu';
-import { RepositoryData } from '../types/schema';
+
+const CoveragePieChart: React.FC<{ coverage: TestCoverage }> = ({ coverage }) => {
+  const radius = 50;
+  const strokeWidth = 10;
+  const innerRadius = radius - strokeWidth;
+  const circumference = 2 * Math.PI * innerRadius;
+
+  const totalMetrics = Object.values(coverage).filter(v => v !== undefined).length;
+  const avgCoverage =
+    totalMetrics > 0
+      ? Object.values(coverage).reduce((acc, v) => acc + (v || 0), 0) / totalMetrics
+      : 0;
+
+  if (totalMetrics === 0 || avgCoverage === 0) return null;
+
+  const offset = circumference - avgCoverage * circumference;
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width={radius * 2} height={radius * 2} className="transform -rotate-90">
+        <circle
+          cx={radius}
+          cy={radius}
+          r={innerRadius}
+          stroke="#e6e6e6"
+          strokeWidth={strokeWidth}
+          fill="transparent"
+        />
+        <circle
+          cx={radius}
+          cy={radius}
+          r={innerRadius}
+          stroke="#4ade80"
+          strokeWidth={strokeWidth}
+          fill="transparent"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="text-center text-xl font-bold text-gray-700 -mt-12">
+        {(avgCoverage * 100).toFixed(1)}%
+      </div>
+      <div className="text-center text-xs text-gray-500 mt-8">Avg. Coverage</div>
+    </div>
+  );
+};
 
 interface FileDetailsProps {
   fileId: string;
@@ -112,11 +159,20 @@ const FileDetails: React.FC<FileDetailsProps> = ({ fileId, data, onClose }) => {
               {file.metrics.commitCount && (
                 <p className="text-sm text-gray-600">Commit count: {file.metrics.commitCount}</p>
               )}
-              {file.metrics.lastCommitDaysAgo !== undefined && (
+              {file.metrics.lastModified !== undefined && (
                 <p className="text-sm text-gray-600">
-                  Last commit: {file.metrics.lastCommitDaysAgo} days ago
+                  Last commit: {Math.floor((Date.now() / 1000 - file.metrics.lastModified) / 86400)}{' '}
+                  days ago
                 </p>
               )}
+            </div>
+          </div>
+        )}
+        {file.metrics?.testCoverage && (
+          <div className="mt-4">
+            <p className="font-medium text-gray-800 mb-2">Test Coverage:</p>
+            <div className="flex justify-center p-4">
+              <CoveragePieChart coverage={file.metrics.testCoverage} />
             </div>
           </div>
         )}

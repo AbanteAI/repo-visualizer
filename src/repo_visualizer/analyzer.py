@@ -11,27 +11,12 @@ import os
 import re
 import subprocess
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 
 import pathspec
 
 # Optional dependency for semantic similarity
-try:
-    import openai
-
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-
-try:
-    import numpy as np
-
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
-
 from .schema import (
-    Component,
     File,
     Relationship,
     RepositoryData,
@@ -42,7 +27,12 @@ from .schema import (
 class RepositoryAnalyzer:
     """Analyzes a local git repository and generates visualization data."""
 
-    def __init__(self, repo_path: str):
+    def __init__(
+        self,
+        repo_path: str,
+        python_coverage_path: Optional[str] = None,
+        frontend_coverage_path: Optional[str] = None,
+    ):
         """
         Initialize the repository analyzer.
 
@@ -50,6 +40,8 @@ class RepositoryAnalyzer:
             repo_path: Path to the local git repository
         """
         self.repo_path = os.path.abspath(repo_path)
+        self.python_coverage_path = python_coverage_path
+        self.frontend_coverage_path = frontend_coverage_path
         if not os.path.isdir(self.repo_path):
             raise ValueError(f"Repository path does not exist: {self.repo_path}")
 
@@ -59,7 +51,7 @@ class RepositoryAnalyzer:
             raise ValueError(f"Not a git repository: {self.repo_path}")
 
         self.data = create_empty_schema()
-        self.file_ids: Set[str] = set()
+        self.file_ids: Dict[str, File] = {}
         self.relationships: List[Relationship] = []
         self.relationship_counts: Dict[Tuple[str, str, str], int] = {}
 
@@ -67,7 +59,77 @@ class RepositoryAnalyzer:
         self.gitignore_spec = self._load_gitignore_patterns()
 
         # Cache for coverage data to avoid reparsing
-        self._coverage_cache: Optional[Dict[str, float]] = None
+        self._coverage_cache: Optional[Dict[str, Dict[str, float]]] = None
+
+    def _load_coverage_data(self) -> Dict[str, Dict[str, float]]:
+        """Load and parse coverage data from JSON files."""
+        if self._coverage_cache is not None:
+            return self._coverage_cache
+
+        coverage_data: Dict[str, Dict[str, float]] = {}
+
+        # Load Python coverage
+        if self.python_coverage_path and os.path.exists(self.python_coverage_path):
+            try:
+                with open(self.python_coverage_path) as f:
+                    py_coverage = json.load(f)
+                    for file_path, summary in py_coverage.get("files", {}).items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": summary.get("summary", {}).get(
+                                    "percent_covered", 0
+                                )
+                                / 100.0
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse Python coverage file: {e}")
+
+        # Load frontend coverage
+        if self.frontend_coverage_path and os.path.exists(self.frontend_coverage_path):
+            try:
+                with open(self.frontend_coverage_path) as f:
+                    fe_coverage = json.load(f)
+                    for file_path, summary in fe_coverage.items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": float(summary.get("lines", {}).get("pct", 0))
+                                / 100.0,
+                                "statements": float(
+                                    summary.get("statements", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "functions": float(
+                                    summary.get("functions", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "branches": float(
+                                    summary.get("branches", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse frontend coverage file: {e}")
+
+        self._coverage_cache = coverage_data
+        return self._coverage_cache
 
     def analyze(self) -> RepositoryData:
         """
@@ -87,6 +149,9 @@ class RepositoryAnalyzer:
 
         # Analyze git history
         self._analyze_history()
+
+        self.data["files"] = list(self.file_ids.values())
+        self._consolidate_relationships()
 
         return self.data
 
@@ -311,7 +376,6 @@ class RepositoryAnalyzer:
         Returns:
             Sanitized URL without credentials
         """
-        import re
 
         # Remove credentials from HTTPS URLs
         # Pattern matches: https://username:token@github.com/org/repo.git
@@ -423,12 +487,21 @@ class RepositoryAnalyzer:
         # Round percentages to 2 decimal places
         return {lang: round(pct, 4) for lang, pct in language_stats.items()}
 
+    def _read_file_content(self, file_path: str) -> Optional[str]:
+        """Read file content, returning None if it fails."""
+        try:
+            with open(os.path.join(self.repo_path, file_path), encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return None
+
     def _analyze_files(self) -> None:
         """Analyze file structure and content."""
-        files: List[File] = []
         dir_file_map: Dict[
             str, List[str]
         ] = {}  # Maps directory paths to contained file IDs
+
+        coverage_data = self._load_coverage_data()
 
         for root, dirs, file_names in os.walk(self.repo_path):
             # Get the path relative to the repository root
@@ -464,7 +537,7 @@ class RepositoryAnalyzer:
                 rel_path = rel_path.replace(os.path.sep, "/")
 
                 # Calculate directory depth
-                depth = len(rel_path.split("/"))
+                depth = len(rel_path.split("/")) - 1
 
                 # Create directory entry
                 dir_entry: File = {
@@ -477,8 +550,7 @@ class RepositoryAnalyzer:
                     "components": [],
                 }
 
-                files.append(dir_entry)
-                self.file_ids.add(rel_path)
+                self.file_ids[rel_path] = dir_entry
 
                 # Initialize directory in map
                 dir_file_map[rel_path] = []
@@ -486,13 +558,3098 @@ class RepositoryAnalyzer:
                 # Create parent directory relationship
                 parent_dir = os.path.dirname(rel_path)
                 if parent_dir and parent_dir in self.file_ids:
-                    self.relationships.append(
+                    self._add_relationship(parent_dir, rel_path, "contains")
+                    if parent_dir in dir_file_map:
+                        dir_file_map[parent_dir].append(rel_path)
+
+            # Process files
+            for file_name in file_names:
+                file_path = os.path.join(root, file_name)
+                rel_path = os.path.relpath(file_path, self.repo_path)
+
+                # Skip if somehow outside repo path
+                if rel_path.startswith(".."):
+                    continue
+
+                # Skip ignored files
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                # Normalize path separator to forward slash
+                rel_path = rel_path.replace(os.path.sep, "/")
+
+                # Calculate file depth
+                depth = len(rel_path.split("/")) - 1
+
+                # Get file size
+                try:
+                    size = os.path.getsize(file_path)
+                except OSError:
+                    size = 0
+
+                # Get coverage data
+                file_coverage = coverage_data.get(rel_path)
+
+                # Create file entry
+                file_entry: File = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": file_name,
+                    "type": "file",
+                    "depth": depth,
+                    "size": size,
+                    "components": [],
+                    "coverage": file_coverage,
+                }
+
+                self.file_ids[rel_path] = file_entry
+
+                # Add to parent directory map
+                parent_dir = os.path.dirname(rel_path)
+                if parent_dir and parent_dir in dir_file_map:
+                    dir_file_map[parent_dir].append(rel_path)
+                    self._add_relationship(parent_dir, rel_path, "contains")
+
+        # Update directory sizes
+        self._update_directory_sizes(dir_file_map)
+
+    def _update_directory_sizes(self, dir_file_map: Dict[str, List[str]]) -> None:
+        """Recursively update directory sizes based on their contents."""
+        # Sort directories by depth to process from deepest to shallowest
+        sorted_dirs = sorted(
+            [d for d in self.file_ids.values() if d["type"] == "directory"],
+            key=lambda d: d["depth"],
+            reverse=True,
+        )
+
+        for dir_entry in sorted_dirs:
+            dir_path = dir_entry["path"]
+            total_size = 0
+            if dir_path in dir_file_map:
+                for child_id in dir_file_map[dir_path]:
+                    if child_id in self.file_ids:
+                        total_size += self.file_ids[child_id]["size"]
+            dir_entry["size"] = total_size
+
+    def _extract_relationships(self) -> None:
+        """Extract relationships between files."""
+        for file_id, file_data in self.file_ids.items():
+            if file_data["type"] == "file":
+                content = self._read_file_content(file_id)
+                if content:
+                    # Extract relationships based on file type
+                    ext = file_id.split(".")[-1]
+                    if ext == "py":
+                        self._extract_python_imports(file_id, content)
+                    elif ext in ["js", "ts", "jsx", "tsx"]:
+                        self._extract_js_imports(file_id, content)
+
+    def _extract_python_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from Python files."""
+        # Regex for `from . import ...` and `import ...`
+        import_regex = re.compile(
+            r"^(?:from\s+([.\w]+)\s+)?import\s+(?:\S+|\([^)]+\))", re.MULTILINE
+        )
+        # Regex for `from ... import (...)`
+        from_import_regex = re.compile(
+            r"^from\s+([.\w]+)\s+import\s+\(([^)]+)\)", re.MULTILINE | re.DOTALL
+        )
+
+        # Handle `from .module import something`
+        for match in import_regex.finditer(content):
+            if match.group(1):
+                import_path = match.group(1)
+                level = 0
+                if import_path.startswith("."):
+                    # Count leading dots for relative imports
+                    level = len(import_path) - len(import_path.lstrip("."))
+                    import_path = import_path.lstrip(".")
+
+                if import_path:
+                    target_file = self._resolve_python_import(
+                        import_path, file_path, level
+                    )
+                    if target_file:
+                        self._add_relationship(file_path, target_file, "import")
+
+        # Handle multi-line `from ... import (a, b, c)`
+        for match in from_import_regex.finditer(content):
+            import_path = match.group(1)
+            level = 0
+            if import_path.startswith("."):
+                level = len(import_path) - len(import_path.lstrip("."))
+                import_path = import_path.lstrip(".")
+
+            if import_path:
+                target_file = self._resolve_python_import(import_path, file_path, level)
+                if target_file:
+                    self._add_relationship(file_path, target_file, "import")
+
+    def _resolve_python_import(
+        self, import_name: str, file_path: str, level: int = 0
+    ) -> Optional[str]:
+        """Resolve a Python import to a file path."""
+        # Reconstruct the absolute path of the importing file's directory
+        current_dir = os.path.dirname(os.path.join(self.repo_path, file_path))
+
+        # Handle relative imports
+        if level > 0:
+            # Move up the directory tree for each level
+            for _ in range(level - 1):
+                current_dir = os.path.dirname(current_dir)
+
+        # Convert import name to path segments
+        import_parts = import_name.split(".")
+
+        # Attempt to resolve as a .py file
+        possible_file_path = os.path.join(current_dir, *import_parts) + ".py"
+        if os.path.isfile(possible_file_path):
+            return os.path.relpath(possible_file_path, self.repo_path).replace(
+                os.path.sep, "/"
+            )
+
+        # Attempt to resolve as a package (directory with __init__.py)
+        possible_package_path = os.path.join(current_dir, *import_parts)
+        if os.path.isdir(possible_package_path):
+            init_file = os.path.join(possible_package_path, "__init__.py")
+            if os.path.isfile(init_file):
+                return os.path.relpath(init_file, self.repo_path).replace(
+                    os.path.sep, "/"
+                )
+
+        # Handle absolute imports from the repo root
+        if level == 0:
+            possible_path_from_root = os.path.join(self.repo_path, *import_parts)
+            # As a file
+            if os.path.isfile(possible_path_from_root + ".py"):
+                return os.path.relpath(
+                    possible_path_from_root + ".py", self.repo_path
+                ).replace(os.path.sep, "/")
+            # As a package
+            if os.path.isdir(possible_path_from_root):
+                init_file = os.path.join(possible_path_from_root, "__init__.py")
+                if os.path.isfile(init_file):
+                    return os.path.relpath(init_file, self.repo_path).replace(
+                        os.path.sep, "/"
+                    )
+
+        return None
+
+    def _extract_js_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from JavaScript/TypeScript files."""
+        # This is a placeholder for future relationship extraction logic
+        pass
+
+    def _analyze_history(self) -> None:
+        """Analyze git history to create commits data."""
+        try:
+            # Get git log with commit hash, author, date, and message
+            log_format = "%H%x1f%an%x1f%ad%x1f%s"
+            result = subprocess.run(
+                ["git", "log", f"--format={log_format}", "--date=iso"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            commits = []
+            for line in result.stdout.strip().split("\n"):
+                parts = line.split("\x1f")
+                if len(parts) == 4:
+                    commit_hash, author, date_str, message = parts
+                    # Parse and convert to ISO format
+                    dt = datetime.fromisoformat(
+                        date_str.replace(" ", "T").replace(" +", "+")
+                    )
+                    commits.append(
                         {
-                            "source": parent_dir,
-                            "target": rel_path,
-                            "type": "contains",
+                            "id": commit_hash,
+                            "author": author,
+                            "date": dt.isoformat(),
+                            "message": message,
                         }
                     )
+            self.data["commits"] = commits
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"Warning: Could not analyze git history: {e}")
+            self.data["commits"] = []
+
+    def _add_relationship(self, source: str, target: str, rel_type: str) -> None:
+        """Add a relationship to the list, avoiding duplicates."""
+        # Ensure both source and target are in file_ids before adding
+        if source in self.file_ids and target in self.file_ids:
+            # Use a tuple to count occurrences of each unique relationship
+            rel_tuple = (source, target, rel_type)
+            if rel_tuple not in self.relationship_counts:
+                self.relationship_counts[rel_tuple] = 0
+            self.relationship_counts[rel_tuple] += 1
+
+    def _consolidate_relationships(self) -> None:
+        """Consolidate relationships from counts to the final list."""
+        self.relationships = [
+            {
+                "source": source,
+                "target": target,
+                "type": rel_type,
+                "strength": count,
+            }
+            for (source, target, rel_type), count in self.relationship_counts.items()
+        ]
+        self.data["relationships"] = self.relationships
+
+    """Analyzes a local git repository and generates visualization data."""
+
+    def __init__(
+        self,
+        repo_path: str,
+        python_coverage_path: Optional[str] = None,
+        frontend_coverage_path: Optional[str] = None,
+    ):
+        """
+        Initialize the repository analyzer.
+
+        Args:
+            repo_path: Path to the local git repository
+        """
+        self.repo_path = os.path.abspath(repo_path)
+        self.python_coverage_path = python_coverage_path
+        self.frontend_coverage_path = frontend_coverage_path
+        if not os.path.isdir(self.repo_path):
+            raise ValueError(f"Repository path does not exist: {self.repo_path}")
+
+        # Check if it's a git repo
+        git_dir = os.path.join(self.repo_path, ".git")
+        if not os.path.isdir(git_dir):
+            raise ValueError(f"Not a git repository: {self.repo_path}")
+
+        self.data = create_empty_schema()
+        self.file_ids: Dict[str, File] = {}
+        self.relationships: List[Relationship] = []
+        self.relationship_counts: Dict[Tuple[str, str, str], int] = {}
+
+        # Load gitignore patterns
+        self.gitignore_spec = self._load_gitignore_patterns()
+
+        # Cache for coverage data to avoid reparsing
+        self._coverage_cache: Optional[Dict[str, Dict[str, float]]] = None
+
+    def _load_coverage_data(self) -> Dict[str, Dict[str, float]]:
+        """Load and parse coverage data from JSON files."""
+        if self._coverage_cache is not None:
+            return self._coverage_cache
+
+        coverage_data: Dict[str, Dict[str, float]] = {}
+
+        # Load Python coverage
+        if self.python_coverage_path and os.path.exists(self.python_coverage_path):
+            try:
+                with open(self.python_coverage_path) as f:
+                    py_coverage = json.load(f)
+                    for file_path, summary in py_coverage.get("files", {}).items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": summary.get("summary", {}).get(
+                                    "percent_covered", 0
+                                )
+                                / 100.0
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse Python coverage file: {e}")
+
+        # Load frontend coverage
+        if self.frontend_coverage_path and os.path.exists(self.frontend_coverage_path):
+            try:
+                with open(self.frontend_coverage_path) as f:
+                    fe_coverage = json.load(f)
+                    for file_path, summary in fe_coverage.items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": float(summary.get("lines", {}).get("pct", 0))
+                                / 100.0,
+                                "statements": float(
+                                    summary.get("statements", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "functions": float(
+                                    summary.get("functions", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "branches": float(
+                                    summary.get("branches", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse frontend coverage file: {e}")
+
+        self._coverage_cache = coverage_data
+        return self._coverage_cache
+
+    def analyze(self) -> RepositoryData:
+        """
+        Perform the repository analysis.
+
+        Returns:
+            RepositoryData: The complete repository data structure
+        """
+        # Extract repository metadata
+        self._extract_metadata()
+
+        # Analyze file structure
+        self._analyze_files()
+
+        # Extract relationships
+        self._extract_relationships()
+
+        # Analyze git history
+        self._analyze_history()
+
+        self.data["files"] = list(self.file_ids.values())
+        self._consolidate_relationships()
+
+        return self.data
+
+    def _extract_metadata(self) -> None:
+        """Extract repository metadata."""
+        # Get repository name from the directory name
+        repo_name = os.path.basename(self.repo_path)
+
+        # Try to get description from git if available
+        description = self._get_git_description()
+
+        # Get default branch
+        default_branch = self._get_default_branch()
+
+        # Get repository creation date (first commit date)
+        created_at = self._get_first_commit_date()
+
+        # Get repository update date (last commit date)
+        updated_at = self._get_last_commit_date()
+
+        # Get language statistics
+        language_stats = self._calculate_language_stats()
+
+        # Update metadata
+        self.data["metadata"].update(
+            {
+                "repoName": repo_name,
+                "description": description,
+                "createdAt": created_at,
+                "updatedAt": updated_at,
+                "schemaVersion": "1.0.0",
+                "analysisDate": datetime.now().isoformat(),
+                "defaultBranch": default_branch,
+                "language": language_stats,
+            }
+        )
+
+    def _get_git_description(self) -> str:
+        """Get repository description from git if available."""
+        try:
+            # Try to get description from git config
+            result = subprocess.run(
+                ["git", "config", "--get", "remote.origin.url"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                git_url = result.stdout.strip()
+                # Sanitize URL to remove any embedded credentials
+                git_url = self._sanitize_git_url(git_url)
+                return f"Git repository at {git_url}"
+            return ""
+        except Exception:
+            return ""
+
+    def _get_default_branch(self) -> str:
+        """Get the default branch name."""
+        try:
+            result = subprocess.run(
+                ["git", "symbolic-ref", "--short", "HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return "main"  # Default fallback
+        except Exception:
+            return "main"  # Default fallback
+
+    def _get_first_commit_date(self) -> str:
+        """Get the date of the first commit."""
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "log",
+                    "--reverse",
+                    "--date=iso",
+                    "--format=%ad",
+                    "--max-count=1",
+                ],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse and convert to ISO format
+                date_str = result.stdout.strip()
+                dt = datetime.fromisoformat(
+                    date_str.replace(" ", "T").replace(" +", "+")
+                )
+                return dt.isoformat()
+            return datetime.now().isoformat()
+        except Exception:
+            return datetime.now().isoformat()
+
+    def _get_last_commit_date(self) -> str:
+        """Get the date of the last commit."""
+        try:
+            result = subprocess.run(
+                ["git", "log", "--date=iso", "--format=%ad", "--max-count=1"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse and convert to ISO format
+                date_str = result.stdout.strip()
+                dt = datetime.fromisoformat(
+                    date_str.replace(" ", "T").replace(" +", "+")
+                )
+                return dt.isoformat()
+            return datetime.now().isoformat()
+        except Exception:
+            return datetime.now().isoformat()
+
+    def _load_gitignore_patterns(self) -> pathspec.PathSpec:
+        """
+        Load gitignore patterns from the repository.
+
+        Returns:
+            A PathSpec object that can match paths against gitignore patterns
+        """
+        gitignore_path = os.path.join(self.repo_path, ".gitignore")
+        patterns = []
+
+        # If .gitignore file exists, read the patterns
+        if os.path.isfile(gitignore_path):
+            try:
+                with open(gitignore_path, encoding="utf-8") as f:
+                    patterns = f.readlines()
+            except Exception as e:
+                print(f"Warning: Could not read .gitignore file: {e}")
+
+        # Create a PathSpec object to match against gitignore patterns
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+
+    def _is_ignored(self, path: str, is_directory: Optional[bool] = None) -> bool:
+        """
+        Check if a path should be ignored according to gitignore rules.
+
+        Args:
+            path: The path to check, relative to the repository root
+            is_directory: Explicitly specify if path is a directory; if None, will check
+                filesystem
+
+        Returns:
+            True if the path should be ignored, False otherwise
+        """
+        # Always ignore common directories that shouldn't be visualized
+        always_ignore = {
+            ".git",
+            "node_modules",
+            ".venv",
+            "venv",
+            "__pycache__",
+            ".pytest_cache",
+            "build",
+            "dist",
+            ".next",
+            ".nuxt",
+            "coverage",
+            ".coverage",
+            "*.egg-info",
+            ".tox",
+            ".nox",
+            "vendor",
+            ".DS_Store",
+            "Thumbs.db",
+        }
+
+        path_parts = path.split(os.path.sep)
+        for part in path_parts:
+            if part in always_ignore:
+                return True
+            # Handle glob patterns like *.egg-info
+            for ignore_pattern in always_ignore:
+                if "*" in ignore_pattern:
+                    import fnmatch
+
+                    if fnmatch.fnmatch(part, ignore_pattern):
+                        return True
+
+        # Normalize path separator to forward slash for consistency
+        norm_path = path.replace(os.path.sep, "/")
+
+        # Determine if the path is a directory and add trailing slash if so
+        if is_directory is None:
+            is_directory = os.path.isdir(os.path.join(self.repo_path, norm_path))
+
+        if is_directory and not norm_path.endswith("/"):
+            norm_path += "/"
+
+        # 1. First check if the path itself is ignored
+        if self.gitignore_spec.match_file(norm_path):
+            return True
+
+        # 2. For a file path, also check if any parent directory is ignored
+        if not is_directory and "/" in norm_path:
+            # Check if any parent directory is ignored
+            parts = norm_path.split("/")
+            for i in range(1, len(parts)):
+                parent_dir = "/".join(parts[:i]) + "/"
+                if self.gitignore_spec.match_file(parent_dir):
+                    return True
+
+        return False
+
+    def _sanitize_git_url(self, url: str) -> str:
+        """
+        Remove credentials from git URLs to prevent token exposure.
+
+        Args:
+            url: Git URL that may contain credentials
+
+        Returns:
+            Sanitized URL without credentials
+        """
+
+        # Remove credentials from HTTPS URLs
+        # Pattern matches: https://username:token@github.com/org/repo.git
+        url = re.sub(r"https://[^@]+@([^/]+)(/.*)$", r"https://\1\2", url)
+
+        # Remove credentials from SSH URLs if any
+        # Pattern matches: ssh://user:pass@host/path
+        url = re.sub(r"ssh://[^@]+@([^/]+)(/.*)$", r"ssh://\1\2", url)
+
+        return url
+
+    def _calculate_language_stats(self) -> Dict[str, float]:
+        """Calculate language statistics based on file extensions."""
+        extension_map = {
+            "py": "Python",
+            "js": "JavaScript",
+            "ts": "TypeScript",
+            "jsx": "JavaScript",
+            "tsx": "TypeScript",
+            "html": "HTML",
+            "css": "CSS",
+            "scss": "SCSS",
+            "java": "Java",
+            "c": "C",
+            "cpp": "C++",
+            "h": "C/C++ Header",
+            "hpp": "C++ Header",
+            "go": "Go",
+            "rb": "Ruby",
+            "php": "PHP",
+            "rs": "Rust",
+            "swift": "Swift",
+            "kt": "Kotlin",
+            "md": "Markdown",
+            "json": "JSON",
+            "yml": "YAML",
+            "yaml": "YAML",
+            "xml": "XML",
+            "sh": "Shell",
+            "bat": "Batch",
+            "ps1": "PowerShell",
+        }
+
+        # Count bytes per extension
+        extension_sizes: Dict[str, int] = {}
+        total_size = 0
+
+        for root, dirs, files in os.walk(self.repo_path):
+            # Filter out gitignore directories
+            rel_root = os.path.relpath(root, self.repo_path)
+            if rel_root == ".":
+                rel_root = ""
+
+            # Filter directories in-place
+            i = 0
+            while i < len(dirs):
+                dir_name = dirs[i]
+                dir_path = os.path.join(rel_root, dir_name)
+
+                # Explicitly check as a directory
+                if self._is_ignored(dir_path, is_directory=True):
+                    dirs.pop(i)
+                else:
+                    i += 1
+
+            for file in files:
+                rel_path = os.path.join(rel_root, file)
+
+                # Skip ignored files
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                file_path = os.path.join(root, file)
+                try:
+                    # Only count regular files
+                    if not os.path.isfile(file_path):
+                        continue
+
+                    # Get file extension
+                    _, ext = os.path.splitext(file)
+                    ext = ext.lstrip(".").lower()
+
+                    # Skip files without extensions or unknown types
+                    if not ext:
+                        continue
+
+                    # Get file size
+                    size = os.path.getsize(file_path)
+                    if ext in extension_sizes:
+                        extension_sizes[ext] += size
+                    else:
+                        extension_sizes[ext] = size
+
+                    total_size += size
+                except Exception:
+                    continue
+
+        # Convert to language stats with percentages
+        language_stats: Dict[str, float] = {}
+        if total_size > 0:
+            for ext, size in extension_sizes.items():
+                language = extension_map.get(ext, ext.upper())
+                percentage = size / total_size
+                if language in language_stats:
+                    language_stats[language] += percentage
+                else:
+                    language_stats[language] = percentage
+
+        # Round percentages to 2 decimal places
+        return {lang: round(pct, 4) for lang, pct in language_stats.items()}
+
+    def _read_file_content(self, file_path: str) -> Optional[str]:
+        """Read file content, returning None if it fails."""
+        try:
+            with open(os.path.join(self.repo_path, file_path), encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return None
+
+    def _analyze_files(self) -> None:
+        """Analyze file structure and content."""
+        dir_file_map: Dict[
+            str, List[str]
+        ] = {}  # Maps directory paths to contained file IDs
+
+        coverage_data = self._load_coverage_data()
+
+        for root, dirs, file_names in os.walk(self.repo_path):
+            # Get the path relative to the repository root
+            rel_root = os.path.relpath(root, self.repo_path)
+            if rel_root == ".":
+                rel_root = ""
+
+            # Filter directories in-place to respect gitignore
+            # Use a copy of the list since we're modifying it during iteration
+            i = 0
+            while i < len(dirs):
+                dir_name = dirs[i]
+                dir_path = os.path.join(rel_root, dir_name)
+
+                # Skip hidden directories and those that match gitignore patterns
+                if dir_name.startswith(".") or self._is_ignored(
+                    dir_path, is_directory=True
+                ):
+                    dirs.pop(i)
+                else:
+                    i += 1
+
+            # Process directories that weren't filtered out
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
+                rel_path = os.path.relpath(dir_path, self.repo_path)
+
+                # Skip if somehow outside repo path
+                if rel_path.startswith(".."):
+                    continue
+
+                # Normalize path separator to forward slash
+                rel_path = rel_path.replace(os.path.sep, "/")
+
+                # Calculate directory depth
+                depth = len(rel_path.split("/")) - 1
+
+                # Create directory entry
+                dir_entry: File = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": dir_name,
+                    "type": "directory",
+                    "depth": depth,
+                    "size": 0,  # Will be updated later
+                    "components": [],
+                }
+
+                self.file_ids[rel_path] = dir_entry
+
+                # Initialize directory in map
+                dir_file_map[rel_path] = []
+
+                # Create parent directory relationship
+                parent_dir = os.path.dirname(rel_path)
+                if parent_dir and parent_dir in self.file_ids:
+                    self._add_relationship(parent_dir, rel_path, "contains")
+                    if parent_dir in dir_file_map:
+                        dir_file_map[parent_dir].append(rel_path)
+
+            # Process files
+            for file_name in file_names:
+                file_path = os.path.join(root, file_name)
+                rel_path = os.path.relpath(file_path, self.repo_path)
+
+                # Skip if somehow outside repo path
+                if rel_path.startswith(".."):
+                    continue
+
+                # Skip ignored files
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                # Normalize path separator to forward slash
+                rel_path = rel_path.replace(os.path.sep, "/")
+
+                # Calculate file depth
+                depth = len(rel_path.split("/")) - 1
+
+                # Get file size
+                try:
+                    size = os.path.getsize(file_path)
+                except OSError:
+                    size = 0
+
+                # Get coverage data
+                file_coverage = coverage_data.get(rel_path)
+
+                # Create file entry
+                file_entry: File = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": file_name,
+                    "type": "file",
+                    "depth": depth,
+                    "size": size,
+                    "components": [],
+                    "coverage": file_coverage,
+                }
+
+                self.file_ids[rel_path] = file_entry
+
+                # Add to parent directory map
+                parent_dir = os.path.dirname(rel_path)
+                if parent_dir and parent_dir in dir_file_map:
+                    dir_file_map[parent_dir].append(rel_path)
+                    self._add_relationship(parent_dir, rel_path, "contains")
+
+        # Update directory sizes
+        self._update_directory_sizes(dir_file_map)
+
+    def _update_directory_sizes(self, dir_file_map: Dict[str, List[str]]) -> None:
+        """Recursively update directory sizes based on their contents."""
+        # Sort directories by depth to process from deepest to shallowest
+        sorted_dirs = sorted(
+            [d for d in self.file_ids.values() if d["type"] == "directory"],
+            key=lambda d: d["depth"],
+            reverse=True,
+        )
+
+        for dir_entry in sorted_dirs:
+            dir_path = dir_entry["path"]
+            total_size = 0
+            if dir_path in dir_file_map:
+                for child_id in dir_file_map[dir_path]:
+                    if child_id in self.file_ids:
+                        total_size += self.file_ids[child_id]["size"]
+            dir_entry["size"] = total_size
+
+    def _extract_relationships(self) -> None:
+        """Extract relationships between files."""
+        for file_id, file_data in self.file_ids.items():
+            if file_data["type"] == "file":
+                content = self._read_file_content(file_id)
+                if content:
+                    # Extract relationships based on file type
+                    ext = file_id.split(".")[-1]
+                    if ext == "py":
+                        self._extract_python_imports(file_id, content)
+                    elif ext in ["js", "ts", "jsx", "tsx"]:
+                        self._extract_js_imports(file_id, content)
+
+    def _extract_python_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from Python files."""
+        # Regex for `from . import ...` and `import ...`
+        import_regex = re.compile(
+            r"^(?:from\s+([.\w]+)\s+)?import\s+(?:\S+|\([^)]+\))", re.MULTILINE
+        )
+        # Regex for `from ... import (...)`
+        from_import_regex = re.compile(
+            r"^from\s+([.\w]+)\s+import\s+\(([^)]+)\)", re.MULTILINE | re.DOTALL
+        )
+
+        # Handle `from .module import something`
+        for match in import_regex.finditer(content):
+            if match.group(1):
+                import_path = match.group(1)
+                level = 0
+                if import_path.startswith("."):
+                    # Count leading dots for relative imports
+                    level = len(import_path) - len(import_path.lstrip("."))
+                    import_path = import_path.lstrip(".")
+
+                if import_path:
+                    target_file = self._resolve_python_import(
+                        import_path, file_path, level
+                    )
+                    if target_file:
+                        self._add_relationship(file_path, target_file, "import")
+
+        # Handle multi-line `from ... import (a, b, c)`
+        for match in from_import_regex.finditer(content):
+            import_path = match.group(1)
+            level = 0
+            if import_path.startswith("."):
+                level = len(import_path) - len(import_path.lstrip("."))
+                import_path = import_path.lstrip(".")
+
+            if import_path:
+                target_file = self._resolve_python_import(import_path, file_path, level)
+                if target_file:
+                    self._add_relationship(file_path, target_file, "import")
+
+    def _resolve_python_import(
+        self, import_name: str, file_path: str, level: int = 0
+    ) -> Optional[str]:
+        """Resolve a Python import to a file path."""
+        # Reconstruct the absolute path of the importing file's directory
+        current_dir = os.path.dirname(os.path.join(self.repo_path, file_path))
+
+        # Handle relative imports
+        if level > 0:
+            # Move up the directory tree for each level
+            for _ in range(level - 1):
+                current_dir = os.path.dirname(current_dir)
+
+        # Convert import name to path segments
+        import_parts = import_name.split(".")
+
+        # Attempt to resolve as a .py file
+        possible_file_path = os.path.join(current_dir, *import_parts) + ".py"
+        if os.path.isfile(possible_file_path):
+            return os.path.relpath(possible_file_path, self.repo_path).replace(
+                os.path.sep, "/"
+            )
+
+        # Attempt to resolve as a package (directory with __init__.py)
+        possible_package_path = os.path.join(current_dir, *import_parts)
+        if os.path.isdir(possible_package_path):
+            init_file = os.path.join(possible_package_path, "__init__.py")
+            if os.path.isfile(init_file):
+                return os.path.relpath(init_file, self.repo_path).replace(
+                    os.path.sep, "/"
+                )
+
+        # Handle absolute imports from the repo root
+        if level == 0:
+            possible_path_from_root = os.path.join(self.repo_path, *import_parts)
+            # As a file
+            if os.path.isfile(possible_path_from_root + ".py"):
+                return os.path.relpath(
+                    possible_path_from_root + ".py", self.repo_path
+                ).replace(os.path.sep, "/")
+            # As a package
+            if os.path.isdir(possible_path_from_root):
+                init_file = os.path.join(possible_path_from_root, "__init__.py")
+                if os.path.isfile(init_file):
+                    return os.path.relpath(init_file, self.repo_path).replace(
+                        os.path.sep, "/"
+                    )
+
+        return None
+
+    def _extract_js_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from JavaScript/TypeScript files."""
+        # This is a placeholder for future relationship extraction logic
+        pass
+
+    def _analyze_history(self) -> None:
+        """Analyze git history to create commits data."""
+        try:
+            # Get git log with commit hash, author, date, and message
+            log_format = "%H%x1f%an%x1f%ad%x1f%s"
+            result = subprocess.run(
+                ["git", "log", f"--format={log_format}", "--date=iso"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            commits = []
+            for line in result.stdout.strip().split("\n"):
+                parts = line.split("\x1f")
+                if len(parts) == 4:
+                    commit_hash, author, date_str, message = parts
+                    # Parse and convert to ISO format
+                    dt = datetime.fromisoformat(
+                        date_str.replace(" ", "T").replace(" +", "+")
+                    )
+                    commits.append(
+                        {
+                            "id": commit_hash,
+                            "author": author,
+                            "date": dt.isoformat(),
+                            "message": message,
+                        }
+                    )
+            self.data["commits"] = commits
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"Warning: Could not analyze git history: {e}")
+            self.data["commits"] = []
+
+    def _add_relationship(self, source: str, target: str, rel_type: str) -> None:
+        """Add a relationship to the list, avoiding duplicates."""
+        # Ensure both source and target are in file_ids before adding
+        if source in self.file_ids and target in self.file_ids:
+            # Use a tuple to count occurrences of each unique relationship
+            rel_tuple = (source, target, rel_type)
+            if rel_tuple not in self.relationship_counts:
+                self.relationship_counts[rel_tuple] = 0
+            self.relationship_counts[rel_tuple] += 1
+
+    def _consolidate_relationships(self) -> None:
+        """Consolidate relationships from counts to the final list."""
+        self.relationships = [
+            {
+                "source": source,
+                "target": target,
+                "type": rel_type,
+                "strength": count,
+            }
+            for (source, target, rel_type), count in self.relationship_counts.items()
+        ]
+        self.data["relationships"] = self.relationships
+
+    """Analyzes a local git repository and generates visualization data."""
+
+    def __init__(
+        self,
+        repo_path: str,
+        python_coverage_path: Optional[str] = None,
+        frontend_coverage_path: Optional[str] = None,
+    ):
+        """
+        Initialize the repository analyzer.
+
+        Args:
+            repo_path: Path to the local git repository
+        """
+        self.repo_path = os.path.abspath(repo_path)
+        self.python_coverage_path = python_coverage_path
+        self.frontend_coverage_path = frontend_coverage_path
+        if not os.path.isdir(self.repo_path):
+            raise ValueError(f"Repository path does not exist: {self.repo_path}")
+
+        # Check if it's a git repo
+        git_dir = os.path.join(self.repo_path, ".git")
+        if not os.path.isdir(git_dir):
+            raise ValueError(f"Not a git repository: {self.repo_path}")
+
+        self.data = create_empty_schema()
+        self.file_ids: Dict[str, File] = {}
+        self.relationships: List[Relationship] = []
+        self.relationship_counts: Dict[Tuple[str, str, str], int] = {}
+
+        # Load gitignore patterns
+        self.gitignore_spec = self._load_gitignore_patterns()
+
+        # Cache for coverage data to avoid reparsing
+        self._coverage_cache: Optional[Dict[str, Dict[str, float]]] = None
+
+    def _load_coverage_data(self) -> Dict[str, Dict[str, float]]:
+        """Load and parse coverage data from JSON files."""
+        if self._coverage_cache is not None:
+            return self._coverage_cache
+
+        coverage_data: Dict[str, Dict[str, float]] = {}
+
+        # Load Python coverage
+        if self.python_coverage_path and os.path.exists(self.python_coverage_path):
+            try:
+                with open(self.python_coverage_path) as f:
+                    py_coverage = json.load(f)
+                    for file_path, summary in py_coverage.get("files", {}).items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": summary.get("summary", {}).get(
+                                    "percent_covered", 0
+                                )
+                                / 100.0
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse Python coverage file: {e}")
+
+        # Load frontend coverage
+        if self.frontend_coverage_path and os.path.exists(self.frontend_coverage_path):
+            try:
+                with open(self.frontend_coverage_path) as f:
+                    fe_coverage = json.load(f)
+                    for file_path, summary in fe_coverage.items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": float(summary.get("lines", {}).get("pct", 0))
+                                / 100.0,
+                                "statements": float(
+                                    summary.get("statements", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "functions": float(
+                                    summary.get("functions", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "branches": float(
+                                    summary.get("branches", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse frontend coverage file: {e}")
+
+        self._coverage_cache = coverage_data
+        return self._coverage_cache
+
+    def analyze(self) -> RepositoryData:
+        """
+        Perform the repository analysis.
+
+        Returns:
+            RepositoryData: The complete repository data structure
+        """
+        # Extract repository metadata
+        self._extract_metadata()
+
+        # Analyze file structure
+        self._analyze_files()
+
+        # Extract relationships
+        self._extract_relationships()
+
+        # Analyze git history
+        self._analyze_history()
+
+        self.data["files"] = list(self.file_ids.values())
+        self._consolidate_relationships()
+
+        return self.data
+
+    def _extract_metadata(self) -> None:
+        """Extract repository metadata."""
+        # Get repository name from the directory name
+        repo_name = os.path.basename(self.repo_path)
+
+        # Try to get description from git if available
+        description = self._get_git_description()
+
+        # Get default branch
+        default_branch = self._get_default_branch()
+
+        # Get repository creation date (first commit date)
+        created_at = self._get_first_commit_date()
+
+        # Get repository update date (last commit date)
+        updated_at = self._get_last_commit_date()
+
+        # Get language statistics
+        language_stats = self._calculate_language_stats()
+
+        # Update metadata
+        self.data["metadata"].update(
+            {
+                "repoName": repo_name,
+                "description": description,
+                "createdAt": created_at,
+                "updatedAt": updated_at,
+                "schemaVersion": "1.0.0",
+                "analysisDate": datetime.now().isoformat(),
+                "defaultBranch": default_branch,
+                "language": language_stats,
+            }
+        )
+
+    def _get_git_description(self) -> str:
+        """Get repository description from git if available."""
+        try:
+            # Try to get description from git config
+            result = subprocess.run(
+                ["git", "config", "--get", "remote.origin.url"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                git_url = result.stdout.strip()
+                # Sanitize URL to remove any embedded credentials
+                git_url = self._sanitize_git_url(git_url)
+                return f"Git repository at {git_url}"
+            return ""
+        except Exception:
+            return ""
+
+    def _get_default_branch(self) -> str:
+        """Get the default branch name."""
+        try:
+            result = subprocess.run(
+                ["git", "symbolic-ref", "--short", "HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return "main"  # Default fallback
+        except Exception:
+            return "main"  # Default fallback
+
+    def _get_first_commit_date(self) -> str:
+        """Get the date of the first commit."""
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "log",
+                    "--reverse",
+                    "--date=iso",
+                    "--format=%ad",
+                    "--max-count=1",
+                ],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse and convert to ISO format
+                date_str = result.stdout.strip()
+                dt = datetime.fromisoformat(
+                    date_str.replace(" ", "T").replace(" +", "+")
+                )
+                return dt.isoformat()
+            return datetime.now().isoformat()
+        except Exception:
+            return datetime.now().isoformat()
+
+    def _get_last_commit_date(self) -> str:
+        """Get the date of the last commit."""
+        try:
+            result = subprocess.run(
+                ["git", "log", "--date=iso", "--format=%ad", "--max-count=1"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse and convert to ISO format
+                date_str = result.stdout.strip()
+                dt = datetime.fromisoformat(
+                    date_str.replace(" ", "T").replace(" +", "+")
+                )
+                return dt.isoformat()
+            return datetime.now().isoformat()
+        except Exception:
+            return datetime.now().isoformat()
+
+    def _load_gitignore_patterns(self) -> pathspec.PathSpec:
+        """
+        Load gitignore patterns from the repository.
+
+        Returns:
+            A PathSpec object that can match paths against gitignore patterns
+        """
+        gitignore_path = os.path.join(self.repo_path, ".gitignore")
+        patterns = []
+
+        # If .gitignore file exists, read the patterns
+        if os.path.isfile(gitignore_path):
+            try:
+                with open(gitignore_path, encoding="utf-8") as f:
+                    patterns = f.readlines()
+            except Exception as e:
+                print(f"Warning: Could not read .gitignore file: {e}")
+
+        # Create a PathSpec object to match against gitignore patterns
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+
+    def _is_ignored(self, path: str, is_directory: Optional[bool] = None) -> bool:
+        """
+        Check if a path should be ignored according to gitignore rules.
+
+        Args:
+            path: The path to check, relative to the repository root
+            is_directory: Explicitly specify if path is a directory; if None, will check
+                filesystem
+
+        Returns:
+            True if the path should be ignored, False otherwise
+        """
+        # Always ignore common directories that shouldn't be visualized
+        always_ignore = {
+            ".git",
+            "node_modules",
+            ".venv",
+            "venv",
+            "__pycache__",
+            ".pytest_cache",
+            "build",
+            "dist",
+            ".next",
+            ".nuxt",
+            "coverage",
+            ".coverage",
+            "*.egg-info",
+            ".tox",
+            ".nox",
+            "vendor",
+            ".DS_Store",
+            "Thumbs.db",
+        }
+
+        path_parts = path.split(os.path.sep)
+        for part in path_parts:
+            if part in always_ignore:
+                return True
+            # Handle glob patterns like *.egg-info
+            for ignore_pattern in always_ignore:
+                if "*" in ignore_pattern:
+                    import fnmatch
+
+                    if fnmatch.fnmatch(part, ignore_pattern):
+                        return True
+
+        # Normalize path separator to forward slash for consistency
+        norm_path = path.replace(os.path.sep, "/")
+
+        # Determine if the path is a directory and add trailing slash if so
+        if is_directory is None:
+            is_directory = os.path.isdir(os.path.join(self.repo_path, norm_path))
+
+        if is_directory and not norm_path.endswith("/"):
+            norm_path += "/"
+
+        # 1. First check if the path itself is ignored
+        if self.gitignore_spec.match_file(norm_path):
+            return True
+
+        # 2. For a file path, also check if any parent directory is ignored
+        if not is_directory and "/" in norm_path:
+            # Check if any parent directory is ignored
+            parts = norm_path.split("/")
+            for i in range(1, len(parts)):
+                parent_dir = "/".join(parts[:i]) + "/"
+                if self.gitignore_spec.match_file(parent_dir):
+                    return True
+
+        return False
+
+    def _sanitize_git_url(self, url: str) -> str:
+        """
+        Remove credentials from git URLs to prevent token exposure.
+
+        Args:
+            url: Git URL that may contain credentials
+
+        Returns:
+            Sanitized URL without credentials
+        """
+
+        # Remove credentials from HTTPS URLs
+        # Pattern matches: https://username:token@github.com/org/repo.git
+        url = re.sub(r"https://[^@]+@([^/]+)(/.*)$", r"https://\1\2", url)
+
+        # Remove credentials from SSH URLs if any
+        # Pattern matches: ssh://user:pass@host/path
+        url = re.sub(r"ssh://[^@]+@([^/]+)(/.*)$", r"ssh://\1\2", url)
+
+        return url
+
+    def _calculate_language_stats(self) -> Dict[str, float]:
+        """Calculate language statistics based on file extensions."""
+        extension_map = {
+            "py": "Python",
+            "js": "JavaScript",
+            "ts": "TypeScript",
+            "jsx": "JavaScript",
+            "tsx": "TypeScript",
+            "html": "HTML",
+            "css": "CSS",
+            "scss": "SCSS",
+            "java": "Java",
+            "c": "C",
+            "cpp": "C++",
+            "h": "C/C++ Header",
+            "hpp": "C++ Header",
+            "go": "Go",
+            "rb": "Ruby",
+            "php": "PHP",
+            "rs": "Rust",
+            "swift": "Swift",
+            "kt": "Kotlin",
+            "md": "Markdown",
+            "json": "JSON",
+            "yml": "YAML",
+            "yaml": "YAML",
+            "xml": "XML",
+            "sh": "Shell",
+            "bat": "Batch",
+            "ps1": "PowerShell",
+        }
+
+        # Count bytes per extension
+        extension_sizes: Dict[str, int] = {}
+        total_size = 0
+
+        for root, dirs, files in os.walk(self.repo_path):
+            # Filter out gitignore directories
+            rel_root = os.path.relpath(root, self.repo_path)
+            if rel_root == ".":
+                rel_root = ""
+
+            # Filter directories in-place
+            i = 0
+            while i < len(dirs):
+                dir_name = dirs[i]
+                dir_path = os.path.join(rel_root, dir_name)
+
+                # Explicitly check as a directory
+                if self._is_ignored(dir_path, is_directory=True):
+                    dirs.pop(i)
+                else:
+                    i += 1
+
+            for file in files:
+                rel_path = os.path.join(rel_root, file)
+
+                # Skip ignored files
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                file_path = os.path.join(root, file)
+                try:
+                    # Only count regular files
+                    if not os.path.isfile(file_path):
+                        continue
+
+                    # Get file extension
+                    _, ext = os.path.splitext(file)
+                    ext = ext.lstrip(".").lower()
+
+                    # Skip files without extensions or unknown types
+                    if not ext:
+                        continue
+
+                    # Get file size
+                    size = os.path.getsize(file_path)
+                    if ext in extension_sizes:
+                        extension_sizes[ext] += size
+                    else:
+                        extension_sizes[ext] = size
+
+                    total_size += size
+                except Exception:
+                    continue
+
+        # Convert to language stats with percentages
+        language_stats: Dict[str, float] = {}
+        if total_size > 0:
+            for ext, size in extension_sizes.items():
+                language = extension_map.get(ext, ext.upper())
+                percentage = size / total_size
+                if language in language_stats:
+                    language_stats[language] += percentage
+                else:
+                    language_stats[language] = percentage
+
+        # Round percentages to 2 decimal places
+        return {lang: round(pct, 4) for lang, pct in language_stats.items()}
+
+    def _read_file_content(self, file_path: str) -> Optional[str]:
+        """Read file content, returning None if it fails."""
+        try:
+            with open(os.path.join(self.repo_path, file_path), encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return None
+
+    def _analyze_files(self) -> None:
+        """Analyze file structure and content."""
+        dir_file_map: Dict[
+            str, List[str]
+        ] = {}  # Maps directory paths to contained file IDs
+
+        coverage_data = self._load_coverage_data()
+
+        for root, dirs, file_names in os.walk(self.repo_path):
+            # Get the path relative to the repository root
+            rel_root = os.path.relpath(root, self.repo_path)
+            if rel_root == ".":
+                rel_root = ""
+
+            # Filter directories in-place to respect gitignore
+            # Use a copy of the list since we're modifying it during iteration
+            i = 0
+            while i < len(dirs):
+                dir_name = dirs[i]
+                dir_path = os.path.join(rel_root, dir_name)
+
+                # Skip hidden directories and those that match gitignore patterns
+                if dir_name.startswith(".") or self._is_ignored(
+                    dir_path, is_directory=True
+                ):
+                    dirs.pop(i)
+                else:
+                    i += 1
+
+            # Process directories that weren't filtered out
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
+                rel_path = os.path.relpath(dir_path, self.repo_path)
+
+                # Skip if somehow outside repo path
+                if rel_path.startswith(".."):
+                    continue
+
+                # Normalize path separator to forward slash
+                rel_path = rel_path.replace(os.path.sep, "/")
+
+                # Calculate directory depth
+                depth = len(rel_path.split("/")) - 1
+
+                # Create directory entry
+                dir_entry: File = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": dir_name,
+                    "type": "directory",
+                    "depth": depth,
+                    "size": 0,  # Will be updated later
+                    "components": [],
+                }
+
+                self.file_ids[rel_path] = dir_entry
+
+                # Initialize directory in map
+                dir_file_map[rel_path] = []
+
+                # Create parent directory relationship
+                parent_dir = os.path.dirname(rel_path)
+                if parent_dir and parent_dir in self.file_ids:
+                    self._add_relationship(parent_dir, rel_path, "contains")
+                    if parent_dir in dir_file_map:
+                        dir_file_map[parent_dir].append(rel_path)
+
+            # Process files
+            for file_name in file_names:
+                file_path = os.path.join(root, file_name)
+                rel_path = os.path.relpath(file_path, self.repo_path)
+
+                # Skip if somehow outside repo path
+                if rel_path.startswith(".."):
+                    continue
+
+                # Skip ignored files
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                # Normalize path separator to forward slash
+                rel_path = rel_path.replace(os.path.sep, "/")
+
+                # Calculate file depth
+                depth = len(rel_path.split("/")) - 1
+
+                # Get file size
+                try:
+                    size = os.path.getsize(file_path)
+                except OSError:
+                    size = 0
+
+                # Get coverage data
+                file_coverage = coverage_data.get(rel_path)
+
+                # Create file entry
+                file_entry: File = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": file_name,
+                    "type": "file",
+                    "depth": depth,
+                    "size": size,
+                    "components": [],
+                    "coverage": file_coverage,
+                }
+
+                self.file_ids[rel_path] = file_entry
+
+                # Add to parent directory map
+                parent_dir = os.path.dirname(rel_path)
+                if parent_dir and parent_dir in dir_file_map:
+                    dir_file_map[parent_dir].append(rel_path)
+                    self._add_relationship(parent_dir, rel_path, "contains")
+
+        # Update directory sizes
+        self._update_directory_sizes(dir_file_map)
+
+    def _update_directory_sizes(self, dir_file_map: Dict[str, List[str]]) -> None:
+        """Recursively update directory sizes based on their contents."""
+        # Sort directories by depth to process from deepest to shallowest
+        sorted_dirs = sorted(
+            [d for d in self.file_ids.values() if d["type"] == "directory"],
+            key=lambda d: d["depth"],
+            reverse=True,
+        )
+
+        for dir_entry in sorted_dirs:
+            dir_path = dir_entry["path"]
+            total_size = 0
+            if dir_path in dir_file_map:
+                for child_id in dir_file_map[dir_path]:
+                    if child_id in self.file_ids:
+                        total_size += self.file_ids[child_id]["size"]
+            dir_entry["size"] = total_size
+
+    def _extract_relationships(self) -> None:
+        """Extract relationships between files."""
+        for file_id, file_data in self.file_ids.items():
+            if file_data["type"] == "file":
+                content = self._read_file_content(file_id)
+                if content:
+                    # Extract relationships based on file type
+                    ext = file_id.split(".")[-1]
+                    if ext == "py":
+                        self._extract_python_imports(file_id, content)
+                    elif ext in ["js", "ts", "jsx", "tsx"]:
+                        self._extract_js_imports(file_id, content)
+
+    def _extract_python_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from Python files."""
+        # Regex for `from . import ...` and `import ...`
+        import_regex = re.compile(
+            r"^(?:from\s+([.\w]+)\s+)?import\s+(?:\S+|\([^)]+\))", re.MULTILINE
+        )
+        # Regex for `from ... import (...)`
+        from_import_regex = re.compile(
+            r"^from\s+([.\w]+)\s+import\s+\(([^)]+)\)", re.MULTILINE | re.DOTALL
+        )
+
+        # Handle `from .module import something`
+        for match in import_regex.finditer(content):
+            if match.group(1):
+                import_path = match.group(1)
+                level = 0
+                if import_path.startswith("."):
+                    # Count leading dots for relative imports
+                    level = len(import_path) - len(import_path.lstrip("."))
+                    import_path = import_path.lstrip(".")
+
+                if import_path:
+                    target_file = self._resolve_python_import(
+                        import_path, file_path, level
+                    )
+                    if target_file:
+                        self._add_relationship(file_path, target_file, "import")
+
+        # Handle multi-line `from ... import (a, b, c)`
+        for match in from_import_regex.finditer(content):
+            import_path = match.group(1)
+            level = 0
+            if import_path.startswith("."):
+                level = len(import_path) - len(import_path.lstrip("."))
+                import_path = import_path.lstrip(".")
+
+            if import_path:
+                target_file = self._resolve_python_import(import_path, file_path, level)
+                if target_file:
+                    self._add_relationship(file_path, target_file, "import")
+
+    def _resolve_python_import(
+        self, import_name: str, file_path: str, level: int = 0
+    ) -> Optional[str]:
+        """Resolve a Python import to a file path."""
+        # Reconstruct the absolute path of the importing file's directory
+        current_dir = os.path.dirname(os.path.join(self.repo_path, file_path))
+
+        # Handle relative imports
+        if level > 0:
+            # Move up the directory tree for each level
+            for _ in range(level - 1):
+                current_dir = os.path.dirname(current_dir)
+
+        # Convert import name to path segments
+        import_parts = import_name.split(".")
+
+        # Attempt to resolve as a .py file
+        possible_file_path = os.path.join(current_dir, *import_parts) + ".py"
+        if os.path.isfile(possible_file_path):
+            return os.path.relpath(possible_file_path, self.repo_path).replace(
+                os.path.sep, "/"
+            )
+
+        # Attempt to resolve as a package (directory with __init__.py)
+        possible_package_path = os.path.join(current_dir, *import_parts)
+        if os.path.isdir(possible_package_path):
+            init_file = os.path.join(possible_package_path, "__init__.py")
+            if os.path.isfile(init_file):
+                return os.path.relpath(init_file, self.repo_path).replace(
+                    os.path.sep, "/"
+                )
+
+        # Handle absolute imports from the repo root
+        if level == 0:
+            possible_path_from_root = os.path.join(self.repo_path, *import_parts)
+            # As a file
+            if os.path.isfile(possible_path_from_root + ".py"):
+                return os.path.relpath(
+                    possible_path_from_root + ".py", self.repo_path
+                ).replace(os.path.sep, "/")
+            # As a package
+            if os.path.isdir(possible_path_from_root):
+                init_file = os.path.join(possible_path_from_root, "__init__.py")
+                if os.path.isfile(init_file):
+                    return os.path.relpath(init_file, self.repo_path).replace(
+                        os.path.sep, "/"
+                    )
+
+        return None
+
+    def _extract_js_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from JavaScript/TypeScript files."""
+        # This is a placeholder for future relationship extraction logic
+        pass
+
+    def _analyze_history(self) -> None:
+        """Analyze git history to create commits data."""
+        try:
+            # Get git log with commit hash, author, date, and message
+            log_format = "%H%x1f%an%x1f%ad%x1f%s"
+            result = subprocess.run(
+                ["git", "log", f"--format={log_format}", "--date=iso"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            commits = []
+            for line in result.stdout.strip().split("\n"):
+                parts = line.split("\x1f")
+                if len(parts) == 4:
+                    commit_hash, author, date_str, message = parts
+                    # Parse and convert to ISO format
+                    dt = datetime.fromisoformat(
+                        date_str.replace(" ", "T").replace(" +", "+")
+                    )
+                    commits.append(
+                        {
+                            "id": commit_hash,
+                            "author": author,
+                            "date": dt.isoformat(),
+                            "message": message,
+                        }
+                    )
+            self.data["commits"] = commits
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"Warning: Could not analyze git history: {e}")
+            self.data["commits"] = []
+
+    def _add_relationship(self, source: str, target: str, rel_type: str) -> None:
+        """Add a relationship to the list, avoiding duplicates."""
+        # Ensure both source and target are in file_ids before adding
+        if source in self.file_ids and target in self.file_ids:
+            # Use a tuple to count occurrences of each unique relationship
+            rel_tuple = (source, target, rel_type)
+            if rel_tuple not in self.relationship_counts:
+                self.relationship_counts[rel_tuple] = 0
+            self.relationship_counts[rel_tuple] += 1
+
+    def _consolidate_relationships(self) -> None:
+        """Consolidate relationships from counts to the final list."""
+        self.relationships = [
+            {
+                "source": source,
+                "target": target,
+                "type": rel_type,
+                "strength": count,
+            }
+            for (source, target, rel_type), count in self.relationship_counts.items()
+        ]
+        self.data["relationships"] = self.relationships
+
+    """Analyzes a local git repository and generates visualization data."""
+
+    def __init__(
+        self,
+        repo_path: str,
+        python_coverage_path: Optional[str] = None,
+        frontend_coverage_path: Optional[str] = None,
+    ):
+        """
+        Initialize the repository analyzer.
+
+        Args:
+            repo_path: Path to the local git repository
+        """
+        self.repo_path = os.path.abspath(repo_path)
+        self.python_coverage_path = python_coverage_path
+        self.frontend_coverage_path = frontend_coverage_path
+        if not os.path.isdir(self.repo_path):
+            raise ValueError(f"Repository path does not exist: {self.repo_path}")
+
+        # Check if it's a git repo
+        git_dir = os.path.join(self.repo_path, ".git")
+        if not os.path.isdir(git_dir):
+            raise ValueError(f"Not a git repository: {self.repo_path}")
+
+        self.data = create_empty_schema()
+        self.file_ids: Dict[str, File] = {}
+        self.relationships: List[Relationship] = []
+        self.relationship_counts: Dict[Tuple[str, str, str], int] = {}
+
+        # Load gitignore patterns
+        self.gitignore_spec = self._load_gitignore_patterns()
+
+        # Cache for coverage data to avoid reparsing
+        self._coverage_cache: Optional[Dict[str, Dict[str, float]]] = None
+
+    def _load_coverage_data(self) -> Dict[str, Dict[str, float]]:
+        """Load and parse coverage data from JSON files."""
+        if self._coverage_cache is not None:
+            return self._coverage_cache
+
+        coverage_data: Dict[str, Dict[str, float]] = {}
+
+        # Load Python coverage
+        if self.python_coverage_path and os.path.exists(self.python_coverage_path):
+            try:
+                with open(self.python_coverage_path) as f:
+                    py_coverage = json.load(f)
+                    for file_path, summary in py_coverage.get("files", {}).items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": summary.get("summary", {}).get(
+                                    "percent_covered", 0
+                                )
+                                / 100.0
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse Python coverage file: {e}")
+
+        # Load frontend coverage
+        if self.frontend_coverage_path and os.path.exists(self.frontend_coverage_path):
+            try:
+                with open(self.frontend_coverage_path) as f:
+                    fe_coverage = json.load(f)
+                    for file_path, summary in fe_coverage.items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": float(summary.get("lines", {}).get("pct", 0))
+                                / 100.0,
+                                "statements": float(
+                                    summary.get("statements", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "functions": float(
+                                    summary.get("functions", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "branches": float(
+                                    summary.get("branches", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse frontend coverage file: {e}")
+
+        self._coverage_cache = coverage_data
+        return self._coverage_cache
+
+    def analyze(self) -> RepositoryData:
+        """
+        Perform the repository analysis.
+
+        Returns:
+            RepositoryData: The complete repository data structure
+        """
+        # Extract repository metadata
+        self._extract_metadata()
+
+        # Analyze file structure
+        self._analyze_files()
+
+        # Extract relationships
+        self._extract_relationships()
+
+        # Analyze git history
+        self._analyze_history()
+
+        self.data["files"] = list(self.file_ids.values())
+        self._consolidate_relationships()
+
+        return self.data
+
+    def _extract_metadata(self) -> None:
+        """Extract repository metadata."""
+        # Get repository name from the directory name
+        repo_name = os.path.basename(self.repo_path)
+
+        # Try to get description from git if available
+        description = self._get_git_description()
+
+        # Get default branch
+        default_branch = self._get_default_branch()
+
+        # Get repository creation date (first commit date)
+        created_at = self._get_first_commit_date()
+
+        # Get repository update date (last commit date)
+        updated_at = self._get_last_commit_date()
+
+        # Get language statistics
+        language_stats = self._calculate_language_stats()
+
+        # Update metadata
+        self.data["metadata"].update(
+            {
+                "repoName": repo_name,
+                "description": description,
+                "createdAt": created_at,
+                "updatedAt": updated_at,
+                "schemaVersion": "1.0.0",
+                "analysisDate": datetime.now().isoformat(),
+                "defaultBranch": default_branch,
+                "language": language_stats,
+            }
+        )
+
+    def _get_git_description(self) -> str:
+        """Get repository description from git if available."""
+        try:
+            # Try to get description from git config
+            result = subprocess.run(
+                ["git", "config", "--get", "remote.origin.url"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                git_url = result.stdout.strip()
+                # Sanitize URL to remove any embedded credentials
+                git_url = self._sanitize_git_url(git_url)
+                return f"Git repository at {git_url}"
+            return ""
+        except Exception:
+            return ""
+
+    def _get_default_branch(self) -> str:
+        """Get the default branch name."""
+        try:
+            result = subprocess.run(
+                ["git", "symbolic-ref", "--short", "HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return "main"  # Default fallback
+        except Exception:
+            return "main"  # Default fallback
+
+    def _get_first_commit_date(self) -> str:
+        """Get the date of the first commit."""
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "log",
+                    "--reverse",
+                    "--date=iso",
+                    "--format=%ad",
+                    "--max-count=1",
+                ],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse and convert to ISO format
+                date_str = result.stdout.strip()
+                dt = datetime.fromisoformat(
+                    date_str.replace(" ", "T").replace(" +", "+")
+                )
+                return dt.isoformat()
+            return datetime.now().isoformat()
+        except Exception:
+            return datetime.now().isoformat()
+
+    def _get_last_commit_date(self) -> str:
+        """Get the date of the last commit."""
+        try:
+            result = subprocess.run(
+                ["git", "log", "--date=iso", "--format=%ad", "--max-count=1"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse and convert to ISO format
+                date_str = result.stdout.strip()
+                dt = datetime.fromisoformat(
+                    date_str.replace(" ", "T").replace(" +", "+")
+                )
+                return dt.isoformat()
+            return datetime.now().isoformat()
+        except Exception:
+            return datetime.now().isoformat()
+
+    def _load_gitignore_patterns(self) -> pathspec.PathSpec:
+        """
+        Load gitignore patterns from the repository.
+
+        Returns:
+            A PathSpec object that can match paths against gitignore patterns
+        """
+        gitignore_path = os.path.join(self.repo_path, ".gitignore")
+        patterns = []
+
+        # If .gitignore file exists, read the patterns
+        if os.path.isfile(gitignore_path):
+            try:
+                with open(gitignore_path, encoding="utf-8") as f:
+                    patterns = f.readlines()
+            except Exception as e:
+                print(f"Warning: Could not read .gitignore file: {e}")
+
+        # Create a PathSpec object to match against gitignore patterns
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+
+    def _is_ignored(self, path: str, is_directory: Optional[bool] = None) -> bool:
+        """
+        Check if a path should be ignored according to gitignore rules.
+
+        Args:
+            path: The path to check, relative to the repository root
+            is_directory: Explicitly specify if path is a directory; if None, will check
+                filesystem
+
+        Returns:
+            True if the path should be ignored, False otherwise
+        """
+        # Always ignore common directories that shouldn't be visualized
+        always_ignore = {
+            ".git",
+            "node_modules",
+            ".venv",
+            "venv",
+            "__pycache__",
+            ".pytest_cache",
+            "build",
+            "dist",
+            ".next",
+            ".nuxt",
+            "coverage",
+            ".coverage",
+            "*.egg-info",
+            ".tox",
+            ".nox",
+            "vendor",
+            ".DS_Store",
+            "Thumbs.db",
+        }
+
+        path_parts = path.split(os.path.sep)
+        for part in path_parts:
+            if part in always_ignore:
+                return True
+            # Handle glob patterns like *.egg-info
+            for ignore_pattern in always_ignore:
+                if "*" in ignore_pattern:
+                    import fnmatch
+
+                    if fnmatch.fnmatch(part, ignore_pattern):
+                        return True
+
+        # Normalize path separator to forward slash for consistency
+        norm_path = path.replace(os.path.sep, "/")
+
+        # Determine if the path is a directory and add trailing slash if so
+        if is_directory is None:
+            is_directory = os.path.isdir(os.path.join(self.repo_path, norm_path))
+
+        if is_directory and not norm_path.endswith("/"):
+            norm_path += "/"
+
+        # 1. First check if the path itself is ignored
+        if self.gitignore_spec.match_file(norm_path):
+            return True
+
+        # 2. For a file path, also check if any parent directory is ignored
+        if not is_directory and "/" in norm_path:
+            # Check if any parent directory is ignored
+            parts = norm_path.split("/")
+            for i in range(1, len(parts)):
+                parent_dir = "/".join(parts[:i]) + "/"
+                if self.gitignore_spec.match_file(parent_dir):
+                    return True
+
+        return False
+
+    def _sanitize_git_url(self, url: str) -> str:
+        """
+        Remove credentials from git URLs to prevent token exposure.
+
+        Args:
+            url: Git URL that may contain credentials
+
+        Returns:
+            Sanitized URL without credentials
+        """
+
+        # Remove credentials from HTTPS URLs
+        # Pattern matches: https://username:token@github.com/org/repo.git
+        url = re.sub(r"https://[^@]+@([^/]+)(/.*)$", r"https://\1\2", url)
+
+        # Remove credentials from SSH URLs if any
+        # Pattern matches: ssh://user:pass@host/path
+        url = re.sub(r"ssh://[^@]+@([^/]+)(/.*)$", r"ssh://\1\2", url)
+
+        return url
+
+    def _calculate_language_stats(self) -> Dict[str, float]:
+        """Calculate language statistics based on file extensions."""
+        extension_map = {
+            "py": "Python",
+            "js": "JavaScript",
+            "ts": "TypeScript",
+            "jsx": "JavaScript",
+            "tsx": "TypeScript",
+            "html": "HTML",
+            "css": "CSS",
+            "scss": "SCSS",
+            "java": "Java",
+            "c": "C",
+            "cpp": "C++",
+            "h": "C/C++ Header",
+            "hpp": "C++ Header",
+            "go": "Go",
+            "rb": "Ruby",
+            "php": "PHP",
+            "rs": "Rust",
+            "swift": "Swift",
+            "kt": "Kotlin",
+            "md": "Markdown",
+            "json": "JSON",
+            "yml": "YAML",
+            "yaml": "YAML",
+            "xml": "XML",
+            "sh": "Shell",
+            "bat": "Batch",
+            "ps1": "PowerShell",
+        }
+
+        # Count bytes per extension
+        extension_sizes: Dict[str, int] = {}
+        total_size = 0
+
+        for root, dirs, files in os.walk(self.repo_path):
+            # Filter out gitignore directories
+            rel_root = os.path.relpath(root, self.repo_path)
+            if rel_root == ".":
+                rel_root = ""
+
+            # Filter directories in-place
+            i = 0
+            while i < len(dirs):
+                dir_name = dirs[i]
+                dir_path = os.path.join(rel_root, dir_name)
+
+                # Explicitly check as a directory
+                if self._is_ignored(dir_path, is_directory=True):
+                    dirs.pop(i)
+                else:
+                    i += 1
+
+            for file in files:
+                rel_path = os.path.join(rel_root, file)
+
+                # Skip ignored files
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                file_path = os.path.join(root, file)
+                try:
+                    # Only count regular files
+                    if not os.path.isfile(file_path):
+                        continue
+
+                    # Get file extension
+                    _, ext = os.path.splitext(file)
+                    ext = ext.lstrip(".").lower()
+
+                    # Skip files without extensions or unknown types
+                    if not ext:
+                        continue
+
+                    # Get file size
+                    size = os.path.getsize(file_path)
+                    if ext in extension_sizes:
+                        extension_sizes[ext] += size
+                    else:
+                        extension_sizes[ext] = size
+
+                    total_size += size
+                except Exception:
+                    continue
+
+        # Convert to language stats with percentages
+        language_stats: Dict[str, float] = {}
+        if total_size > 0:
+            for ext, size in extension_sizes.items():
+                language = extension_map.get(ext, ext.upper())
+                percentage = size / total_size
+                if language in language_stats:
+                    language_stats[language] += percentage
+                else:
+                    language_stats[language] = percentage
+
+        # Round percentages to 2 decimal places
+        return {lang: round(pct, 4) for lang, pct in language_stats.items()}
+
+    def _read_file_content(self, file_path: str) -> Optional[str]:
+        """Read file content, returning None if it fails."""
+        try:
+            with open(os.path.join(self.repo_path, file_path), encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return None
+
+    def _analyze_files(self) -> None:
+        """Analyze file structure and content."""
+        dir_file_map: Dict[
+            str, List[str]
+        ] = {}  # Maps directory paths to contained file IDs
+
+        coverage_data = self._load_coverage_data()
+
+        for root, dirs, file_names in os.walk(self.repo_path):
+            # Get the path relative to the repository root
+            rel_root = os.path.relpath(root, self.repo_path)
+            if rel_root == ".":
+                rel_root = ""
+
+            # Filter directories in-place to respect gitignore
+            # Use a copy of the list since we're modifying it during iteration
+            i = 0
+            while i < len(dirs):
+                dir_name = dirs[i]
+                dir_path = os.path.join(rel_root, dir_name)
+
+                # Skip hidden directories and those that match gitignore patterns
+                if dir_name.startswith(".") or self._is_ignored(
+                    dir_path, is_directory=True
+                ):
+                    dirs.pop(i)
+                else:
+                    i += 1
+
+            # Process directories that weren't filtered out
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
+                rel_path = os.path.relpath(dir_path, self.repo_path)
+
+                # Skip if somehow outside repo path
+                if rel_path.startswith(".."):
+                    continue
+
+                # Normalize path separator to forward slash
+                rel_path = rel_path.replace(os.path.sep, "/")
+
+                # Calculate directory depth
+                depth = len(rel_path.split("/")) - 1
+
+                # Create directory entry
+                dir_entry: File = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": dir_name,
+                    "type": "directory",
+                    "depth": depth,
+                    "size": 0,  # Will be updated later
+                    "components": [],
+                }
+
+                self.file_ids[rel_path] = dir_entry
+
+                # Initialize directory in map
+                dir_file_map[rel_path] = []
+
+                # Create parent directory relationship
+                parent_dir = os.path.dirname(rel_path)
+                if parent_dir and parent_dir in self.file_ids:
+                    self._add_relationship(parent_dir, rel_path, "contains")
+                    if parent_dir in dir_file_map:
+                        dir_file_map[parent_dir].append(rel_path)
+
+            # Process files
+            for file_name in file_names:
+                file_path = os.path.join(root, file_name)
+                rel_path = os.path.relpath(file_path, self.repo_path)
+
+                # Skip if somehow outside repo path
+                if rel_path.startswith(".."):
+                    continue
+
+                # Skip ignored files
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                # Normalize path separator to forward slash
+                rel_path = rel_path.replace(os.path.sep, "/")
+
+                # Calculate file depth
+                depth = len(rel_path.split("/")) - 1
+
+                # Get file size
+                try:
+                    size = os.path.getsize(file_path)
+                except OSError:
+                    size = 0
+
+                # Get coverage data
+                file_coverage = coverage_data.get(rel_path)
+
+                # Create file entry
+                file_entry: File = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": file_name,
+                    "type": "file",
+                    "depth": depth,
+                    "size": size,
+                    "components": [],
+                    "coverage": file_coverage,
+                }
+
+                self.file_ids[rel_path] = file_entry
+
+                # Add to parent directory map
+                parent_dir = os.path.dirname(rel_path)
+                if parent_dir and parent_dir in dir_file_map:
+                    dir_file_map[parent_dir].append(rel_path)
+                    self._add_relationship(parent_dir, rel_path, "contains")
+
+        # Update directory sizes
+        self._update_directory_sizes(dir_file_map)
+
+    def _update_directory_sizes(self, dir_file_map: Dict[str, List[str]]) -> None:
+        """Recursively update directory sizes based on their contents."""
+        # Sort directories by depth to process from deepest to shallowest
+        sorted_dirs = sorted(
+            [d for d in self.file_ids.values() if d["type"] == "directory"],
+            key=lambda d: d["depth"],
+            reverse=True,
+        )
+
+        for dir_entry in sorted_dirs:
+            dir_path = dir_entry["path"]
+            total_size = 0
+            if dir_path in dir_file_map:
+                for child_id in dir_file_map[dir_path]:
+                    if child_id in self.file_ids:
+                        total_size += self.file_ids[child_id]["size"]
+            dir_entry["size"] = total_size
+
+    def _extract_relationships(self) -> None:
+        """Extract relationships between files."""
+        for file_id, file_data in self.file_ids.items():
+            if file_data["type"] == "file":
+                content = self._read_file_content(file_id)
+                if content:
+                    # Extract relationships based on file type
+                    ext = file_id.split(".")[-1]
+                    if ext == "py":
+                        self._extract_python_imports(file_id, content)
+                    elif ext in ["js", "ts", "jsx", "tsx"]:
+                        self._extract_js_imports(file_id, content)
+
+    def _extract_python_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from Python files."""
+        # Regex for `from . import ...` and `import ...`
+        import_regex = re.compile(
+            r"^(?:from\s+([.\w]+)\s+)?import\s+(?:\S+|\([^)]+\))", re.MULTILINE
+        )
+        # Regex for `from ... import (...)`
+        from_import_regex = re.compile(
+            r"^from\s+([.\w]+)\s+import\s+\(([^)]+)\)", re.MULTILINE | re.DOTALL
+        )
+
+        # Handle `from .module import something`
+        for match in import_regex.finditer(content):
+            if match.group(1):
+                import_path = match.group(1)
+                level = 0
+                if import_path.startswith("."):
+                    # Count leading dots for relative imports
+                    level = len(import_path) - len(import_path.lstrip("."))
+                    import_path = import_path.lstrip(".")
+
+                if import_path:
+                    target_file = self._resolve_python_import(
+                        import_path, file_path, level
+                    )
+                    if target_file:
+                        self._add_relationship(file_path, target_file, "import")
+
+        # Handle multi-line `from ... import (a, b, c)`
+        for match in from_import_regex.finditer(content):
+            import_path = match.group(1)
+            level = 0
+            if import_path.startswith("."):
+                level = len(import_path) - len(import_path.lstrip("."))
+                import_path = import_path.lstrip(".")
+
+            if import_path:
+                target_file = self._resolve_python_import(import_path, file_path, level)
+                if target_file:
+                    self._add_relationship(file_path, target_file, "import")
+
+    def _resolve_python_import(
+        self, import_name: str, file_path: str, level: int = 0
+    ) -> Optional[str]:
+        """Resolve a Python import to a file path."""
+        # Reconstruct the absolute path of the importing file's directory
+        current_dir = os.path.dirname(os.path.join(self.repo_path, file_path))
+
+        # Handle relative imports
+        if level > 0:
+            # Move up the directory tree for each level
+            for _ in range(level - 1):
+                current_dir = os.path.dirname(current_dir)
+
+        # Convert import name to path segments
+        import_parts = import_name.split(".")
+
+        # Attempt to resolve as a .py file
+        possible_file_path = os.path.join(current_dir, *import_parts) + ".py"
+        if os.path.isfile(possible_file_path):
+            return os.path.relpath(possible_file_path, self.repo_path).replace(
+                os.path.sep, "/"
+            )
+
+        # Attempt to resolve as a package (directory with __init__.py)
+        possible_package_path = os.path.join(current_dir, *import_parts)
+        if os.path.isdir(possible_package_path):
+            init_file = os.path.join(possible_package_path, "__init__.py")
+            if os.path.isfile(init_file):
+                return os.path.relpath(init_file, self.repo_path).replace(
+                    os.path.sep, "/"
+                )
+
+        # Handle absolute imports from the repo root
+        if level == 0:
+            possible_path_from_root = os.path.join(self.repo_path, *import_parts)
+            # As a file
+            if os.path.isfile(possible_path_from_root + ".py"):
+                return os.path.relpath(
+                    possible_path_from_root + ".py", self.repo_path
+                ).replace(os.path.sep, "/")
+            # As a package
+            if os.path.isdir(possible_path_from_root):
+                init_file = os.path.join(possible_path_from_root, "__init__.py")
+                if os.path.isfile(init_file):
+                    return os.path.relpath(init_file, self.repo_path).replace(
+                        os.path.sep, "/"
+                    )
+
+        return None
+
+    def _extract_js_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from JavaScript/TypeScript files."""
+        # This is a placeholder for future relationship extraction logic
+        pass
+
+    def _analyze_history(self) -> None:
+        """Analyze git history to create commits data."""
+        try:
+            # Get git log with commit hash, author, date, and message
+            log_format = "%H%x1f%an%x1f%ad%x1f%s"
+            result = subprocess.run(
+                ["git", "log", f"--format={log_format}", "--date=iso"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            commits = []
+            for line in result.stdout.strip().split("\n"):
+                parts = line.split("\x1f")
+                if len(parts) == 4:
+                    commit_hash, author, date_str, message = parts
+                    # Parse and convert to ISO format
+                    dt = datetime.fromisoformat(
+                        date_str.replace(" ", "T").replace(" +", "+")
+                    )
+                    commits.append(
+                        {
+                            "id": commit_hash,
+                            "author": author,
+                            "date": dt.isoformat(),
+                            "message": message,
+                        }
+                    )
+            self.data["commits"] = commits
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"Warning: Could not analyze git history: {e}")
+            self.data["commits"] = []
+
+    def _add_relationship(self, source: str, target: str, rel_type: str) -> None:
+        """Add a relationship to the list, avoiding duplicates."""
+        # Ensure both source and target are in file_ids before adding
+        if source in self.file_ids and target in self.file_ids:
+            # Use a tuple to count occurrences of each unique relationship
+            rel_tuple = (source, target, rel_type)
+            if rel_tuple not in self.relationship_counts:
+                self.relationship_counts[rel_tuple] = 0
+            self.relationship_counts[rel_tuple] += 1
+
+    def _consolidate_relationships(self) -> None:
+        """Consolidate relationships from counts to the final list."""
+        self.relationships = [
+            {
+                "source": source,
+                "target": target,
+                "type": rel_type,
+                "strength": count,
+            }
+            for (source, target, rel_type), count in self.relationship_counts.items()
+        ]
+        self.data["relationships"] = self.relationships
+        """
+        Initialize the repository analyzer.
+
+        Args:
+            repo_path: Path to the local git repository
+        """
+        self.repo_path = os.path.abspath(repo_path)
+        self.python_coverage_path = python_coverage_path
+        self.frontend_coverage_path = frontend_coverage_path
+        if not os.path.isdir(self.repo_path):
+            raise ValueError(f"Repository path does not exist: {self.repo_path}")
+
+        # Check if it's a git repo
+        git_dir = os.path.join(self.repo_path, ".git")
+        if not os.path.isdir(git_dir):
+            raise ValueError(f"Not a git repository: {self.repo_path}")
+
+        self.data = create_empty_schema()
+        self.file_ids: Dict[str, File] = {}
+        self.relationships: List[Relationship] = []
+        self.relationship_counts: Dict[Tuple[str, str, str], int] = {}
+
+        # Load gitignore patterns
+        self.gitignore_spec = self._load_gitignore_patterns()
+
+        # Cache for coverage data to avoid reparsing
+        self._coverage_cache: Optional[Dict[str, Dict[str, float]]] = None
+
+    def _load_coverage_data(self) -> Dict[str, Dict[str, float]]:
+        """Load and parse coverage data from JSON files."""
+        if self._coverage_cache is not None:
+            return self._coverage_cache
+
+        coverage_data: Dict[str, Dict[str, float]] = {}
+
+        # Load Python coverage
+        if self.python_coverage_path and os.path.exists(self.python_coverage_path):
+            try:
+                with open(self.python_coverage_path) as f:
+                    py_coverage = json.load(f)
+                    for file_path, summary in py_coverage.get("files", {}).items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": summary.get("summary", {}).get(
+                                    "percent_covered", 0
+                                )
+                                / 100.0
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse Python coverage file: {e}")
+
+        # Load frontend coverage
+        if self.frontend_coverage_path and os.path.exists(self.frontend_coverage_path):
+            try:
+                with open(self.frontend_coverage_path) as f:
+                    fe_coverage = json.load(f)
+                    for file_path, summary in fe_coverage.items():
+                        abs_path = (
+                            file_path
+                            if os.path.isabs(file_path)
+                            else os.path.join(self.repo_path, file_path)
+                        )
+                        rel_path = os.path.relpath(abs_path, self.repo_path).replace(
+                            os.path.sep, "/"
+                        )
+                        coverage_data.setdefault(rel_path, {}).update(
+                            {
+                                "lines": float(summary.get("lines", {}).get("pct", 0))
+                                / 100.0,
+                                "statements": float(
+                                    summary.get("statements", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "functions": float(
+                                    summary.get("functions", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                                "branches": float(
+                                    summary.get("branches", {}).get("pct", 0)
+                                )
+                                / 100.0,
+                            }
+                        )
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Warning: Could not parse frontend coverage file: {e}")
+
+        self._coverage_cache = coverage_data
+        return self._coverage_cache
+
+    def analyze(self) -> RepositoryData:
+        """
+        Perform the repository analysis.
+
+        Returns:
+            RepositoryData: The complete repository data structure
+        """
+        # Extract repository metadata
+        self._extract_metadata()
+
+        # Analyze file structure
+        self._analyze_files()
+
+        # Extract relationships
+        self._extract_relationships()
+
+        # Analyze git history
+        self._analyze_history()
+
+        self.data["files"] = list(self.file_ids.values())
+        self._consolidate_relationships()
+
+        return self.data
+
+    def _extract_metadata(self) -> None:
+        """Extract repository metadata."""
+        # Get repository name from the directory name
+        repo_name = os.path.basename(self.repo_path)
+
+        # Try to get description from git if available
+        description = self._get_git_description()
+
+        # Get default branch
+        default_branch = self._get_default_branch()
+
+        # Get repository creation date (first commit date)
+        created_at = self._get_first_commit_date()
+
+        # Get repository update date (last commit date)
+        updated_at = self._get_last_commit_date()
+
+        # Get language statistics
+        language_stats = self._calculate_language_stats()
+
+        # Update metadata
+        self.data["metadata"].update(
+            {
+                "repoName": repo_name,
+                "description": description,
+                "createdAt": created_at,
+                "updatedAt": updated_at,
+                "schemaVersion": "1.0.0",
+                "analysisDate": datetime.now().isoformat(),
+                "defaultBranch": default_branch,
+                "language": language_stats,
+            }
+        )
+
+    def _get_git_description(self) -> str:
+        """Get repository description from git if available."""
+        try:
+            # Try to get description from git config
+            result = subprocess.run(
+                ["git", "config", "--get", "remote.origin.url"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                git_url = result.stdout.strip()
+                # Sanitize URL to remove any embedded credentials
+                git_url = self._sanitize_git_url(git_url)
+                return f"Git repository at {git_url}"
+            return ""
+        except Exception:
+            return ""
+
+    def _get_default_branch(self) -> str:
+        """Get the default branch name."""
+        try:
+            result = subprocess.run(
+                ["git", "symbolic-ref", "--short", "HEAD"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return "main"  # Default fallback
+        except Exception:
+            return "main"  # Default fallback
+
+    def _get_first_commit_date(self) -> str:
+        """Get the date of the first commit."""
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "log",
+                    "--reverse",
+                    "--date=iso",
+                    "--format=%ad",
+                    "--max-count=1",
+                ],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse and convert to ISO format
+                date_str = result.stdout.strip()
+                dt = datetime.fromisoformat(
+                    date_str.replace(" ", "T").replace(" +", "+")
+                )
+                return dt.isoformat()
+            return datetime.now().isoformat()
+        except Exception:
+            return datetime.now().isoformat()
+
+    def _get_last_commit_date(self) -> str:
+        """Get the date of the last commit."""
+        try:
+            result = subprocess.run(
+                ["git", "log", "--date=iso", "--format=%ad", "--max-count=1"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse and convert to ISO format
+                date_str = result.stdout.strip()
+                dt = datetime.fromisoformat(
+                    date_str.replace(" ", "T").replace(" +", "+")
+                )
+                return dt.isoformat()
+            return datetime.now().isoformat()
+        except Exception:
+            return datetime.now().isoformat()
+
+    def _load_gitignore_patterns(self) -> pathspec.PathSpec:
+        """
+        Load gitignore patterns from the repository.
+
+        Returns:
+            A PathSpec object that can match paths against gitignore patterns
+        """
+        gitignore_path = os.path.join(self.repo_path, ".gitignore")
+        patterns = []
+
+        # If .gitignore file exists, read the patterns
+        if os.path.isfile(gitignore_path):
+            try:
+                with open(gitignore_path, encoding="utf-8") as f:
+                    patterns = f.readlines()
+            except Exception as e:
+                print(f"Warning: Could not read .gitignore file: {e}")
+
+        # Create a PathSpec object to match against gitignore patterns
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+
+    def _is_ignored(self, path: str, is_directory: Optional[bool] = None) -> bool:
+        """
+        Check if a path should be ignored according to gitignore rules.
+
+        Args:
+            path: The path to check, relative to the repository root
+            is_directory: Explicitly specify if path is a directory; if None, will check
+                filesystem
+
+        Returns:
+            True if the path should be ignored, False otherwise
+        """
+        # Always ignore common directories that shouldn't be visualized
+        always_ignore = {
+            ".git",
+            "node_modules",
+            ".venv",
+            "venv",
+            "__pycache__",
+            ".pytest_cache",
+            "build",
+            "dist",
+            ".next",
+            ".nuxt",
+            "coverage",
+            ".coverage",
+            "*.egg-info",
+            ".tox",
+            ".nox",
+            "vendor",
+            ".DS_Store",
+            "Thumbs.db",
+        }
+
+        path_parts = path.split(os.path.sep)
+        for part in path_parts:
+            if part in always_ignore:
+                return True
+            # Handle glob patterns like *.egg-info
+            for ignore_pattern in always_ignore:
+                if "*" in ignore_pattern:
+                    import fnmatch
+
+                    if fnmatch.fnmatch(part, ignore_pattern):
+                        return True
+
+        # Normalize path separator to forward slash for consistency
+        norm_path = path.replace(os.path.sep, "/")
+
+        # Determine if the path is a directory and add trailing slash if so
+        if is_directory is None:
+            is_directory = os.path.isdir(os.path.join(self.repo_path, norm_path))
+
+        if is_directory and not norm_path.endswith("/"):
+            norm_path += "/"
+
+        # 1. First check if the path itself is ignored
+        if self.gitignore_spec.match_file(norm_path):
+            return True
+
+        # 2. For a file path, also check if any parent directory is ignored
+        if not is_directory and "/" in norm_path:
+            # Check if any parent directory is ignored
+            parts = norm_path.split("/")
+            for i in range(1, len(parts)):
+                parent_dir = "/".join(parts[:i]) + "/"
+                if self.gitignore_spec.match_file(parent_dir):
+                    return True
+
+        return False
+
+    def _sanitize_git_url(self, url: str) -> str:
+        """
+        Remove credentials from git URLs to prevent token exposure.
+
+        Args:
+            url: Git URL that may contain credentials
+
+        Returns:
+            Sanitized URL without credentials
+        """
+
+        # Remove credentials from HTTPS URLs
+        # Pattern matches: https://username:token@github.com/org/repo.git
+        url = re.sub(r"https://[^@]+@([^/]+)(/.*)$", r"https://\1\2", url)
+
+        # Remove credentials from SSH URLs if any
+        # Pattern matches: ssh://user:pass@host/path
+        url = re.sub(r"ssh://[^@]+@([^/]+)(/.*)$", r"ssh://\1\2", url)
+
+        return url
+
+    def _read_file_content(self, file_path: str) -> Optional[str]:
+        """Read file content, returning None if it fails."""
+        try:
+            with open(os.path.join(self.repo_path, file_path), encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return None
+
+    def _calculate_language_stats(self) -> Dict[str, float]:
+        """Calculate language statistics based on file extensions."""
+        extension_map = {
+            "py": "Python",
+            "js": "JavaScript",
+            "ts": "TypeScript",
+            "jsx": "JavaScript",
+            "tsx": "TypeScript",
+            "html": "HTML",
+            "css": "CSS",
+            "scss": "SCSS",
+            "java": "Java",
+            "c": "C",
+            "cpp": "C++",
+            "h": "C/C++ Header",
+            "hpp": "C++ Header",
+            "go": "Go",
+            "rb": "Ruby",
+            "php": "PHP",
+            "rs": "Rust",
+            "swift": "Swift",
+            "kt": "Kotlin",
+            "md": "Markdown",
+            "json": "JSON",
+            "yml": "YAML",
+            "yaml": "YAML",
+            "xml": "XML",
+            "sh": "Shell",
+            "bat": "Batch",
+            "ps1": "PowerShell",
+        }
+
+        # Count bytes per extension
+        extension_sizes: Dict[str, int] = {}
+        total_size = 0
+
+        for root, dirs, files in os.walk(self.repo_path):
+            # Filter out gitignore directories
+            rel_root = os.path.relpath(root, self.repo_path)
+            if rel_root == ".":
+                rel_root = ""
+
+            # Filter directories in-place
+            i = 0
+            while i < len(dirs):
+                dir_name = dirs[i]
+                dir_path = os.path.join(rel_root, dir_name)
+
+                # Explicitly check as a directory
+                if self._is_ignored(dir_path, is_directory=True):
+                    dirs.pop(i)
+                else:
+                    i += 1
+
+            for file in files:
+                rel_path = os.path.join(rel_root, file)
+
+                # Skip ignored files
+                if self._is_ignored(rel_path, is_directory=False):
+                    continue
+
+                file_path = os.path.join(root, file)
+                try:
+                    # Only count regular files
+                    if not os.path.isfile(file_path):
+                        continue
+
+                    # Get file extension
+                    _, ext = os.path.splitext(file)
+                    ext = ext.lstrip(".").lower()
+
+                    # Skip files without extensions or unknown types
+                    if not ext:
+                        continue
+
+                    # Get file size
+                    size = os.path.getsize(file_path)
+                    if ext in extension_sizes:
+                        extension_sizes[ext] += size
+                    else:
+                        extension_sizes[ext] = size
+
+                    total_size += size
+                except Exception:
+                    continue
+
+        # Convert to language stats with percentages
+        language_stats: Dict[str, float] = {}
+        if total_size > 0:
+            for ext, size in extension_sizes.items():
+                language = extension_map.get(ext, ext.upper())
+                percentage = size / total_size
+                if language in language_stats:
+                    language_stats[language] += percentage
+                else:
+                    language_stats[language] = percentage
+
+        # Round percentages to 2 decimal places
+        return {lang: round(pct, 4) for lang, pct in language_stats.items()}
+
+    def _read_file_content(self, file_path: str) -> Optional[str]:
+        """Read file content, returning None if it fails."""
+        try:
+            with open(os.path.join(self.repo_path, file_path), encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return None
+
+    def _analyze_files(self) -> None:
+        """Analyze file structure and content."""
+        dir_file_map: Dict[
+            str, List[str]
+        ] = {}  # Maps directory paths to contained file IDs
+
+        coverage_data = self._load_coverage_data()
+
+        for root, dirs, file_names in os.walk(self.repo_path):
+            # Get the path relative to the repository root
+            rel_root = os.path.relpath(root, self.repo_path)
+            if rel_root == ".":
+                rel_root = ""
+
+            # Filter directories in-place to respect gitignore
+            # Use a copy of the list since we're modifying it during iteration
+            i = 0
+            while i < len(dirs):
+                dir_name = dirs[i]
+                dir_path = os.path.join(rel_root, dir_name)
+
+                # Skip hidden directories and those that match gitignore patterns
+                if dir_name.startswith(".") or self._is_ignored(
+                    dir_path, is_directory=True
+                ):
+                    dirs.pop(i)
+                else:
+                    i += 1
+
+            # Process directories that weren't filtered out
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
+                rel_path = os.path.relpath(dir_path, self.repo_path)
+
+                # Skip if somehow outside repo path
+                if rel_path.startswith(".."):
+                    continue
+
+                # Normalize path separator to forward slash
+                rel_path = rel_path.replace(os.path.sep, "/")
+
+                # Calculate directory depth
+                depth = len(rel_path.split("/")) - 1
+
+                # Create directory entry
+                dir_entry: File = {
+                    "id": rel_path,
+                    "path": rel_path,
+                    "name": dir_name,
+                    "type": "directory",
+                    "depth": depth,
+                    "size": 0,  # Will be updated later
+                    "components": [],
+                }
+
+                self.file_ids[rel_path] = dir_entry
+
+                # Initialize directory in map
+                dir_file_map[rel_path] = []
+
+                # Create parent directory relationship
+                parent_dir = os.path.dirname(rel_path)
+                if parent_dir and parent_dir in self.file_ids:
+                    self._add_relationship(parent_dir, rel_path, "contains")
                     if parent_dir in dir_file_map:
                         dir_file_map[parent_dir].append(rel_path)
 
@@ -508,1870 +3665,453 @@ class RepositoryAnalyzer:
                 if self._is_ignored(rel_path, is_directory=False):
                     continue
 
-                file_path = os.path.join(root, file_name)
-
-                # Skip if somehow outside repo path
-                if rel_path.startswith(".."):
-                    continue
-
-                # Normalize path separator to forward slash
+                # Normalize path separator
                 rel_path = rel_path.replace(os.path.sep, "/")
-
-                # Calculate file depth
-                depth = len(os.path.dirname(rel_path).split("/"))
-                if os.path.dirname(rel_path) == "":
-                    depth = 0
 
                 # Get file extension
                 _, ext = os.path.splitext(file_name)
-                ext = ext.lstrip(".")
+                ext = ext.lstrip(".").lower()
 
                 # Get file size
                 try:
-                    size = os.path.getsize(file_path)
-                except Exception:
-                    size = 0
+                    size = os.path.getsize(os.path.join(root, file_name))
+                except OSError:
+                    continue
 
-                # Get file creation and modification times
-                try:
-                    created = datetime.fromtimestamp(
-                        os.path.getctime(file_path)
-                    ).isoformat()
-                    updated = datetime.fromtimestamp(
-                        os.path.getmtime(file_path)
-                    ).isoformat()
-                except Exception:
-                    created = None
-                    updated = None
-
-                # Extract components and metrics based on file type
-                components, metrics = self._analyze_file_content(
-                    file_path, rel_path, ext
-                )
-
-                # Extract git history data for this file
-                git_metrics = self._extract_file_git_metrics(rel_path)
-                if git_metrics:
-                    if not metrics:
-                        metrics = {}
-                    metrics.update(git_metrics)
+                # Calculate file depth
+                depth = len(rel_path.split("/")) - 1
 
                 # Create file entry
                 file_entry: File = {
                     "id": rel_path,
                     "path": rel_path,
                     "name": file_name,
-                    "extension": ext if ext else None,
-                    "size": size,
                     "type": "file",
+                    "extension": ext,
+                    "size": size,
                     "depth": depth,
-                    "components": components,
+                    "components": [],
                 }
 
-                if created:
-                    file_entry["createdAt"] = created
-                if updated:
-                    file_entry["updatedAt"] = updated
-                if metrics:
-                    file_entry["metrics"] = metrics
+                # Add test coverage if available
+                file_coverage = coverage_data.get(rel_path)
+                if file_coverage:
+                    if file_entry.get("metrics") is None:
+                        file_entry["metrics"] = {}
 
-                files.append(file_entry)
-                self.file_ids.add(rel_path)
+                    metrics = file_entry.get("metrics")
+                    if metrics:
+                        metrics["testCoverage"] = file_coverage
 
-                # Create relationship with parent directory
+                # Analyze file content for components and relationships
+                try:
+                    with open(os.path.join(root, file_name), encoding="utf-8") as f:
+                        content = f.read()
+                    self._analyze_file_content(content, file_entry)
+                    self._extract_file_relationships(content, rel_path, ext)
+                except Exception as e:
+                    print(f"Warning: Could not analyze file {rel_path}: {e}")
+
+                self.file_ids[rel_path] = file_entry
+
+                # Add to parent directory map
                 parent_dir = os.path.dirname(rel_path)
-                if parent_dir:
-                    # Ensure parent_dir exists as an entry
-                    if parent_dir not in self.file_ids:
-                        # Create missing directory entries
-                        # (this can happen with nested directories)
-                        parts = parent_dir.split("/")
-                        current_path = ""
-                        for i, part in enumerate(parts):
-                            current_path = (
-                                current_path + part
-                                if i == 0
-                                else f"{current_path}/{part}"
-                            )
-                            if current_path not in self.file_ids:
-                                dir_depth = i
-                                dir_entry = {
-                                    "id": current_path,
-                                    "path": current_path,
-                                    "name": part,
-                                    "type": "directory",
-                                    "depth": dir_depth,
-                                    "size": 0,
-                                    "components": [],
-                                }
-                                files.append(dir_entry)
-                                self.file_ids.add(current_path)
-                                dir_file_map[current_path] = []
-
-                                # Create relationship with parent
-                                if i > 0:
-                                    parent_path = "/".join(parts[:i])
-                                    if parent_path in self.file_ids:
-                                        self.relationships.append(
-                                            {
-                                                "source": parent_path,
-                                                "target": current_path,
-                                                "type": "contains",
-                                            }
-                                        )
-                                        if parent_path in dir_file_map:
-                                            dir_file_map[parent_path].append(
-                                                current_path
-                                            )
-
-                    # Create contains relationship
-                    self.relationships.append(
-                        {
-                            "source": parent_dir,
-                            "target": rel_path,
-                            "type": "contains",
-                        }
-                    )
-                    if parent_dir in dir_file_map:
-                        dir_file_map[parent_dir].append(rel_path)
-
-                # Add file-component relationships
-                for component in components:
-                    self.relationships.append(
-                        {
-                            "source": rel_path,
-                            "target": component["id"],
-                            "type": "contains",
-                        }
-                    )
-
-                    # Add component-to-component relationships (for methods in a class)
-                    for method in component.get("components", []):
-                        self.relationships.append(
-                            {
-                                "source": component["id"],
-                                "target": method["id"],
-                                "type": "contains",
-                            }
-                        )
-
-        # Update file sizes for directories
-        self._update_directory_sizes(files)
-
-        # Set files in data
-        self.data["files"] = files
-
-    def _analyze_file_content(
-        self, file_path: str, rel_path: str, extension: str
-    ) -> Tuple[List[Component], Optional[Dict[str, Any]]]:
-        """
-        Analyze file content to extract components and metrics.
-
-        Args:
-            file_path: Absolute path to the file
-            rel_path: Relative path from repository root
-            extension: File extension
-
-        Returns:
-            Tuple of components list and metrics dictionary
-        """
-        components: List[Component] = []
-        metrics: Dict[str, Any] = {}
-
-        # Skip binary files and files that are too large
-        try:
-            if (
-                not self._is_text_file(file_path)
-                or os.path.getsize(file_path) > 1024 * 1024
-            ):
-                return components, None
-
-            with open(file_path, encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-                lines = content.split("\n")
-
-                # Calculate basic metrics
-                metrics["linesOfCode"] = len(lines)
-                metrics["emptyLines"] = len(
-                    [line for line in lines if not line.strip()]
-                )
-
-                # Extract components based on file type
-                if extension == "py":
-                    components, metrics = self._analyze_python_file(
-                        content, rel_path, metrics
-                    )
-                elif extension in ("js", "ts", "jsx", "tsx"):
-                    components, metrics = self._analyze_js_file(
-                        content, rel_path, metrics
-                    )
-
-                # Extract imports and add relationships
-                self._extract_file_relationships(content, rel_path, extension)
-
-                # Add coverage data if available
-                coverage_ratio = self._get_file_coverage(rel_path)
-                if coverage_ratio is not None:
-                    metrics["testCoverageRatio"] = coverage_ratio
-
-                return components, metrics
-        except Exception as e:
-            print(f"Error analyzing file {rel_path}: {e}")
-            return components, None
-
-    def _is_text_file(self, file_path: str) -> bool:
-        """Check if a file is a text file by looking at the first 1024 bytes."""
-        try:
-            with open(file_path, "rb") as f:
-                chunk = f.read(1024)
-                return b"\0" not in chunk
-        except Exception:
-            return False
-
-    def _analyze_python_file(
-        self, content: str, file_path: str, metrics: Dict[str, Any]
-    ) -> Tuple[List[Component], Dict[str, Any]]:
-        """
-        Analyze Python file to extract classes and functions.
-
-        Args:
-            content: File content
-            file_path: Relative file path
-            metrics: Existing metrics dictionary
-
-        Returns:
-            Tuple of components list and updated metrics
-        """
-        components: List[Component] = []
-
-        # Count comment lines
-        comment_lines = 0
-        for line in content.split("\n"):
-            line = line.strip()
-            if line.startswith("#"):
-                comment_lines += 1
-            elif '"""' in line or "'''" in line:
-                # Simple heuristic for docstrings, not perfect
-                comment_lines += 1
-
-        metrics["commentLines"] = comment_lines
-
-        # Count top-level identifiers (classes, functions, variables)
-        top_level_count = 0
-
-        # Extract classes using regex
-        class_pattern = r"class\s+(\w+)(?:\(.*\))?:"
-        class_matches = re.finditer(class_pattern, content)
-        class_count = 0
-
-        for class_match in class_matches:
-            class_name = class_match.group(1)
-            class_start = content[: class_match.start()].count("\n") + 1
-
-            # Find class end by indentation
-            lines = content.split("\n")
-            class_end = class_start
-            for i in range(class_start, len(lines)):
-                if (
-                    i + 1 < len(lines)
-                    and lines[i + 1].strip()
-                    and not lines[i + 1].startswith(" ")
-                ):
-                    class_end = i + 1
-                    break
-                class_end = i + 1
-
-            # Create class component
-            class_component: Component = {
-                "id": f"{file_path}:{class_name}",
-                "name": class_name,
-                "type": "class",
-                "lineStart": class_start,
-                "lineEnd": class_end,
-                "components": [],
-            }
-
-            class_count += 1
-
-            # Extract methods within class
-            method_pattern = r"    def\s+(\w+)\s*\("
-            class_content = "\n".join(lines[class_start - 1 : class_end])
-            method_matches = re.finditer(method_pattern, class_content)
-
-            for method_match in method_matches:
-                method_name = method_match.group(1)
-                method_start = class_start + class_content[
-                    : method_match.start()
-                ].count("\n")
-
-                # Find method end by indentation
-                method_end = method_start
-                for i in range(method_start, class_end):
-                    if (
-                        i + 1 < len(lines)
-                        and lines[i + 1].strip()
-                        and not lines[i + 1].startswith("        ")
-                    ):
-                        method_end = i + 1
-                        break
-                    method_end = i + 1
-
-                # Create method component
-                method_component: Component = {
-                    "id": f"{file_path}:{class_name}.{method_name}",
-                    "name": method_name,
-                    "type": "method",
-                    "lineStart": method_start,
-                    "lineEnd": method_end,
-                    "components": [],
-                }
-
-                class_component["components"].append(method_component)
-
-            components.append(class_component)
-
-        # Extract top-level functions
-        function_pattern = r"^def\s+(\w+)\s*\("
-        function_matches = re.finditer(function_pattern, content, re.MULTILINE)
-        function_count = 0
-
-        for func_match in function_matches:
-            func_name = func_match.group(1)
-            func_start = content[: func_match.start()].count("\n") + 1
-
-            # Find function end by indentation
-            lines = content.split("\n")
-            func_end = func_start
-            for i in range(func_start, len(lines)):
-                if (
-                    i + 1 < len(lines)
-                    and lines[i + 1].strip()
-                    and not lines[i + 1].startswith(" ")
-                ):
-                    func_end = i + 1
-                    break
-                func_end = i + 1
-
-            # Create function component
-            func_component: Component = {
-                "id": f"{file_path}:{func_name}",
-                "name": func_name,
-                "type": "function",
-                "lineStart": func_start,
-                "lineEnd": func_end,
-                "components": [],
-            }
-
-            components.append(func_component)
-            function_count += 1
-
-        # Count top-level variables (simplified heuristic)
-        variable_pattern = r"^(\w+)\s*="
-        variable_matches = re.finditer(variable_pattern, content, re.MULTILINE)
-        variable_count = 0
-
-        for var_match in variable_matches:
-            var_name = var_match.group(1)
-            # Skip if it's inside a function or class (basic check)
-            line_start = content[: var_match.start()].count("\n") + 1
-            lines = content.split("\n")
-            if line_start > 0 and line_start <= len(lines):
-                line = lines[line_start - 1]
-                if not line.startswith(" ") and not line.startswith("\t"):
-                    # Skip common non-variable assignments
-                    if var_name not in [
-                        "if",
-                        "for",
-                        "while",
-                        "try",
-                        "except",
-                        "finally",
-                        "with",
-                        "import",
-                        "from",
-                    ]:
-                        variable_count += 1
-
-        # Total top-level identifiers
-        top_level_count = class_count + function_count + variable_count
-        metrics["topLevelIdentifiers"] = top_level_count
-
-        return components, metrics
-
-    def _analyze_js_file(
-        self, content: str, file_path: str, metrics: Dict[str, Any]
-    ) -> Tuple[List[Component], Dict[str, Any]]:
-        """
-        Analyze JavaScript/TypeScript file to extract classes and functions.
-
-        Args:
-            content: File content
-            file_path: Relative file path
-            metrics: Existing metrics dictionary
-
-        Returns:
-            Tuple of components list and updated metrics
-        """
-        components: List[Component] = []
-
-        # Count comment lines
-        comment_lines = 0
-        for line in content.split("\n"):
-            line = line.strip()
-            if line.startswith("//"):
-                comment_lines += 1
-            elif "/*" in line or "*/" in line:
-                # Simple heuristic for block comments, not perfect
-                comment_lines += 1
-
-        metrics["commentLines"] = comment_lines
-
-        # Count top-level identifiers (classes, functions, variables)
-        top_level_count = 0
-
-        # Extract classes using regex (simplified)
-        class_pattern = (
-            r"class\s+(\w+)(?:\s+extends\s+\w+)?(?:\s+implements\s+\w+)?\s*\{"
-        )
-        class_matches = re.finditer(class_pattern, content)
-        class_count = 0
-
-        for class_match in class_matches:
-            class_name = class_match.group(1)
-            class_start = content[: class_match.start()].count("\n") + 1
-
-            # Find class end (this is simplified and may not handle nested classes well)
-            class_content = content[class_match.start() :]
-            open_braces = 0
-            for i, char in enumerate(class_content):
-                if char == "{":
-                    open_braces += 1
-                elif char == "}":
-                    open_braces -= 1
-                    if open_braces == 0:
-                        class_end = class_start + class_content[:i].count("\n")
-                        break
-            else:
-                class_end = content.count("\n") + 1
-
-            # Create class component
-            class_component: Component = {
-                "id": f"{file_path}:{class_name}",
-                "name": class_name,
-                "type": "class",
-                "lineStart": class_start,
-                "lineEnd": class_end,
-                "components": [],
-            }
-
-            components.append(class_component)
-            class_count += 1
-
-        # Extract functions (simplified)
-        function_patterns = [
-            r"function\s+(\w+)\s*\(",  # regular functions
-            r"const\s+(\w+)\s*=\s*function",  # function expressions
-            r"const\s+(\w+)\s*=\s*\(",  # arrow functions
-        ]
-        function_count = 0
-
-        for pattern in function_patterns:
-            func_matches = re.finditer(pattern, content)
-            for func_match in func_matches:
-                func_name = func_match.group(1)
-                func_start = content[: func_match.start()].count("\n") + 1
-
-                # Find function end (simplified)
-                func_content = content[func_match.start() :]
-                open_braces = 0
-                for i, char in enumerate(func_content):
-                    if char == "{":
-                        open_braces += 1
-                    elif char == "}":
-                        open_braces -= 1
-                        if open_braces == 0:
-                            func_end = func_start + func_content[:i].count("\n")
-                            break
-                else:
-                    func_end = func_start + 10  # Arbitrary fallback
-
-                # Create function component
-                func_component: Component = {
-                    "id": f"{file_path}:{func_name}",
-                    "name": func_name,
-                    "type": "function",
-                    "lineStart": func_start,
-                    "lineEnd": func_end,
-                    "components": [],
-                }
-
-                components.append(func_component)
-                function_count += 1
-
-        # Count top-level variables/constants (simplified heuristic)
-        variable_patterns = [
-            r"^const\s+(\w+)\s*=",  # const declarations
-            r"^let\s+(\w+)\s*=",  # let declarations
-            r"^var\s+(\w+)\s*=",  # var declarations
-        ]
-        variable_count = 0
-
-        for pattern in variable_patterns:
-            var_matches = re.finditer(pattern, content, re.MULTILINE)
-            for var_match in var_matches:
-                # Skip if it's a function (already counted)
-                if not any(
-                    func_pattern in content[var_match.start() : var_match.end() + 50]
-                    for func_pattern in ["function", "=>"]
-                ):
-                    variable_count += 1
-
-        # Count export statements (additional top-level identifiers)
-        export_pattern = (
-            r"^export\s+(?:default\s+)?(?:class|function|const|let|var)\s+(\w+)"
-        )
-        export_matches = re.finditer(export_pattern, content, re.MULTILINE)
-        export_count = len(list(export_matches))
-
-        # Total top-level identifiers
-        top_level_count = class_count + function_count + variable_count + export_count
-        metrics["topLevelIdentifiers"] = top_level_count
-
-        return components, metrics
+                if parent_dir and parent_dir in dir_file_map:
+                    dir_file_map[parent_dir].append(rel_path)
+                    self._add_relationship(parent_dir, rel_path, "contains")
+
+    def _analyze_file_content(self, content: str, file_info: File) -> None:
+        """Analyze file content to extract components and metrics."""
+        lines = content.splitlines()
+        metrics = {
+            "linesOfCode": len(lines),
+            "emptyLines": lines.count(""),
+            "commentLines": sum(
+                1
+                for line in lines
+                if line.strip().startswith(("#", "//", "/*", "*", "*/"))
+            ),
+        }
+        if file_info.get("metrics") is None:
+            file_info["metrics"] = {}
+
+        # We know that metrics is not None here
+        file_metrics = cast(Dict, file_info["metrics"])
+        file_metrics.update(metrics)
+
+        if file_info["extension"] == "py":
+            components, _ = self._analyze_python_file(
+                content, file_info["path"], file_metrics
+            )
+            file_info["components"] = components
+        elif file_info["extension"] in ("js", "ts", "jsx", "tsx"):
+            components, _ = self._analyze_js_file(
+                content, file_info["path"], file_metrics
+            )
+            file_info["components"] = components
 
     def _extract_file_relationships(
         self, content: str, file_path: str, extension: str
     ) -> None:
-        """
-        Extract relationships from file content.
-
-        Args:
-            content: File content
-            file_path: Relative file path
-            extension: File extension
-        """
+        """Extract relationships from a single file."""
         if extension == "py":
-            # Extract Python imports - non-overlapping patterns
-            # Process imports to avoid double-counting by using one comprehensive regex
+            self._extract_python_imports(content, file_path)
+        elif extension in ("js", "ts", "jsx", "tsx"):
+            self._extract_js_imports(content, file_path)
 
-            # Find all import statements
-            all_import_matches = []
+    def _extract_python_imports(self, file_path: str, content: str) -> None:
+        """Extract import relationships from Python files."""
+        # Regex for `from . import ...` and `import ...`
+        import_regex = re.compile(
+            r"^(?:from\s+([.\w]+)\s+)?import\s+(?:\S+|\([^)]+\))", re.MULTILINE
+        )
+        # Regex for `from ... import (...)`
+        from_import_regex = re.compile(
+            r"^from\s+([.\w]+)\s+import\s+\(([^)]+)\)", re.MULTILINE | re.DOTALL
+        )
 
-            # Standard imports: import module1, module2
-            for match in re.finditer(
-                r"^import\s+([\w\.]+(?:\s*,\s*[\w\.]+)*)\s*(?:$|#)",
-                content,
-                re.MULTILINE,
-            ):
-                modules = [m.strip() for m in match.group(1).split(",")]
-                for module in modules:
-                    all_import_matches.append((module, match.start(), match.end()))
+        # Handle `from .module import something`
+        for match in import_regex.finditer(content):
+            if match.group(1):
+                import_path = match.group(1)
+                level = 0
+                if import_path.startswith("."):
+                    # Count leading dots for relative imports
+                    level = len(import_path) - len(import_path.lstrip("."))
+                    import_path = import_path.lstrip(".")
 
-            # Import with alias: import module as alias
-            for match in re.finditer(
-                r"^import\s+([\w\.]+)\s+as\s+\w+\s*(?:$|#)", content, re.MULTILINE
-            ):
-                all_import_matches.append((match.group(1), match.start(), match.end()))
+                if import_path:
+                    target_file = self._resolve_python_import(
+                        import_path, file_path, level
+                    )
+                    if target_file:
+                        self._add_relationship(file_path, target_file, "import")
 
-            # From imports: from module import items
-            for match in re.finditer(
-                r"^from\s+([\w\.\*]+)\s+import\s+", content, re.MULTILINE
-            ):
-                all_import_matches.append((match.group(1), match.start(), match.end()))
+        # Handle multi-line `from ... import (a, b, c)`
+        for match in from_import_regex.finditer(content):
+            import_path = match.group(1)
+            level = 0
+            if import_path.startswith("."):
+                level = len(import_path) - len(import_path.lstrip("."))
+                import_path = import_path.lstrip(".")
 
-            # Process all found imports
-            processed_ranges = set()
-            for module, start, end in all_import_matches:
-                # Skip if we've already processed this range (avoid overlaps)
-                range_key = (start, end)
-                if range_key in processed_ranges:
-                    continue
-                processed_ranges.add(range_key)
+            if import_path:
+                target_file = self._resolve_python_import(import_path, file_path, level)
+                if target_file:
+                    self._add_relationship(file_path, target_file, "import")
 
-                try:
-                    # Try to resolve the import to a file in the repository
-                    import_paths = self._resolve_python_import(module, file_path)
-                    for import_path in import_paths:
-                        if import_path and import_path in self.file_ids:
-                            # Count this reference
-                            rel_key = (file_path, import_path, "import")
-                            self.relationship_counts[rel_key] = (
-                                self.relationship_counts.get(rel_key, 0) + 1
-                            )
-                except Exception as e:
-                    print(
-                        f"Error extracting Python relationships from {file_path}: {e}"
+    def _extract_relationships(self) -> None:
+        """Extract relationships between files."""
+        # This is a placeholder for future relationship extraction logic
+        pass
+
+    def _add_relationship(self, source: str, target: str, type: str) -> None:
+        """Add a relationship, handling duplicates and counting."""
+        # For undirected relationships, ensure consistent key ordering
+        if type in ("semantic_similarity", "filesystem_proximity"):
+            rel_key_tuple = (*tuple(sorted((source, target))), type)
+        else:
+            rel_key_tuple = (source, target, type)
+
+        rel_key = cast(Tuple[str, str, str], rel_key_tuple)
+
+        if rel_key in self.relationship_counts:
+            self.relationship_counts[rel_key] += 1
+        else:
+            self.relationship_counts[rel_key] = 1
+            self.relationships.append(
+                {"source": source, "target": target, "type": type}
+            )
+
+    def _consolidate_relationships(self) -> None:
+        """Consolidate relationships and add strength based on counts."""
+        consolidated: List[Relationship] = []
+        for rel in self.relationships:
+            source, target, type = rel["source"], rel["target"], rel["type"]
+            if type in ("semantic_similarity", "filesystem_proximity"):
+                rel_key_tuple = (*tuple(sorted((source, target))), type)
+            else:
+                rel_key_tuple = (source, target, type)
+
+            rel_key = cast(Tuple[str, str, str], rel_key_tuple)
+            strength = self.relationship_counts.get(rel_key, 1)
+            consolidated.append(
+                {"source": source, "target": target, "type": type, "strength": strength}
+            )
+        self.data["relationships"] = consolidated
+
+    def _analyze_history(self) -> None:
+        """Analyze git history to get commit metrics."""
+        try:
+            result = subprocess.run(
+                ["git", "log", "--name-status", "--pretty=format:commit:%H %at"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            log_output = result.stdout
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"Warning: Could not analyze git history: {e}")
+            return
+
+        current_commit_timestamp = 0
+        for line in log_output.splitlines():
+            if line.startswith("commit:"):
+                parts = line.split()
+                if len(parts) >= 3:
+                    current_commit_timestamp = int(parts[2])
+            elif line:
+                parts = line.split("\t")
+                if len(parts) >= 2:
+                    status = parts[0]
+                    file_path = parts[1]
+
+                    # Handle renamed files
+                    if status.startswith("R"):
+                        _, file_path, new_path = parts
+                        file_path = new_path
+
+                    if file_path in self.file_ids:
+                        file_info = self.file_ids[file_path]
+                        if not isinstance(file_info, dict):
+                            continue
+                        if file_info.get("metrics") is None:
+                            file_info["metrics"] = {}
+
+                        metrics = file_info.get("metrics")
+                        if metrics:
+                            metrics["lastModified"] = current_commit_timestamp
+                            metrics["commitCount"] = metrics.get("commitCount", 0) + 1
+
+    def _analyze_python_file(
+        self, content: str, file_path: str, metrics: Dict
+    ) -> Tuple[List[Dict], Dict]:
+        """Analyze Python file to extract components."""
+        components = []
+        try:
+            import ast
+
+            tree = ast.parse(content)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    components.append(
+                        {
+                            "id": f"{file_path}:{node.name}",
+                            "name": node.name,
+                            "type": "function",
+                            "lineStart": node.lineno,
+                            "lineEnd": node.end_lineno,
+                        }
+                    )
+                elif isinstance(node, ast.ClassDef):
+                    components.append(
+                        {
+                            "id": f"{file_path}:{node.name}",
+                            "name": node.name,
+                            "type": "class",
+                            "lineStart": node.lineno,
+                            "lineEnd": node.end_lineno,
+                            "components": [],
+                        }
+                    )
+        except Exception as e:
+            print(f"Warning: Could not parse Python file {file_path}: {e}")
+        return components, metrics
+
+    def _analyze_js_file(
+        self, content: str, file_path: str, metrics: Dict
+    ) -> Tuple[List[Dict], Dict]:
+        """Analyze JavaScript/TypeScript file to extract components."""
+        components = []
+        # Simplified analysis. A better solution would use a proper JS/TS parser.
+        function_patterns = [
+            r"function\s+([a-zA-Z0-9_]+)\s*\(",  # function myFunction()
+            r"const\s+([a-zA-Z0-9_]+)\s*=\s*\(",  # const myFunction = () =>
+            r"let\s+([a-zA-Z0-9_]+)\s*=\s*\(",  # let myFunction = () =>
+            r"var\s+([a-zA-Z0-9_]+)\s*=\s*\(",  # var myFunction = () =>
+        ]
+        class_pattern = r"class\s+([a-zA-Z0-9_]+)"
+
+        for i, line in enumerate(content.splitlines()):
+            for pattern in function_patterns:
+                match = re.search(pattern, line)
+                if match:
+                    components.append(
+                        {
+                            "id": f"{file_path}:{match.group(1)}",
+                            "name": match.group(1),
+                            "type": "function",
+                            "lineStart": i + 1,
+                            "lineEnd": i + 1,
+                        }
                     )
 
-            # Look for function calls between modules
-            self._extract_python_function_calls(content, file_path)
+            match = re.search(class_pattern, line)
+            if match:
+                components.append(
+                    {
+                        "id": f"{file_path}:{match.group(1)}",
+                        "name": match.group(1),
+                        "type": "class",
+                        "lineStart": i + 1,
+                        "lineEnd": i + 1,
+                        "components": [],
+                    }
+                )
+        return components, metrics
 
-        elif extension in ("js", "ts", "jsx", "tsx"):
-            # Extract JavaScript/TypeScript imports - more comprehensive patterns
-            import_patterns = [
-                # ES6 imports
-                r"import\s+(?:(?:[\w{},$\s*]+\s+from\s+)|(?:[\w*]*\s*))['\"](.+?)['\"]",
-                # Dynamic imports
-                r"import\s*\(\s*['\"](.+?)['\"]\s*\)",
-                # CommonJS requires
-                r"require\s*\(\s*['\"](.+?)['\"]\s*\)",
-                # ES6 re-exports
-                r"export\s+(?:{[\s\w,]+})?\s+from\s+['\"](.+?)['\"]",
-            ]
-
-            for pattern in import_patterns:
-                try:
-                    matches = re.finditer(pattern, content)
-                    for match in matches:
-                        module = match.group(1)
-
-                        # Try to resolve the import to a file in the repository
-                        import_path = self._resolve_js_import(module, file_path)
-                        if import_path and import_path in self.file_ids:
-                            # Count this reference
-                            rel_key = (file_path, import_path, "import")
-                            self.relationship_counts[rel_key] = (
-                                self.relationship_counts.get(rel_key, 0) + 1
-                            )
-                except Exception as e:
-                    print(f"Error extracting JS/TS relationships from {file_path}: {e}")
-
-    def _extract_python_function_calls(self, content: str, file_path: str) -> None:
-        """
-        Extract Python function calls between components.
-
-        Args:
-            content: File content
-            file_path: Relative file path
-        """
+    def _extract_python_imports(self, content: str, file_path: str) -> None:
+        """Extract import relationships from a Python file."""
         try:
-            # Get all components in this file
-            file_components = []
-            for file in self.data.get("files", []):
-                if file["id"] == file_path:
-                    file_components = file.get("components", [])
-                    break
+            import ast
 
-            # Look for local function calls
-            for component in file_components:
-                # Skip if not a function or method
-                if component["type"] in ("function", "method"):
-                    # Look for calls to other functions/methods in the same file
-                    for other_comp in file_components:
-                        if other_comp["id"] != component["id"]:
-                            other_name = other_comp["name"]
-                            # Simple check for function calls with regex
-                            call_pattern = rf"\b{other_name}\s*\("
-                            comp_start, comp_end = (
-                                component.get("lineStart", 0),
-                                component.get("lineEnd", 0),
+            tree = ast.parse(content)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        resolved_path = self._resolve_python_import(
+                            alias.name, file_path
+                        )
+                        if resolved_path:
+                            self._add_relationship(file_path, resolved_path, "import")
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module
+                    if module:
+                        for alias in node.names:
+                            self._handle_import_from_alias(
+                                module, file_path, node.level, alias
                             )
-                            if comp_start > 0 and comp_end > 0:
-                                # Extract component content
-                                lines = content.split("\n")
-                                comp_content = "\n".join(
-                                    lines[comp_start - 1 : comp_end]
-                                )
-                                # Count all occurrences of the function call
-                                call_matches = re.findall(call_pattern, comp_content)
-                                if call_matches:
-                                    rel_key = (
-                                        component["id"],
-                                        other_comp["id"],
-                                        "call",
-                                    )
-                                    self.relationship_counts[rel_key] = (
-                                        self.relationship_counts.get(rel_key, 0)
-                                        + len(call_matches)
-                                    )
         except Exception as e:
-            print(f"Error extracting Python function calls from {file_path}: {e}")
+            print(f"Warning: Could not parse Python file for imports {file_path}: {e}")
 
-    def _resolve_python_import(self, module: str, file_path: str) -> List[str]:
-        """
-        Resolve a Python import to file paths.
-
-        Args:
-            module: Imported module name
-            file_path: File path of the importing file
-
-        Returns:
-            List of resolved file paths that match the import
-        """
-        resolved_paths = []
-
-        # Handle relative imports
-        if module.startswith("."):
-            # Count the number of dots for relative import level
-            dots = 0
-            while dots < len(module) and module[dots] == ".":
-                dots += 1
-
-            # Get the module name without dots
-            rel_module = module[dots:]
-
-            # Get the current directory and go up based on the number of dots
-            current_parts = file_path.split("/")
-            if len(current_parts) <= dots:
-                # Invalid relative import (trying to go beyond repo root)
-                return resolved_paths
-
-            # Base directory after going up the right number of levels
-            base_dir = "/".join(current_parts[:-dots])
-
-            # If there's a specific module after the dots
-            if rel_module:
-                rel_module_parts = rel_module.split(".")
-                # Try as file in the resulting directory
-                rel_path = f"{base_dir}/{'/'.join(rel_module_parts)}.py"
-                init_path = f"{base_dir}/{'/'.join(rel_module_parts)}/__init__.py"
-                package_path = f"{base_dir}/{'/'.join(rel_module_parts)}"
-
-                if rel_path.replace("//", "/").lstrip("/") in self.file_ids:
-                    resolved_paths.append(rel_path.replace("//", "/").lstrip("/"))
-                if init_path.replace("//", "/").lstrip("/") in self.file_ids:
-                    resolved_paths.append(init_path.replace("//", "/").lstrip("/"))
-
-                # Try as a directory
-                if package_path in self.file_ids:
-                    resolved_paths.append(package_path)
+    def _handle_import_from_alias(self, module, file_path, level, alias):
+        resolved_path = self._resolve_python_import(module, file_path, level)
+        if resolved_path:
+            # If resolved to a package, find the specific module.
+            if os.path.basename(resolved_path) == "__init__.py":
+                module_dir = os.path.dirname(resolved_path)
+                imported_file = os.path.join(module_dir, alias.name + ".py")
+                if imported_file in self.file_ids:
+                    self._add_relationship(file_path, imported_file, "import")
+                else:
+                    # Fallback to package if module not found
+                    self._add_relationship(file_path, resolved_path, "import")
             else:
-                # Just a directory reference (e.g., from . import x)
-                if base_dir in self.file_ids:
-                    resolved_paths.append(base_dir)
-                init_path = f"{base_dir}/__init__.py"
-                if init_path.replace("//", "/").lstrip("/") in self.file_ids:
-                    resolved_paths.append(init_path.replace("//", "/").lstrip("/"))
-        else:
-            # Convert module name to potential file path
-            module_parts = module.split(".")
+                self._add_relationship(file_path, resolved_path, "import")
 
-            # Try as a standard library import
-            if module_parts[0] in (
-                "os",
-                "sys",
-                "re",
-                "datetime",
-                "collections",
-                "json",
-                "math",
-                "random",
-                "time",
-                "logging",
-                "argparse",
-                "subprocess",
-            ):
-                return resolved_paths  # Standard library, not in repo
-
-            # Try direct file in same directory
-            current_dir = os.path.dirname(file_path)
-            local_paths = [
-                f"{current_dir}/{module_parts[0]}.py",
-                f"{current_dir}/{module_parts[0]}/__init__.py",
-                f"{current_dir}/{'/'.join(module_parts)}.py",
-                f"{current_dir}/{'/'.join(module_parts)}/__init__.py",
-            ]
-
-            # Also try resolving sub-packages
-            if len(module_parts) > 1:
-                for i in range(1, len(module_parts)):
-                    base_parts = module_parts[:i]
-                    base_path = f"{current_dir}/{'/'.join(base_parts)}"
-                    if base_path.replace("//", "/").lstrip("/") in self.file_ids:
-                        sub_path = f"{base_path}/{'/'.join(module_parts[i:])}.py"
-                        sub_init = f"{base_path}/{'/'.join(module_parts[i:])}"
-
-                        if sub_path.replace("//", "/").lstrip("/") in self.file_ids:
-                            resolved_paths.append(
-                                sub_path.replace("//", "/").lstrip("/")
-                            )
-                        elif sub_init.replace("//", "/").lstrip("/") in self.file_ids:
-                            resolved_paths.append(
-                                sub_init.replace("//", "/").lstrip("/")
-                            )
-
-                        # Try as __init__.py
-                        sub_init_py = f"{sub_init}/__init__.py"
-                        if sub_init_py.replace("//", "/").lstrip("/") in self.file_ids:
-                            resolved_paths.append(
-                                sub_init_py.replace("//", "/").lstrip("/")
-                            )
-
-            # Try as absolute import from repository root
-            absolute_paths = [
-                f"{'/'.join(module_parts)}.py",
-                f"{'/'.join(module_parts)}/__init__.py",
-                f"{'/'.join(module_parts)}",
-            ]
-
-            # Try resolving with package prefixes
-            # (ex: src.repo_visualizer => src/repo_visualizer)
-            potential_paths = local_paths + absolute_paths
-
-            # Check for partial path matches
-            for file_id in self.file_ids:
-                if file_id.endswith("/" + module_parts[-1] + ".py"):
-                    # Check if the path ends with the full module path
-                    file_parts = file_id.split("/")
-                    module_match = True
-                    for i, part in enumerate(reversed(module_parts)):
-                        if i >= len(file_parts) or file_parts[-i - 1] != part:
-                            if i == 0 and file_parts[-1] == part + ".py":
-                                continue  # Handle the .py extension
-                            module_match = False
-                            break
-                    if module_match:
-                        potential_paths.append(file_id)
-
-            # Add all package directories on the path
-            for i in range(1, len(module_parts) + 1):
-                partial_path = "/".join(module_parts[:i])
-                potential_paths.append(partial_path)
-
-            # Normalize paths
-            potential_paths = [
-                p.replace("//", "/").lstrip("/") for p in potential_paths
-            ]
-
-            # Check if paths exist
-            for path in potential_paths:
-                if path in self.file_ids and path not in resolved_paths:
-                    resolved_paths.append(path)
-
-        return resolved_paths
-
-    def _resolve_js_import(self, module: str, file_path: str) -> Optional[str]:
-        """
-        Resolve a JavaScript/TypeScript import to a file path.
-
-        Args:
-            module: Imported module path
-            file_path: File path of the importing file
-
-        Returns:
-            Resolved file path or None if not found
-        """
-        # Skip external modules
-        if module.startswith("@") or not (
-            module.startswith("./")
-            or module.startswith("../")
-            or module.startswith("/")
-        ):
-            return None
-
-        # Normalize path and make it relative to repo root
-        current_dir = os.path.dirname(file_path)
-        if module.startswith("./") or module.startswith("../"):
+    def _resolve_python_import(
+        self, import_name: str, file_path: str, level: int = 0
+    ) -> Optional[str]:
+        """Resolve a Python import to a file path."""
+        if level > 0:
             # Relative import
-            module_path = os.path.normpath(os.path.join(current_dir, module))
+            base_path = os.path.dirname(file_path)
+            for _ in range(level - 1):
+                base_path = os.path.dirname(base_path)
         else:
-            # Absolute import (from repo root)
-            module_path = module.lstrip("/")
+            # Absolute import from repo root
+            base_path = ""
 
-        # Add potential extensions if not specified
-        if not os.path.splitext(module_path)[1]:
-            potential_paths = [
-                f"{module_path}.js",
-                f"{module_path}.jsx",
-                f"{module_path}.ts",
-                f"{module_path}.tsx",
-                f"{module_path}/index.js",
-                f"{module_path}/index.jsx",
-                f"{module_path}/index.ts",
-                f"{module_path}/index.tsx",
-            ]
-        else:
-            potential_paths = [module_path]
+        parts = import_name.split(".")
 
-        # Normalize paths
-        potential_paths = [p.replace("\\", "/") for p in potential_paths]
+        # Try resolving as a file (e.g. from . import a)
+        possible_path = os.path.join(self.repo_path, base_path, *parts) + ".py"
+        if os.path.exists(possible_path):
+            return os.path.relpath(possible_path, self.repo_path).replace(
+                os.path.sep, "/"
+            )
 
-        # Return first existing path
-        for path in potential_paths:
-            if path in self.file_ids:
-                return path
+        # Try resolving as a directory/package (e.g. import a)
+        possible_path = os.path.join(self.repo_path, base_path, *parts, "__init__.py")
+        if os.path.exists(possible_path):
+            return os.path.relpath(possible_path, self.repo_path).replace(
+                os.path.sep, "/"
+            )
+
+        # Try resolving relative to file path
+        if level > 0:
+            possible_path = os.path.join(os.path.dirname(file_path), *parts) + ".py"
+            if os.path.exists(possible_path):
+                return os.path.relpath(possible_path, self.repo_path).replace(
+                    os.path.sep, "/"
+                )
 
         return None
 
-    def _update_directory_sizes(self, files: List[File]) -> None:
-        """
-        Update directory sizes based on contained files.
-
-        Args:
-            files: List of file entries
-        """
-        # Create a mapping of directories to their entries
-        dir_map: Dict[str, File] = {}
-
-        for file in files:
-            if file["type"] == "directory":
-                dir_map[file["path"]] = file
-
-        # Calculate sizes
-        for file in files:
-            if file["type"] == "file":
-                # Update all parent directories
-                path_parts = file["path"].split("/")
-                for i in range(len(path_parts) - 1):
-                    dir_path = "/".join(path_parts[: i + 1])
-                    if dir_path in dir_map:
-                        dir_map[dir_path]["size"] = (
-                            dir_map[dir_path].get("size", 0) + file["size"]
-                        )
-
-    def _extract_relationships(self) -> None:
-        """Extract relationships between files and components."""
-        # Add filesystem-based relationships
-        self._add_filesystem_relationships()
-
-        # Add semantic similarity relationships if available
-        self._add_semantic_similarity_relationships()
-
-        # Add components as "nodes" to be visualized
-        files = self.data["files"]
-        component_nodes = []
-
-        # Collect components for visualization
-        for file in files:
-            if file["type"] == "file":
-                for component in file.get("components", []):
-                    # Create a node for this component
-                    comp_node = {
-                        "id": component["id"],
-                        "path": component["id"],
-                        "name": component["name"],
-                        "type": component["type"],
-                        "size": 100,  # Default size for components
-                        "depth": file["depth"] + 1,
-                        "components": [],
-                    }
-                    component_nodes.append(comp_node)
-
-                    # Add nodes for nested components
-                    for nested in component.get("components", []):
-                        nested_node = {
-                            "id": nested["id"],
-                            "path": nested["id"],
-                            "name": nested["name"],
-                            "type": nested["type"],
-                            "size": 50,  # Smaller size for nested components
-                            "depth": file["depth"] + 2,
-                            "components": [],
-                        }
-                        component_nodes.append(nested_node)
-
-        # Add component nodes to files list
-        self.data["files"].extend(component_nodes)
-
-        # Convert relationship counts to relationships with strength
-        final_relationships = []
-
-        # Add counted relationships with strength values
-        for (source, target, rel_type), count in self.relationship_counts.items():
-            final_relationships.append(
-                {
-                    "source": source,
-                    "target": target,
-                    "type": rel_type,
-                    "strength": count,
-                }
-            )
-
-        # Add other relationships that weren't counted (like filesystem proximity)
-        for rel in self.relationships:
-            rel_key = (rel["source"], rel["target"], rel["type"])
-            if rel_key not in self.relationship_counts:
-                final_relationships.append(rel)
-
-        self.data["relationships"] = final_relationships
-
-    def _add_filesystem_relationships(self) -> None:
-        """Add relationships between files based on filesystem proximity."""
-        # Get all files (not directories or components)
-        files = [f for f in self.data["files"] if f["type"] == "file"]
-
-        # Group files by directory
-        directory_files = {}
-        for file in files:
-            file_path = file.get("path", file["id"])
-            dir_path = os.path.dirname(file_path)
-            if dir_path not in directory_files:
-                directory_files[dir_path] = []
-            directory_files[dir_path].append(file)
-
-        # Add relationships between files in the same directory
-        for _dir_path, dir_files in directory_files.items():
-            for i, file1 in enumerate(dir_files):
-                for file2 in dir_files[i + 1 :]:
-                    self.relationships.append(
-                        {
-                            "source": file1["id"],
-                            "target": file2["id"],
-                            "type": "filesystem_proximity",
-                            "strength": 1.0,
-                        }
-                    )
-
-        # Add relationships between files in sibling directories
-        for dir_path1, files1 in directory_files.items():
-            for dir_path2, files2 in directory_files.items():
-                if dir_path1 >= dir_path2:  # Avoid duplicates
-                    continue
-
-                # Check if directories are siblings or cousins
-                dir1_parts = dir_path1.split("/") if dir_path1 else []
-                dir2_parts = dir_path2.split("/") if dir_path2 else []
-
-                # Calculate common prefix length
-                common_prefix_len = 0
-                for i in range(min(len(dir1_parts), len(dir2_parts))):
-                    if dir1_parts[i] == dir2_parts[i]:
-                        common_prefix_len += 1
-                    else:
-                        break
-
-                # Calculate filesystem distance
-                dir1_depth = len(dir1_parts) - common_prefix_len
-                dir2_depth = len(dir2_parts) - common_prefix_len
-                distance = dir1_depth + dir2_depth
-
-                # Only add relationships for relatively close directories
-                if distance <= 2:  # Sibling directories or one level apart
-                    strength = 1.0 / (distance + 1)  # Closer = stronger
-
-                    # Add relationships between files in these directories
-                    for file1 in files1:
-                        for file2 in files2:
-                            self.relationships.append(
-                                {
-                                    "source": file1["id"],
-                                    "target": file2["id"],
-                                    "type": "filesystem_proximity",
-                                    "strength": strength,
-                                }
-                            )
-
-    def _add_semantic_similarity_relationships(self) -> None:
-        """Add relationships between files based on semantic similarity."""
-        if not OPENAI_AVAILABLE or not NUMPY_AVAILABLE:
-            print(
-                "Warning: OpenAI and NumPy are required for semantic similarity. "
-                "Skipping semantic analysis."
-            )
-            return
-
-        # Check if API key is available
-        if not os.getenv("OPENAI_API_KEY"):
-            print(
-                "Warning: OPENAI_API_KEY not set. "
-                "Skipping semantic similarity analysis."
-            )
-            return
-
-        # Get all files (not directories or components)
-        files = [f for f in self.data["files"] if f["type"] == "file"]
-
-        # Filter for code files that we can analyze
-        code_files = []
-        for file in files:
-            extension = file.get("extension", "") or ""
-            extension = extension.lower()
-            if extension in [
-                "py",
-                "js",
-                "ts",
-                "jsx",
-                "tsx",
-                "java",
-                "cpp",
-                "c",
-                "h",
-                "rb",
-                "go",
-                "rs",
-                "php",
-                "kt",
-                "swift",
-            ]:
-                code_files.append(file)
-
-        if len(code_files) < 2:
-            print(
-                "Warning: Need at least 2 code files for semantic similarity analysis."
-            )
-            return
-
-        print(f"Analyzing semantic similarity for {len(code_files)} files...")
-
-        # Extract text content and generate embeddings
-        file_embeddings = {}
-
-        for file in code_files:
-            try:
-                text_content = self._extract_file_text_content(file)
-                if (
-                    text_content and len(text_content.strip()) > 50
-                ):  # Only process files with meaningful content
-                    embedding = self._generate_embedding(text_content)
-                    if embedding is not None:
-                        file_embeddings[file["id"]] = embedding
-            except Exception as e:
-                print(
-                    f"Warning: Could not process file {file['id']} "
-                    f"for semantic similarity: {e}"
-                )
-                continue
-
-        if len(file_embeddings) < 2:
-            print(
-                "Warning: Not enough files with valid embeddings "
-                "for semantic similarity."
-            )
-            return
-
-        print(
-            f"Generated embeddings for {len(file_embeddings)} files. "
-            f"Computing similarities..."
+    def _extract_js_imports(self, content: str, file_path: str) -> None:
+        """Extract import relationships from a JavaScript/TypeScript file."""
+        # Simplified analysis for JS/TS files.
+        import_pattern = re.compile(
+            r"""
+            (?:import|export) .*? from \s* ['"]([^'"]+)['"] | # import/export ... from
+            import \s* ['"]([^'"]+)['"] | # import "..."
+            require \s* \( \s* ['"]([^'"]+)['"] \s* \) # require("...")
+            """,
+            re.VERBOSE,
         )
-
-        # Compute pairwise similarities
-        file_ids = list(file_embeddings.keys())
-        similarity_threshold = 0.7  # Only include files with high similarity
-
-        for i, file_id1 in enumerate(file_ids):
-            for file_id2 in file_ids[i + 1 :]:
-                try:
-                    similarity = self._cosine_similarity(
-                        file_embeddings[file_id1], file_embeddings[file_id2]
-                    )
-
-                    if similarity >= similarity_threshold:
-                        self.relationships.append(
-                            {
-                                "source": file_id1,
-                                "target": file_id2,
-                                "type": "semantic_similarity",
-                                "strength": float(similarity),
-                            }
-                        )
-                except Exception as e:
-                    print(
-                        f"Warning: Could not compute similarity between "
-                        f"{file_id1} and {file_id2}: {e}"
-                    )
-                    continue
-
-        semantic_count = len(
-            [r for r in self.relationships if r["type"] == "semantic_similarity"]
-        )
-        print(f"Found {semantic_count} semantic similarity relationships.")
-
-    def _extract_file_text_content(self, file: Dict[str, Any]) -> Optional[str]:
-        """Extract meaningful text content from a file for semantic analysis."""
-        file_path = os.path.join(self.repo_path, file["path"])
-
-        if not os.path.isfile(file_path):
-            return None
-
-        try:
-            with open(file_path, encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-
-            # Extract meaningful content based on file type
-            extension = file.get("extension", "") or ""
-            extension = extension.lower()
-
-            if extension == "py":
-                return self._extract_python_semantic_content(content)
-            elif extension in ["js", "ts", "jsx", "tsx"]:
-                return self._extract_javascript_semantic_content(content)
-            else:
-                # For other code files, extract comments and identifiers
-                return self._extract_generic_semantic_content(content)
-
-        except Exception as e:
-            print(f"Warning: Could not read file {file['path']}: {e}")
-            return None
-
-    def _extract_python_semantic_content(self, content: str) -> str:
-        """Extract semantic content from Python files."""
-        parts = []
-
-        # Extract docstrings
-        docstring_matches = re.finditer(r'"""(.*?)"""', content, re.DOTALL)
-        for match in docstring_matches:
-            parts.append(match.group(1).strip())
-
-        # Extract comments
-        comment_matches = re.finditer(r"#\s*(.+)", content)
-        for match in comment_matches:
-            parts.append(match.group(1).strip())
-
-        # Extract function and class names with their context
-        function_matches = re.finditer(r"def\s+(\w+)\s*\([^)]*\):", content)
-        for match in function_matches:
-            parts.append(f"function {match.group(1)}")
-
-        class_matches = re.finditer(r"class\s+(\w+)(?:\([^)]*\))?:", content)
-        for match in class_matches:
-            parts.append(f"class {match.group(1)}")
-
-        # Extract import statements to understand dependencies
-        import_matches = re.finditer(r"(?:from\s+(\S+)\s+)?import\s+([^\n]+)", content)
-        for match in import_matches:
-            if match.group(1):
-                parts.append(f"imports from {match.group(1)}")
-            parts.append(f"imports {match.group(2).strip()}")
-
-        return " ".join(parts)
-
-    def _extract_javascript_semantic_content(self, content: str) -> str:
-        """Extract semantic content from JavaScript/TypeScript files."""
-        parts = []
-
-        # Extract comments
-        comment_matches = re.finditer(r"//\s*(.+)", content)
-        for match in comment_matches:
-            parts.append(match.group(1).strip())
-
-        # Extract block comments
-        block_comment_matches = re.finditer(r"/\*(.*?)\*/", content, re.DOTALL)
-        for match in block_comment_matches:
-            parts.append(match.group(1).strip())
-
-        # Extract function names
-        function_matches = re.finditer(
-            r"(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:function|\([^)]*\)\s*=>))",
-            content,
-        )
-        for match in function_matches:
-            func_name = match.group(1) or match.group(2)
-            if func_name:
-                parts.append(f"function {func_name}")
-
-        # Extract class names
-        class_matches = re.finditer(r"class\s+(\w+)", content)
-        for match in class_matches:
-            parts.append(f"class {match.group(1)}")
-
-        # Extract imports
-        import_matches = re.finditer(
-            r'import\s+[^;]+from\s+[\'"]([^\'"]+)[\'"]', content
-        )
-        for match in import_matches:
-            parts.append(f"imports from {match.group(1)}")
-
-        return " ".join(parts)
-
-    def _extract_generic_semantic_content(self, content: str) -> str:
-        """Extract semantic content from generic code files."""
-        parts = []
-
-        # Extract various comment patterns
-        comment_patterns = [
-            r"//\s*(.+)",  # C++ style comments
-            r"#\s*(.+)",  # Shell/Python style comments
-            r"/\*(.*?)\*/",  # Block comments
-        ]
-
-        for pattern in comment_patterns:
-            matches = re.finditer(
-                pattern, content, re.DOTALL if r"\*" in pattern else 0
-            )
-            for match in matches:
-                parts.append(match.group(1).strip())
-
-        # Extract function-like patterns
-        function_patterns = [
-            r"(?:function|def|fn)\s+(\w+)",  # function definitions
-            r"class\s+(\w+)",  # class definitions
-            r"struct\s+(\w+)",  # struct definitions
-        ]
-
-        for pattern in function_patterns:
-            matches = re.finditer(pattern, content, re.IGNORECASE)
-            for match in matches:
-                parts.append(f"defines {match.group(1)}")
-
-        return " ".join(parts)
-
-    def _generate_embedding(self, text: str) -> Optional[List[float]]:
-        """Generate embedding for text using OpenAI API."""
-        if not text or len(text.strip()) == 0:
-            return None
-
-        try:
-            # Truncate text to avoid API limits (roughly 8000 tokens)
-            if len(text) > 30000:
-                text = text[:30000] + "..."
-
-            client = openai.OpenAI()
-            response = client.embeddings.create(
-                model="text-embedding-3-small", input=text
-            )
-
-            return response.data[0].embedding
-
-        except Exception as e:
-            print(f"Warning: Could not generate embedding: {e}")
-            return None
-
-    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
-        """Compute cosine similarity between two vectors."""
-        if not vec1 or not vec2 or len(vec1) != len(vec2):
-            return 0.0
-
-        try:
-            vec1_np = np.array(vec1)
-            vec2_np = np.array(vec2)
-
-            dot_product = np.dot(vec1_np, vec2_np)
-            norm1 = np.linalg.norm(vec1_np)
-            norm2 = np.linalg.norm(vec2_np)
-
-            if norm1 == 0 or norm2 == 0:
-                return 0.0
-
-            return dot_product / (norm1 * norm2)
-
-        except Exception as e:
-            print(f"Warning: Could not compute cosine similarity: {e}")
-            return 0.0
-
-    def _analyze_history(self) -> None:
-        """Analyze git history."""
-        # Extract commit history
-        commits = self._extract_commits()
-
-        # Create timeline points (simplified for now)
-        timeline_points = self._create_timeline_points(commits)
-
-        # Set history data
-        if commits:
-            self.data["history"] = {
-                "commits": commits,
-                "timelinePoints": timeline_points,
-            }
-
-    def _extract_commits(self) -> List[Dict[str, Any]]:
-        """
-        Extract commit history from the git repository.
-
-        Returns:
-            List of commit data
-        """
-        try:
-            # Get commit logs
-            result = subprocess.run(
-                [
-                    "git",
-                    "log",
-                    "--pretty=format:%H|||%an <%ae>|||%ad|||%s",
-                    "--date=iso",
-                    "--name-status",
-                    "-n",
-                    "100",  # Limit to 100 commits for performance
-                ],
-                cwd=self.repo_path,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-
-            if result.returncode != 0:
-                return []
-
-            # Parse commit log
-            commits = []
-            commit_blocks = result.stdout.split("\n\n")
-
-            for block in commit_blocks:
-                lines = block.strip().split("\n")
-                if not lines:
-                    continue
-
-                # Parse header
-                try:
-                    header = lines[0].split("|||")
-                    commit_hash = header[0]
-                    author = header[1]
-                    date_str = header[2]
-                    message = header[3]
-
-                    # Convert date to ISO format
-                    dt = datetime.fromisoformat(
-                        date_str.replace(" ", "T").replace(" +", "+")
-                    )
-                    date = dt.isoformat()
-
-                    # Parse file changes
-                    file_changes = []
-                    for i in range(1, len(lines)):
-                        if not lines[i].strip():
-                            continue
-
-                        change_parts = lines[i].split("\t")
-                        if len(change_parts) < 2:
-                            continue
-
-                        change_type = change_parts[0]
-                        file_path = change_parts[-1].replace("\\", "/")
-
-                        # Skip files outside the repo
-                        if ".." in file_path:
-                            continue
-
-                        # Map change type
-                        if change_type == "A":
-                            change_type_mapped = "add"
-                        elif change_type in ("M", "R"):
-                            change_type_mapped = "modify"
-                        elif change_type == "D":
-                            change_type_mapped = "delete"
-                        else:
-                            continue
-
-                        # Get additions and deletions (simplified)
-                        additions = 0
-                        deletions = 0
-                        if change_type_mapped == "add":
-                            additions = 10  # Placeholder value
-                        elif change_type_mapped == "modify":
-                            additions = 5  # Placeholder value
-                            deletions = 3  # Placeholder value
-                        elif change_type_mapped == "delete":
-                            deletions = 10  # Placeholder value
-
-                        file_changes.append(
-                            {
-                                "fileId": file_path,
-                                "type": change_type_mapped,
-                                "additions": additions,
-                                "deletions": deletions,
-                            }
-                        )
-
-                    commits.append(
-                        {
-                            "id": commit_hash,
-                            "author": author,
-                            "date": date,
-                            "message": message,
-                            "fileChanges": file_changes,
-                        }
-                    )
-                except Exception as e:
-                    print(f"Error parsing commit: {e}")
-                    continue
-
-            return commits
-        except Exception as e:
-            print(f"Error extracting commits: {e}")
-            return []
-
-    def _create_timeline_points(
-        self, commits: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Create timeline points from commits.
-
-        Args:
-            commits: List of commit data
-
-        Returns:
-            List of timeline points
-        """
-        # This is a simplified implementation that creates a timeline point
-        # for every 10th commit (or fewer if there aren't many commits)
-        timeline_points = []
-
-        if not commits:
-            return timeline_points
-
-        step = max(1, len(commits) // 10)
-
-        for i in range(0, len(commits), step):
-            commit = commits[i]
-
-            # Create a simplified snapshot
-            timeline_points.append(
-                {
-                    "commitId": commit["id"],
-                    "state": {
-                        "commitIndex": i,
-                        "timestamp": commit["date"],
-                    },
-                    "snapshot": {
-                        "files": [],  # Simplified for now
-                        "relationships": [],  # Simplified for now
-                    },
-                }
-            )
-
-        return timeline_points
-
-    def _extract_file_git_metrics(self, file_path: str) -> Dict[str, Any]:
-        """
-        Extract git history metrics for a specific file.
-
-        Args:
-            file_path: Relative file path
-
-        Returns:
-            Dictionary containing git metrics
-        """
-        metrics = {}
-
-        try:
-            # Get commit count for this file
-            result = subprocess.run(
-                ["git", "log", "--oneline", "--", file_path],
-                cwd=self.repo_path,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-
-            if result.returncode == 0:
-                commit_lines = [
-                    line.strip() for line in result.stdout.split("\n") if line.strip()
-                ]
-                metrics["commitCount"] = len(commit_lines)
-            else:
-                metrics["commitCount"] = 0
-
-            # Get most recent commit date for this file
-            result = subprocess.run(
-                ["git", "log", "-1", "--format=%ad", "--date=iso", "--", file_path],
-                cwd=self.repo_path,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-
-            if result.returncode == 0 and result.stdout.strip():
-                date_str = result.stdout.strip()
-                try:
-                    # Parse the date and calculate days ago
-                    dt = datetime.fromisoformat(
-                        date_str.replace(" ", "T").replace(" +", "+")
-                    )
-                    days_ago = (datetime.now() - dt.replace(tzinfo=None)).days
-                    metrics["lastCommitDaysAgo"] = days_ago
-                    metrics["lastCommitDate"] = dt.isoformat()
-                except Exception:
-                    metrics["lastCommitDaysAgo"] = 0
-                    metrics["lastCommitDate"] = datetime.now().isoformat()
-            else:
-                metrics["lastCommitDaysAgo"] = 0
-                metrics["lastCommitDate"] = datetime.now().isoformat()
-
-        except Exception as e:
-            print(f"Error extracting git metrics for {file_path}: {e}")
-            metrics["commitCount"] = 0
-            metrics["lastCommitDaysAgo"] = 0
-            metrics["lastCommitDate"] = datetime.now().isoformat()
-
-        return metrics
-
-    def _get_file_coverage(self, file_path: str) -> Optional[float]:
-        """
-        Get test coverage ratio for a file if coverage data is available.
-
-        Args:
-            file_path: Relative file path
-
-        Returns:
-            Coverage ratio between 0.0 and 1.0, or None if not available
-        """
-        # Initialize coverage cache on first call
-        if self._coverage_cache is None:
-            self._coverage_cache = self._build_coverage_cache()
-
-        return self._coverage_cache.get(file_path)
-
-    def _build_coverage_cache(self) -> Dict[str, float]:
-        """
-        Build a cache of coverage data for all files.
-
-        Returns:
-            Dictionary mapping file paths to coverage ratios
-        """
-        coverage_cache: Dict[str, float] = {}
-
-        # Try Python coverage first
-        python_coverage = self._parse_python_coverage()
-        coverage_cache.update(python_coverage)
-
-        # Try JavaScript/TypeScript coverage
-        js_coverage = self._parse_js_coverage()
-        coverage_cache.update(js_coverage)
-
-        return coverage_cache
-
-    def _parse_python_coverage(self) -> Dict[str, float]:
-        """Parse Python coverage data and return file mapping."""
-        coverage_data: Dict[str, float] = {}
-
-        # Check for coverage.xml (commonly generated by pytest-cov)
-        coverage_xml_path = os.path.join(self.repo_path, "coverage.xml")
-        if os.path.exists(coverage_xml_path):
-            try:
-                import xml.etree.ElementTree as ET
-
-                tree = ET.parse(coverage_xml_path)
-                root = tree.getroot()
-
-                # Find files in coverage report
-                for package in root.findall(".//package"):
-                    for class_elem in package.findall("classes/class"):
-                        filename = class_elem.get("filename", "")
-                        if filename:
-                            # Convert absolute path to relative
-                            if filename.startswith(self.repo_path):
-                                rel_path = os.path.relpath(filename, self.repo_path)
-                            else:
-                                rel_path = filename
-                            rel_path = rel_path.replace(os.path.sep, "/")
-
-                            line_rate = float(class_elem.get("line-rate", 0))
-                            coverage_data[rel_path] = line_rate
-
-            except Exception as e:
-                print(f"Error parsing coverage.xml: {e}")
-
-        # Check for .coverage file and try to use coverage.py
-        coverage_file_path = os.path.join(self.repo_path, ".coverage")
-        if os.path.exists(coverage_file_path):
-            try:
-                # Try to import coverage module
-                import coverage
-
-                cov = coverage.Coverage(data_file=coverage_file_path)
-                cov.load()
-
-                # Get all measured files
-                measured_files = cov.get_data().measured_files()
-                for abs_file_path in measured_files:
-                    try:
-                        rel_path = os.path.relpath(abs_file_path, self.repo_path)
-                        rel_path = rel_path.replace(os.path.sep, "/")
-
-                        analysis = cov.analysis2(abs_file_path)
-                        if analysis:
-                            statements = analysis[1]  # executable statements
-                            missing = analysis[
-                                3
-                            ]  # missing statements (corrected index)
-                            if statements:
-                                covered = len(statements) - len(missing)
-                                coverage_ratio = covered / len(statements)
-                                coverage_data[rel_path] = coverage_ratio
-                    except Exception:
-                        continue
-
-            except ImportError:
-                pass  # coverage module not available
-            except Exception as e:
-                print(f"Error reading .coverage file: {e}")
-
-        return coverage_data
-
-    def _parse_js_coverage(self) -> Dict[str, float]:
-        """Parse JavaScript/TypeScript coverage data and return file mapping."""
-        coverage_data: Dict[str, float] = {}
-
-        # Check for vitest v8 coverage format first
-        v8_coverage = self._parse_v8_coverage()
-        coverage_data.update(v8_coverage)
-
-        # Check for lcov.info file (common format)
-        lcov_path = os.path.join(self.repo_path, "coverage", "lcov.info")
-        if os.path.exists(lcov_path):
-            try:
-                with open(lcov_path) as f:
-                    content = f.read()
-
-                # Parse LCOV format
-                sections = content.split("end_of_record")
-                for section in sections:
-                    if not section.strip():
-                        continue
-
-                    lines = section.split("\n")
-                    source_file = None
-                    found_lines = 0
-                    hit_lines = 0
-
-                    for line in lines:
-                        line = line.strip()
-                        if line.startswith("SF:"):  # Source file
-                            source_file = line[3:]  # Remove 'SF:' prefix
-                            # Convert to relative path
-                            if source_file.startswith(self.repo_path):
-                                source_file = os.path.relpath(
-                                    source_file, self.repo_path
-                                )
-                            source_file = source_file.replace(os.path.sep, "/")
-                        elif line.startswith("LF:"):  # Lines found
-                            found_lines = int(line[3:])
-                        elif line.startswith("LH:"):  # Lines hit
-                            hit_lines = int(line[3:])
-
-                    if source_file and found_lines > 0:
-                        coverage_data[source_file] = hit_lines / found_lines
-
-            except Exception as e:
-                print(f"Error parsing lcov.info: {e}")
-
-        # Check for coverage-summary.json (common in Jest)
-        coverage_summary_path = os.path.join(
-            self.repo_path, "coverage", "coverage-summary.json"
-        )
-        if os.path.exists(coverage_summary_path):
-            try:
-                with open(coverage_summary_path) as f:
-                    import json
-
-                    data = json.load(f)
-
-                # Find files in coverage summary
-                for file_key, file_data in data.items():
-                    if isinstance(file_data, dict) and "lines" in file_data:
-                        # Convert absolute path to relative
-                        rel_path = file_key
-                        if rel_path.startswith(self.repo_path):
-                            rel_path = os.path.relpath(rel_path, self.repo_path)
-                        rel_path = rel_path.replace(os.path.sep, "/")
-
-                        lines_data = file_data.get("lines", {})
-                        pct = lines_data.get("pct", 0)
-                        if isinstance(pct, (int, float)):
-                            coverage_data[rel_path] = (
-                                pct / 100.0
-                            )  # Convert percentage to ratio
-
-            except Exception as e:
-                print(f"Error parsing coverage-summary.json: {e}")
-
-        return coverage_data
-
-    def _parse_v8_coverage(self) -> Dict[str, float]:
-        """Parse v8 coverage data from vitest (stored in frontend/coverage/.tmp/)."""
-        coverage_data: Dict[str, float] = {}
-
-        # Look for v8 coverage files in frontend/coverage/.tmp/
-        v8_coverage_dir = os.path.join(self.repo_path, "frontend", "coverage", ".tmp")
-        if not os.path.exists(v8_coverage_dir):
-            return coverage_data
-
-        try:
-            import glob
-            import json
-
-            # Process all coverage-*.json files
-            coverage_files = glob.glob(os.path.join(v8_coverage_dir, "coverage-*.json"))
-
-            for coverage_file in coverage_files:
-                try:
-                    with open(coverage_file) as f:
-                        data = json.load(f)
-
-                    # Parse v8 coverage format
-                    result = data.get("result", [])
-                    for script_data in result:
-                        script_url = script_data.get("url", "")
-
-                        # Extract relative path from file:// URL
-                        if script_url.startswith("file://"):
-                            abs_path = script_url[7:]  # Remove file://
-                            if abs_path.startswith(self.repo_path):
-                                rel_path = os.path.relpath(abs_path, self.repo_path)
-                                rel_path = rel_path.replace(os.path.sep, "/")
-
-                                # Only process frontend files we care about
-                                if rel_path.startswith(
-                                    "frontend/src/"
-                                ) and rel_path.endswith((".ts", ".tsx", ".js", ".jsx")):
-                                    # Calculate coverage from function data
-                                    functions = script_data.get("functions", [])
-                                    total_ranges = 0
-                                    covered_ranges = 0
-
-                                    for func in functions:
-                                        ranges = func.get("ranges", [])
-                                        for range_data in ranges:
-                                            total_ranges += 1
-                                            if range_data.get("count", 0) > 0:
-                                                covered_ranges += 1
-
-                                    if total_ranges > 0:
-                                        coverage_ratio = covered_ranges / total_ranges
-                                        coverage_data[rel_path] = coverage_ratio
-
-                except Exception as e:
-                    print(f"Error parsing v8 coverage file {coverage_file}: {e}")
-                    continue
-
-        except Exception as e:
-            print(f"Error parsing v8 coverage: {e}")
-
-        return coverage_data
-
-    def save_to_file(self, output_path: str) -> None:
-        """
-        Save the repository data to a JSON file.
-
-        Args:
-            output_path: Path to output JSON file
-        """
-
-        # Custom JSON encoder to handle datetime objects
-        class DateTimeEncoder(json.JSONEncoder):
-            def default(self, obj):
-                if isinstance(obj, datetime):
-                    return obj.isoformat()
-                return super().default(obj)
-
-        with open(output_path, "w") as f:
-            json.dump(self.data, f, indent=2, cls=DateTimeEncoder)
-
-        print(f"Repository data saved to {output_path}")
-
-
-def analyze_repository(repo_path: str, output_path: str) -> None:
+        for match in import_pattern.finditer(content):
+            import_path = next((g for g in match.groups() if g is not None), None)
+            if import_path:
+                resolved_path = self._resolve_js_import(import_path, file_path)
+                if resolved_path:
+                    self._add_relationship(file_path, resolved_path, "import")
+
+    def _resolve_js_import(self, import_path: str, file_path: str) -> Optional[str]:
+        """Resolve a JavaScript import path to a file path."""
+        if not import_path.startswith((".", "/")):
+            return None  # Skip node_modules imports
+
+        base_dir = os.path.dirname(file_path)
+
+        # Handle absolute paths from root
+        if import_path.startswith("/"):
+            base_dir = self.repo_path
+            import_path = import_path[1:]
+
+        resolved_path = os.path.normpath(os.path.join(base_dir, import_path))
+
+        # Try with extensions
+        for ext in [
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            "/index.js",
+            "/index.ts",
+            "/index.jsx",
+            "/index.tsx",
+        ]:
+            path_with_ext = resolved_path + ext
+            if path_with_ext in self.file_ids:
+                return path_with_ext
+
+        if resolved_path in self.file_ids:
+            return resolved_path
+
+        return None
+
+
+def analyze_repository(
+    repo_path: str,
+    output_path: str,
+    python_coverage_path: Optional[str] = None,
+    frontend_coverage_path: Optional[str] = None,
+) -> None:
     """
     Analyze a repository and generate visualization data.
 
     Args:
         repo_path: Path to the local git repository
         output_path: Path to output JSON file
+        python_coverage_path: Path to Python coverage.json file
+        frontend_coverage_path: Path to frontend coverage.json file
     """
-    analyzer = RepositoryAnalyzer(repo_path)
-    analyzer.analyze()
-    analyzer.save_to_file(output_path)
-
-    print(f"Repository analysis complete. Data saved to {output_path}")
-
-
-def main() -> None:
-    """Command-line entry point."""
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Analyze a git repository for visualization"
+    analyzer = RepositoryAnalyzer(
+        repo_path,
+        python_coverage_path=python_coverage_path,
+        frontend_coverage_path=frontend_coverage_path,
     )
-    parser.add_argument("repo_path", help="Path to the local git repository")
-    parser.add_argument(
-        "--output",
-        "-o",
-        default="repo_data.json",
-        help="Output JSON file path (default: repo_data.json)",
-    )
-
-    args = parser.parse_args()
-    analyze_repository(args.repo_path, args.output)
-
-
-if __name__ == "__main__":
-    main()
+    data = analyzer.analyze()
+    with open(output_path, "w") as f:
+        json.dump(data, f, indent=2)

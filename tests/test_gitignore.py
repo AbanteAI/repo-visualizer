@@ -133,11 +133,8 @@ sample/ignore_me/
             Path(os.path.join(temp_dir, "ignored_dir", "wont_be_seen.txt")).touch()
 
             # Initialize the analyzer with mocked methods except for _analyze_files
-            with patch.object(RepositoryAnalyzer, "_extract_metadata"), patch.object(
-                RepositoryAnalyzer, "_extract_relationships"
-            ), patch.object(RepositoryAnalyzer, "_analyze_history"):
-                analyzer = RepositoryAnalyzer(temp_dir)
-                analyzer._analyze_files()  # Only run the file analysis portion
+            analyzer = RepositoryAnalyzer(temp_dir)
+            analyzer.analyze()
 
             # Check that ignored files are not included
             file_paths = {file["path"] for file in analyzer.data["files"]}
