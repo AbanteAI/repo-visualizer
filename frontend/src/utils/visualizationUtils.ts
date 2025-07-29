@@ -36,6 +36,7 @@ export interface ComputedNodeMetrics {
   recency: number;
   identifiers: number;
   references: number;
+  test_coverage: number;
 }
 
 export interface ComputedLinkMetrics {
@@ -71,6 +72,11 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
     // For directories, use 'directory' as the file_type for categorical coloring
     const fileType = file.type === 'directory' ? 'directory' : file.extension || 'unknown';
 
+    const testCoverage = fileMetrics.testCoverage
+      ? Object.values(fileMetrics.testCoverage).reduce((a, b) => a + b, 0) /
+        Object.values(fileMetrics.testCoverage).length
+      : 0;
+
     metrics.set(file.id, {
       file_type: fileType,
       file_size: file.size || 0,
@@ -78,11 +84,17 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
       recency: recencyScore,
       identifiers: fileMetrics.topLevelIdentifiers || 0,
       references: incomingReferences.get(file.id) || 0,
+      test_coverage: testCoverage,
     });
 
     // Add metrics for components (classes, functions, methods) - only for files, not directories
     if (file.type === 'file' && file.components) {
       file.components.forEach(component => {
+        const testCoverage = fileMetrics.testCoverage
+          ? Object.values(fileMetrics.testCoverage).reduce((a, b) => a + b, 0) /
+            Object.values(fileMetrics.testCoverage).length
+          : 0;
+
         metrics.set(component.id, {
           file_type: component.type, // Use component type as the categorical value
           file_size: file.size || 0, // Use parent file size
@@ -90,6 +102,7 @@ export const computeNodeMetrics = (data: RepositoryData): Map<string, ComputedNo
           recency: recencyScore,
           identifiers: fileMetrics.topLevelIdentifiers || 0,
           references: incomingReferences.get(component.id) || 0,
+          test_coverage: testCoverage,
         });
       });
     }

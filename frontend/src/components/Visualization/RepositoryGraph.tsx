@@ -26,6 +26,7 @@ import {
   isEdgeVisible,
 } from '../../utils/visualizationUtils';
 import { EXTENSION_COLORS } from '../../utils/extensionColors';
+import { createPieChartNodes, isPieChartEnabled } from './RepositoryGraph.helpers';
 
 interface RepositoryGraphProps {
   data: RepositoryData;
@@ -490,32 +491,49 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('cursor', 'pointer')
         .call(dragBehavior(simulation));
 
-      // Create regular circle nodes
-      const node = nodeGroups
-        .append('circle')
-        .attr('class', 'node')
-        .attr('r', d => {
-          const metrics = nodeMetrics.get(d.id);
-          return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
-        })
-        .attr('fill', d => {
-          const metrics = nodeMetrics.get(d.id);
-          return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
-        })
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5)
-        .on('mouseover', function (_event, _d) {
-          d3.select(this).attr('stroke-width', 3);
-        })
-        .on('mouseout', function (_event, _d) {
-          // Reset to default hover state, but preserve selection highlighting
-          const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
-          d3.select(this).attr('stroke-width', isSelected ? 2 : 1.5);
-        })
-        .on('click', (event, d) => {
-          event.stopPropagation();
-          onSelectFile(d.id);
-        });
+      // Check if pie chart mode is enabled
+      const pieChartMode = isPieChartEnabled(config);
+
+      let node: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>;
+
+      if (pieChartMode) {
+        // Create pie chart nodes
+        node = createPieChartNodes(
+          nodeGroups,
+          nodeMetrics,
+          config,
+          allNodeMetrics,
+          EXTENSION_COLORS,
+          onSelectFile
+        );
+      } else {
+        // Create regular circle nodes
+        node = nodeGroups
+          .append('circle')
+          .attr('class', 'node')
+          .attr('r', d => {
+            const metrics = nodeMetrics.get(d.id);
+            return metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5;
+          })
+          .attr('fill', d => {
+            const metrics = nodeMetrics.get(d.id);
+            return getNodeColor(d, metrics, config, allNodeMetrics, EXTENSION_COLORS);
+          })
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 1.5)
+          .on('mouseover', function (_event, _d) {
+            d3.select(this).attr('stroke-width', 3);
+          })
+          .on('mouseout', function (_event, _d) {
+            // Reset to default hover state, but preserve selection highlighting
+            const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
+            d3.select(this).attr('stroke-width', isSelected ? 2 : 1.5);
+          })
+          .on('click', (event, d) => {
+            event.stopPropagation();
+            onSelectFile(d.id);
+          });
+      }
 
       // Add tooltips to nodes
       node.append('title').text(d => `${d.name}\nPath: ${d.path}\nType: ${d.type}`);
@@ -691,18 +709,33 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     useEffect(() => {
       if (!svgRef.current) return;
       const svg = d3.select(svgRef.current);
+      const pieChartMode = isPieChartEnabled(config);
 
-      // Reset all nodes to default style first
-      svg.selectAll('.node').attr('stroke', '#fff').attr('stroke-width', 1.5);
+      // Select appropriate node elements based on mode
+      const nodes = pieChartMode ? svg.selectAll('g.pie-node') : svg.selectAll('circle.node');
+
+      // Only proceed if nodes exist
+      if (nodes.empty()) return;
+
+      // Reset all nodes to default stroke
+      if (pieChartMode) {
+        nodes.selectAll('.pie-segment').attr('stroke', '#fff').attr('stroke-width', 1);
+      } else {
+        nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
+      }
 
       if (selectedFile) {
-        svg
-          .selectAll('.node')
-          .filter(d => (d as Node).id === selectedFile)
-          .attr('stroke', '#e74c3c') // Highlight color
-          .attr('stroke-width', 2);
+        const selectedNodes = nodes.filter(function (d) {
+          return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
+        });
+
+        if (pieChartMode) {
+          selectedNodes.selectAll('.pie-segment').attr('stroke', '#e74c3c').attr('stroke-width', 2);
+        } else {
+          selectedNodes.attr('stroke', '#e74c3c').attr('stroke-width', 2);
+        }
       }
-    }, [selectedFile]);
+    }, [selectedFile, config, expandedFiles]);
 
     return (
       <div ref={containerRef} className="w-full h-full bg-gray-50 rounded-lg overflow-hidden">

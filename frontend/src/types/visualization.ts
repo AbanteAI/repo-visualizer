@@ -127,6 +127,16 @@ export const DATA_SOURCES: DataSource[] = [
     dataType: 'continuous',
     applicableTo: 'edge',
   },
+  {
+    id: 'test_coverage',
+    name: 'Test Coverage',
+    description: 'Test coverage percentage for files',
+    color: '#fde047',
+    defaultWeight: 0,
+    category: 'file',
+    dataType: 'continuous',
+    applicableTo: 'node',
+  },
 ];
 
 // Available visual features
@@ -259,6 +269,7 @@ export const DEFAULT_CONFIG: VisualizationConfig = {
         semantic_similarity: 0,
         filesystem_proximity: 0,
         code_references: 0,
+        test_coverage: 100,
       },
       threshold: 0,
       includeDirectories: true, // Directories can participate in edge relationships
