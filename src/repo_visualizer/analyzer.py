@@ -735,6 +735,8 @@ class RepositoryAnalyzer:
 
                 # Add GitHub activity data if available
                 if self.github_activity_data and rel_path in self.github_activity_data:
+                    if not metrics:
+                        metrics = {}
                     metrics["githubActivity"] = self.github_activity_data[rel_path]
 
                 return components, metrics
