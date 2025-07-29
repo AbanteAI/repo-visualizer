@@ -31,6 +31,7 @@ class TestRepositoryRelationships:
 
         # Create a complex file structure
         os.makedirs(os.path.join(self.repo_path, "src/app/components"))
+        os.makedirs(os.path.join(self.repo_path, "src/utils"))
         with open(os.path.join(self.repo_path, "src/app/main.py"), "w") as f:
             f.write("from ..utils import helper\n")
         with open(os.path.join(self.repo_path, "src/utils/helper.py"), "w") as f:

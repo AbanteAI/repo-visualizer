@@ -100,7 +100,9 @@ class TestRepositoryAnalyzerExtended:
         analyzer.analyze()
 
         assert any(
-            r["source"] == "src/main.py" and r["target"] == "src/utils/helpers.py"
+            r["source"] == "src/main.py"
+            and r["target"] == "src/utils/helpers.py"
+            and r["type"] == "import"
             for r in analyzer.data["relationships"]
         )
 

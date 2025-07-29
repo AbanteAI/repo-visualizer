@@ -854,34 +854,40 @@ class RepositoryAnalyzer:
         self, import_name: str, file_path: str, level: int = 0
     ) -> Optional[str]:
         """Resolve a Python import to a file path."""
-        base_dir = os.path.dirname(file_path)
         if level > 0:
             # Relative import
-            base_dir = os.path.abspath(
-                os.path.join(base_dir, *(".." for _ in range(level)))
-            )
+            base_dir = os.path.dirname(file_path)
+            for _ in range(level - 1):
+                base_dir = os.path.dirname(base_dir)
+        else:
+            # Absolute import from repo root
+            base_dir = self.repo_path
 
         parts = import_name.split(".")
 
-        # Try to find a file
-        possible_path = os.path.join(base_dir, *parts)
-        for ext in [".py", "/__init__.py"]:
-            path_with_ext = possible_path + ext
-            rel_path = os.path.relpath(path_with_ext, self.repo_path).replace(
+        # Case 1: from a.b import c -> a/b/c.py
+        possible_file_path = os.path.join(base_dir, *parts) + ".py"
+        rel_path = os.path.relpath(possible_file_path, self.repo_path).replace(
+            os.path.sep, "/"
+        )
+        if rel_path in self.file_ids:
+            return rel_path
+
+        # Case 2: from a import b -> a/b/__init__.py
+        possible_dir_path = os.path.join(base_dir, *parts)
+        init_path = os.path.join(possible_dir_path, "__init__.py")
+        rel_path = os.path.relpath(init_path, self.repo_path).replace(os.path.sep, "/")
+        if rel_path in self.file_ids:
+            return rel_path
+
+        # Case 3: import a -> a/__init__.py
+        if len(parts) == 1:
+            init_path = os.path.join(base_dir, parts[0], "__init__.py")
+            rel_path = os.path.relpath(init_path, self.repo_path).replace(
                 os.path.sep, "/"
             )
             if rel_path in self.file_ids:
                 return rel_path
-
-        # Try to find a directory
-        possible_dir_path = os.path.join(base_dir, *parts)
-        rel_dir_path = os.path.relpath(possible_dir_path, self.repo_path).replace(
-            os.path.sep, "/"
-        )
-        if rel_dir_path in self.file_ids:
-            init_path = os.path.join(rel_dir_path, "__init__.py")
-            if init_path in self.file_ids:
-                return init_path
 
         return None
 

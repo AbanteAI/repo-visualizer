@@ -89,7 +89,7 @@ class TestRepositoryAnalyzer:
         assert len(data["relationships"]) > 0
         assert any(
             r["source"] == "main.py"
-            and r["target"] == "utils/helpers.py"
+            and r["target"] == "utils/__init__.py"
             and r["type"] == "import"
             for r in data["relationships"]
         )
