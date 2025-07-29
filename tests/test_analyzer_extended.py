@@ -41,91 +41,68 @@ class TestRepositoryAnalyzerExtended:
 
     def test_analyze_python_file_content(self):
         """Test analysis of Python file content."""
+        with open(os.path.join(self.repo_path, "test.py"), "w") as f:
+            f.write("import os\n\nclass MyClass:\n    pass\n")
+
         analyzer = RepositoryAnalyzer(self.repo_path)
-        python_content = "import os\n\nclass MyClass:\n    pass\n"
-        file_info = {
-            "id": "test.py",
-            "path": "test.py",
-            "type": "file",
-            "extension": "py",
-            "components": [],
-            "metrics": {},
-        }
-        analyzer._analyze_file_content(python_content, file_info)
+        analyzer.analyze()
+
+        file_info = analyzer.file_ids.get("test.py")
+        assert file_info is not None
         assert len(file_info.get("components", [])) == 1
         assert file_info.get("components", [])[0].get("name") == "MyClass"
         assert "linesOfCode" in file_info.get("metrics", {})
 
     def test_analyze_js_file_content(self):
         """Test analysis of JavaScript file content."""
+        with open(os.path.join(self.repo_path, "test.js"), "w") as f:
+            f.write(
+                "import React from 'react';\n\n"
+                "function MyComponent() {\n"
+                "    return <div></div>;\n"
+                "}"
+            )
+
         analyzer = RepositoryAnalyzer(self.repo_path)
-        js_content = (
-            "import React from 'react';\n\n"
-            "function MyComponent() {\n"
-            "    return <div></div>;\n"
-            "}"
-        )
-        file_info = {
-            "id": "test.js",
-            "path": "test.js",
-            "type": "file",
-            "extension": "js",
-            "components": [],
-            "metrics": {},
-        }
-        analyzer._analyze_file_content(js_content, file_info)
+        analyzer.analyze()
+
+        file_info = analyzer.file_ids.get("test.js")
+        assert file_info is not None
         assert len(file_info.get("components", [])) == 1
         assert file_info.get("components", [])[0].get("name") == "MyComponent"
         assert "linesOfCode" in file_info.get("metrics", {})
 
     def test_resolve_python_import(self):
         """Test Python import resolution."""
-        analyzer = RepositoryAnalyzer(self.repo_path)
         os.makedirs(os.path.join(self.repo_path, "src/utils"))
         with open(os.path.join(self.repo_path, "src/utils/__init__.py"), "w") as f:
             f.write("")
         with open(os.path.join(self.repo_path, "src/utils/helpers.py"), "w") as f:
             f.write("")
+        with open(os.path.join(self.repo_path, "src/main.py"), "w") as f:
+            f.write("from src.utils import helpers\n")
 
-        analyzer.file_ids = {
-            "src/utils/helpers.py": {
-                "id": "src/utils/helpers.py",
-                "path": "src/utils/helpers.py",
-                "type": "file",
-                "extension": "py",
-            }
-        }
+        analyzer = RepositoryAnalyzer(self.repo_path)
+        analyzer.analyze()
 
-        analyzer._extract_file_relationships(
-            "from src.utils import helpers", "src/main.py", "py"
+        assert any(
+            r["source"] == "src/main.py" and r["target"] == "src/utils/helpers.py"
+            for r in analyzer.data["relationships"]
         )
-        assert (
-            "src/main.py",
-            "src/utils/helpers.py",
-            "import",
-        ) in analyzer.relationship_counts
 
     def test_resolve_js_import(self):
         """Test JavaScript import resolution."""
-        analyzer = RepositoryAnalyzer(self.repo_path)
         os.makedirs(os.path.join(self.repo_path, "src/components"))
         with open(os.path.join(self.repo_path, "src/components/Button.js"), "w") as f:
             f.write("")
+        with open(os.path.join(self.repo_path, "src/components/Card.js"), "w") as f:
+            f.write("import Button from './Button';\n")
 
-        analyzer.file_ids = {
-            "src/components/Button.js": {
-                "id": "src/components/Button.js",
-                "path": "src/components/Button.js",
-                "type": "file",
-                "extension": "js",
-            }
-        }
+        analyzer = RepositoryAnalyzer(self.repo_path)
+        analyzer.analyze()
 
-        analyzer._extract_file_relationships(
-            "import Button from './Button'", "src/components/Card.js", "js"
+        assert any(
+            r["source"] == "src/components/Card.js"
+            and r["target"] == "src/components/Button.js"
+            for r in analyzer.data["relationships"]
         )
-        assert (
-            "src/components/Card.js",
-            "src/components/Button.js",
-            "import",
-        ) in analyzer.relationship_counts

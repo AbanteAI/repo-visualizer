@@ -597,9 +597,12 @@ class RepositoryAnalyzer:
                 # Add test coverage if available
                 file_coverage = coverage_data.get(rel_path)
                 if file_coverage:
-                    if "metrics" not in file_entry:
+                    if file_entry.get("metrics") is None:
                         file_entry["metrics"] = {}
-                    file_entry["metrics"]["testCoverage"] = file_coverage
+
+                    metrics = file_entry.get("metrics")
+                    if metrics:
+                        metrics["testCoverage"] = file_coverage
 
                 self.file_ids[rel_path] = file_entry
 
