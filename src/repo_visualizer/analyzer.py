@@ -11,7 +11,7 @@ import os
 import re
 import subprocess
 from datetime import datetime
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 
 import pathspec
 
@@ -31,7 +31,6 @@ except ImportError:
     NUMPY_AVAILABLE = False
 
 from .schema import (
-    Component,
     File,
     Relationship,
     RepositoryData,
@@ -66,7 +65,7 @@ class RepositoryAnalyzer:
             raise ValueError(f"Not a git repository: {self.repo_path}")
 
         self.data = create_empty_schema()
-        self.file_ids: Set[str] = set()
+        self.file_ids: Dict[str, File] = {}
         self.relationships: List[Relationship] = []
         self.relationship_counts: Dict[Tuple[str, str, str], int] = {}
 
@@ -164,6 +163,9 @@ class RepositoryAnalyzer:
 
         # Analyze git history
         self._analyze_history()
+
+        self.data["files"] = list(self.file_ids.values())
+        self._consolidate_relationships()
 
         return self.data
 
@@ -388,7 +390,6 @@ class RepositoryAnalyzer:
         Returns:
             Sanitized URL without credentials
         """
-        import re
 
         # Remove credentials from HTTPS URLs
         # Pattern matches: https://username:token@github.com/org/repo.git
@@ -502,7 +503,6 @@ class RepositoryAnalyzer:
 
     def _analyze_files(self) -> None:
         """Analyze file structure and content."""
-        files: List[File] = []
         dir_file_map: Dict[
             str, List[str]
         ] = {}  # Maps directory paths to contained file IDs
@@ -556,8 +556,7 @@ class RepositoryAnalyzer:
                     "components": [],
                 }
 
-                files.append(dir_entry)
-                self.file_ids.add(rel_path)
+                self.file_ids[rel_path] = dir_entry
 
                 # Initialize directory in map
                 dir_file_map[rel_path] = []
@@ -565,13 +564,7 @@ class RepositoryAnalyzer:
                 # Create parent directory relationship
                 parent_dir = os.path.dirname(rel_path)
                 if parent_dir and parent_dir in self.file_ids:
-                    self.relationships.append(
-                        {
-                            "source": parent_dir,
-                            "target": rel_path,
-                            "type": "contains",
-                        }
-                    )
+                    self._add_relationship(parent_dir, rel_path, "contains")
                     if parent_dir in dir_file_map:
                         dir_file_map[parent_dir].append(rel_path)
 
@@ -587,33 +580,21 @@ class RepositoryAnalyzer:
                 if self._is_ignored(rel_path, is_directory=False):
                     continue
 
-                file_path = os.path.join(root, file_name)
-
-                # Skip if not a regular file
-                if not os.path.isfile(file_path):
-                    continue
-
-                # Normalize path separator to forward slash
+                # Normalize path separator
                 rel_path = rel_path.replace(os.path.sep, "/")
 
                 # Get file extension
                 _, ext = os.path.splitext(file_name)
-                ext = ext.lstrip(".")
+                ext = ext.lstrip(".").lower()
 
-                # Calculate file size
+                # Get file size
                 try:
-                    size = os.path.getsize(file_path)
+                    size = os.path.getsize(os.path.join(root, file_name))
                 except OSError:
                     continue
 
                 # Calculate file depth
                 depth = len(rel_path.split("/")) - 1
-
-                # Extract components from the file
-                components = self._extract_components(file_path)
-
-                # Get test coverage for the file
-                file_coverage = coverage_data.get(rel_path)
 
                 # Create file entry
                 file_entry: File = {
@@ -624,14 +605,17 @@ class RepositoryAnalyzer:
                     "extension": ext,
                     "size": size,
                     "depth": depth,
-                    "components": components,
-                    "metrics": {
-                        "testCoverage": file_coverage,
-                    },
+                    "components": [],
                 }
 
-                files.append(file_entry)
-                self.file_ids.add(rel_path)
+                # Add test coverage if available
+                file_coverage = coverage_data.get(rel_path)
+                if file_coverage:
+                    if "metrics" not in file_entry:
+                        file_entry["metrics"] = {}
+                    file_entry["metrics"]["testCoverage"] = file_coverage
+
+                self.file_ids[rel_path] = file_entry
 
                 # Add to parent directory map
                 parent_dir = os.path.dirname(rel_path)
@@ -639,207 +623,20 @@ class RepositoryAnalyzer:
                     dir_file_map[parent_dir].append(rel_path)
                     self._add_relationship(parent_dir, rel_path, "contains")
 
-                # Add file-component relationships
-                for component in components:
-                    self._add_relationship(rel_path, component["id"], "contains")
-
-        # Update directory sizes
-        for f in files:
-            if f["type"] == "directory":
-                f["size"] = self._calculate_directory_size(f["id"], files, dir_file_map)
-
-        self.data["files"] = files
-
-    def _calculate_directory_size(
-        self,
-        dir_id: str,
-        all_files: List[File],
-        dir_file_map: Dict[str, List[str]],
-    ) -> int:
-        """Recursively calculate the size of a directory."""
-        total_size = 0
-        if dir_id in dir_file_map:
-            for child_id in dir_file_map[dir_id]:
-                child_file = next((f for f in all_files if f["id"] == child_id), None)
-                if child_file:
-                    if child_file["type"] == "file":
-                        total_size += child_file["size"]
-                    elif child_file["type"] == "directory":
-                        total_size += self._calculate_directory_size(
-                            child_id, all_files, dir_file_map
-                        )
-        return total_size
-
-    def _extract_components(self, file_path: str) -> List[Component]:
-        """
-        Extract components (classes, functions) from a file.
-
-        Args:
-            file_path: The absolute path to the file
-
-        Returns:
-            A list of Component objects
-        """
-        components: List[Component] = []
-        rel_path = os.path.relpath(file_path, self.repo_path)
-        _, ext = os.path.splitext(file_path)
-        ext = ext.lstrip(".")
-
-        try:
-            with open(file_path, encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-        except Exception:
-            return []
-
-        # Python component extraction
-        if ext == "py":
-            # Regex for classes and functions
-            pattern = re.compile(
-                r"^(?:class|def)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[:(]", re.MULTILINE
-            )
-            for match in pattern.finditer(content):
-                component_name = match.group(1)
-                component_type = "class" if "class" in match.group(0) else "function"
-                components.append(
-                    {
-                        "id": f"{rel_path}::{component_name}",
-                        "name": component_name,
-                        "type": component_type,
-                        "lineStart": 0,
-                        "lineEnd": 0,
-                    }
-                )
-
-        # JavaScript/TypeScript component extraction
-        elif ext in ["js", "ts", "jsx", "tsx"]:
-            # Regex for functions (including arrow functions) and classes
-            pattern = re.compile(
-                r"^(?:export\s+)?(?:async\s+)?(?:class|function\*?|const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=|\(|extends|{)",
-                re.MULTILINE,
-            )
-            for match in pattern.finditer(content):
-                component_name = match.group(1)
-                declaration = match.group(0)
-                component_type = "class" if "class" in declaration else "function"
-                components.append(
-                    {
-                        "id": f"{rel_path}::{component_name}",
-                        "name": component_name,
-                        "type": component_type,
-                        "lineStart": 0,
-                        "lineEnd": 0,
-                    }
-                )
-
-        return components
-
     def _extract_relationships(self) -> None:
-        """Extract relationships between files (e.g., imports)."""
-        # Regex patterns for different languages
-        patterns = {
-            "py": re.compile(r"^\s*(?:from|import)\s+([a-zA-Z0-9_.]+)", re.MULTILINE),
-            "js": re.compile(
-                r"^\s*import\s+.*\s+from\s+['\"]([^'\"]+)['\"]", re.MULTILINE
-            ),
-            "ts": re.compile(
-                r"^\s*import\s+.*\s+from\s+['\"]([^'\"]+)['\"]", re.MULTILINE
-            ),
-            "jsx": re.compile(
-                r"^\s*import\s+.*\s+from\s+['\"]([^'\"]+)['\"]", re.MULTILINE
-            ),
-            "tsx": re.compile(
-                r"^\s*import\s+.*\s+from\s+['\"]([^'\"]+)['\"]", re.MULTILINE
-            ),
-        }
-
-        for file_info in self.data["files"]:
-            if file_info["type"] != "file":
-                continue
-
-            ext = file_info["extension"]
-            if ext not in patterns:
-                continue
-
-            file_path = os.path.join(self.repo_path, file_info["path"])
-            try:
-                with open(file_path, encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-            except Exception:
-                continue
-
-            for match in patterns[ext].finditer(content):
-                import_path = match.group(1)
-                target_file = self._resolve_import_path(
-                    import_path, file_info["path"], ext
-                )
-                if target_file and target_file in self.file_ids:
-                    self._add_relationship(file_info["id"], target_file, "import")
-
-        # Add semantic similarity relationships if enabled
-        self._add_semantic_relationships()
-
-        # Add filesystem proximity relationships
-        self._add_filesystem_relationships()
-
-        # Consolidate relationships
-        self._consolidate_relationships()
-
-    def _resolve_import_path(
-        self, import_path: str, source_path: str, ext: str
-    ) -> Optional[str]:
-        """
-        Resolve an import path to a file path in the repository.
-
-        Args:
-            import_path: The imported path string
-            source_path: The path of the file containing the import
-            ext: The file extension of the source file
-
-        Returns:
-            The resolved file path relative to the repo root, or None
-        """
-        # Python import resolution
-        if ext == "py":
-            # Convert import path to file path
-            parts = import_path.split(".")
-            possible_paths = [
-                os.path.join(*parts) + ".py",
-                os.path.join(*parts, "__init__.py"),
-            ]
-            for path in possible_paths:
-                full_path = os.path.join(self.repo_path, path)
-                if os.path.isfile(full_path):
-                    return path.replace(os.path.sep, "/")
-            return None
-
-        # JavaScript/TypeScript import resolution
-        elif ext in ["js", "ts", "jsx", "tsx"]:
-            # Handle relative paths
-            if import_path.startswith("./") or import_path.startswith("../"):
-                source_dir = os.path.dirname(source_path)
-                resolved_path = os.path.normpath(os.path.join(source_dir, import_path))
-                possible_exts = [".js", ".ts", ".jsx", ".tsx", "/index.js", "/index.ts"]
-                for possible_ext in possible_exts:
-                    full_path = os.path.join(
-                        self.repo_path, resolved_path + possible_ext
-                    )
-                    if os.path.isfile(full_path):
-                        return (resolved_path + possible_ext).replace(os.path.sep, "/")
-                # Check for extensionless import
-                full_path = os.path.join(self.repo_path, resolved_path)
-                if os.path.isfile(full_path):
-                    return resolved_path.replace(os.path.sep, "/")
-            return None
-
-        return None
+        """Extract relationships between files."""
+        # This is a placeholder for future relationship extraction logic
+        pass
 
     def _add_relationship(self, source: str, target: str, type: str) -> None:
         """Add a relationship, handling duplicates and counting."""
         # For undirected relationships, ensure consistent key ordering
         if type in ("semantic_similarity", "filesystem_proximity"):
-            rel_key = (*tuple(sorted((source, target))), type)
+            rel_key_tuple = (*tuple(sorted((source, target))), type)
         else:
-            rel_key = (source, target, type)
+            rel_key_tuple = (source, target, type)
+
+        rel_key = cast(Tuple[str, str, str], rel_key_tuple)
 
         if rel_key in self.relationship_counts:
             self.relationship_counts[rel_key] += 1
@@ -855,176 +652,55 @@ class RepositoryAnalyzer:
         for rel in self.relationships:
             source, target, type = rel["source"], rel["target"], rel["type"]
             if type in ("semantic_similarity", "filesystem_proximity"):
-                rel_key = (*tuple(sorted((source, target))), type)
+                rel_key_tuple = (*tuple(sorted((source, target))), type)
             else:
-                rel_key = (source, target, type)
+                rel_key_tuple = (source, target, type)
+
+            rel_key = cast(Tuple[str, str, str], rel_key_tuple)
             strength = self.relationship_counts.get(rel_key, 1)
             consolidated.append(
                 {"source": source, "target": target, "type": type, "strength": strength}
             )
         self.data["relationships"] = consolidated
 
-    def _add_semantic_relationships(self) -> None:
-        """Add relationships based on semantic similarity (if enabled)."""
-        if not OPENAI_AVAILABLE or not NUMPY_AVAILABLE:
-            return
-
-        # Get embeddings for all files
-        embeddings = self._get_file_embeddings()
-        if not embeddings:
-            return
-
-        # Calculate cosine similarity between all pairs of files
-        file_ids = list(embeddings.keys())
-        embedding_matrix = np.array(list(embeddings.values()))
-
-        # Normalize embeddings
-        norms = np.linalg.norm(embedding_matrix, axis=1, keepdims=True)
-        normalized_embeddings = embedding_matrix / norms
-
-        # Compute cosine similarity matrix
-        similarity_matrix = np.dot(normalized_embeddings, normalized_embeddings.T)
-
-        # Add relationships for pairs with similarity above a threshold
-        threshold = 0.8
-        for i in range(len(file_ids)):
-            for j in range(i + 1, len(file_ids)):
-                if similarity_matrix[i, j] > threshold:
-                    self._add_relationship(
-                        file_ids[i], file_ids[j], "semantic_similarity"
-                    )
-
-    def _get_file_embeddings(self) -> Dict[str, List[float]]:
-        """Get OpenAI embeddings for all text files."""
-        embeddings: Dict[str, List[float]] = {}
-        text_extensions = {"py", "js", "ts", "jsx", "tsx", "md", "txt", "html", "css"}
-
-        for file_info in self.data["files"]:
-            if (
-                file_info["type"] == "file"
-                and file_info["extension"] in text_extensions
-            ):
-                try:
-                    file_path = os.path.join(self.repo_path, file_info["path"])
-                    with open(file_path, encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
-                    # Truncate content to avoid excessive token usage
-                    content = content[:4096]
-                    response = openai.Embedding.create(
-                        input=content, model="text-embedding-ada-002"
-                    )
-                    embeddings[file_info["id"]] = response["data"][0]["embedding"]
-                except Exception as e:
-                    print(
-                        f"Warning: Could not get embedding for {file_info['path']}: {e}"
-                    )
-        return embeddings
-
-    def _add_filesystem_relationships(self) -> None:
-        """Add relationships based on filesystem proximity."""
-        for i, file1 in enumerate(self.data["files"]):
-            if file1["type"] != "file":
-                continue
-            for j in range(i + 1, len(self.data["files"])):
-                file2 = self.data["files"][j]
-                if file2["type"] != "file":
-                    continue
-
-                # Add relationship if files are in the same directory
-                if os.path.dirname(file1["path"]) == os.path.dirname(file2["path"]):
-                    self._add_relationship(
-                        file1["id"], file2["id"], "filesystem_proximity"
-                    )
-
     def _analyze_history(self) -> None:
-        """Analyze git history to get commit counts and recency for each file."""
+        """Analyze git history to get commit metrics."""
         try:
-            # Get commit history for all files in one go
             result = subprocess.run(
-                ["git", "log", "--name-only", "--pretty=format:%H %at"],
+                ["git", "log", "--name-status", "--pretty=format:commit:%H %at"],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
-                check=False,
+                check=True,
             )
-            if result.returncode != 0:
-                return
-
-            commit_counts: Dict[str, int] = {}
-            last_modified: Dict[str, int] = {}
-            current_commit_timestamp = 0
-
-            for line in result.stdout.splitlines():
-                if not line:
-                    continue
-                # Check if it's a commit line (hash and timestamp)
-                if " " in line and len(line.split()[0]) == 40:
-                    parts = line.split()
-                    current_commit_timestamp = int(parts[1])
-                else:
-                    # It's a file path
-                    file_path = line.strip()
-                    if file_path in self.file_ids:
-                        # Increment commit count
-                        commit_counts[file_path] = commit_counts.get(file_path, 0) + 1
-                        # Update last modified timestamp
-                        if file_path not in last_modified:
-                            last_modified[file_path] = current_commit_timestamp
-
-            # Update file metrics
-            for file_info in self.data["files"]:
-                if file_info["type"] == "file":
-                    path = file_info["path"]
-                    if "metrics" not in file_info:
-                        file_info["metrics"] = {}
-                    file_info["metrics"]["commitCount"] = commit_counts.get(path, 0)
-                    file_info["metrics"]["lastModified"] = last_modified.get(path, 0)
-
-        except Exception as e:
+            log_output = result.stdout
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"Warning: Could not analyze git history: {e}")
+            return
 
-    def save_to_file(self, output_path: str) -> None:
-        """
-        Save the repository data to a JSON file.
+        current_commit_timestamp = 0
+        for line in log_output.splitlines():
+            if line.startswith("commit:"):
+                parts = line.split()
+                if len(parts) >= 3:
+                    current_commit_timestamp = int(parts[2])
+            elif line:
+                parts = line.split("\t")
+                if len(parts) >= 2:
+                    status = parts[0]
+                    file_path = parts[1]
 
-        Args:
-            output_path: Path to output JSON file
-        """
+                    # Handle renamed files
+                    if status.startswith("R"):
+                        _, file_path, new_path = parts
+                        file_path = new_path
 
-        # Custom JSON encoder to handle datetime objects
-        class DateTimeEncoder(json.JSONEncoder):
-            def default(self, obj):
-                if isinstance(obj, datetime):
-                    return obj.isoformat()
-                return super().default(obj)
+                    if file_path in self.file_ids:
+                        file_info = self.file_ids[file_path]
+                        if "metrics" not in file_info:
+                            file_info["metrics"] = {}
 
-        with open(output_path, "w") as f:
-            json.dump(self.data, f, indent=2, cls=DateTimeEncoder)
-
-        print(f"Repository data saved to {output_path}")
-
-
-def analyze_repository(
-    repo_path: str,
-    output_path: str,
-    python_coverage_path: Optional[str] = None,
-    frontend_coverage_path: Optional[str] = None,
-) -> None:
-    """
-    Analyze a repository and generate visualization data.
-
-    Args:
-        repo_path: Path to the local git repository
-        output_path: Path to output JSON file
-        python_coverage_path: Path to Python coverage.json file
-        frontend_coverage_path: Path to frontend coverage.json file
-    """
-    analyzer = RepositoryAnalyzer(
-        repo_path,
-        python_coverage_path=python_coverage_path,
-        frontend_coverage_path=frontend_coverage_path,
-    )
-    analyzer.analyze()
-    analyzer.save_to_file(output_path)
-
-    print(f"Repository analysis complete. Data saved to {output_path}")
+                        file_info["metrics"]["lastModified"] = current_commit_timestamp
+                        file_info["metrics"]["commitCount"] = (
+                            file_info["metrics"].get("commitCount", 0) + 1
+                        )
