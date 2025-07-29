@@ -348,7 +348,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         g.selectAll<SVGGElement, Node>('.node').attr('transform', d => `translate(${d.x},${d.y})`);
       };
       simulation.on('tick', ticked);
-    }, [dimensions, g]);
+    }, [dimensions]);
 
     // Effect for updating the visualization with new data
     useEffect(() => {
@@ -543,7 +543,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('pointer-events', 'none');
 
       simulation.alpha(0.1).restart();
-    }, [data, nodeMetrics, linkMetrics, expandedFiles, config, onSelectFile, dimensions, g]);
+    }, [data, nodeMetrics, linkMetrics, expandedFiles, config, onSelectFile, dimensions]);
 
     // Cleanup on unmount
     useEffect(() => {
