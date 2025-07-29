@@ -635,16 +635,19 @@ class RepositoryAnalyzer:
         }
         if file_info.get("metrics") is None:
             file_info["metrics"] = {}
-        file_info["metrics"].update(metrics)
+
+        # We know that metrics is not None here
+        file_metrics = cast(Dict, file_info["metrics"])
+        file_metrics.update(metrics)
 
         if file_info["extension"] == "py":
             components, _ = self._analyze_python_file(
-                content, file_info["path"], file_info["metrics"]
+                content, file_info["path"], file_metrics
             )
             file_info["components"] = components
         elif file_info["extension"] in ("js", "ts", "jsx", "tsx"):
             components, _ = self._analyze_js_file(
-                content, file_info["path"], file_info["metrics"]
+                content, file_info["path"], file_metrics
             )
             file_info["components"] = components
 
