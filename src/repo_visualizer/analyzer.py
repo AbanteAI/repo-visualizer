@@ -73,8 +73,15 @@ class RepositoryAnalyzer:
 
         # GitHub integration
         self.enable_github = enable_github
-        self.github_client = GitHubClient(github_token) if enable_github else None
+        self.github_client = None
         self.github_activity_data: Optional[Dict[str, Dict]] = None
+
+        if enable_github:
+            try:
+                self.github_client = GitHubClient(github_token)
+            except ImportError as e:
+                print(f"Warning: {e}")
+                self.enable_github = False
 
         # Load gitignore patterns
         self.gitignore_spec = self._load_gitignore_patterns()

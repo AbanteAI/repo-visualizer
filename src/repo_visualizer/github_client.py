@@ -12,7 +12,12 @@ import re
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-import requests
+try:
+    import requests
+
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +33,11 @@ class GitHubClient:
             token: GitHub personal access token. If not provided, will try to get from
                    GITHUB_TOKEN environment variable.
         """
+        if not REQUESTS_AVAILABLE:
+            raise ImportError(
+                "requests library is required for GitHub integration. Install with: pip install requests"
+            )
+
         self.token = token or os.getenv("GITHUB_TOKEN")
         self.base_url = "https://api.github.com"
         self.session = requests.Session()
