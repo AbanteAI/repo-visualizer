@@ -117,27 +117,22 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   // Update refs with current values
   handleMouseMoveRef.current = (e: MouseEvent) => {
     if (isDragging && menuRef.current) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      animationFrameRef.current = requestAnimationFrame(() => {
-        if (!menuRef.current) return;
-        const parent = menuRef.current.parentElement;
-        const deltaX = e.clientX - dragStartRef.current.mouseX;
-        const deltaY = e.clientY - dragStartRef.current.mouseY;
+      // Update position immediately without requestAnimationFrame for responsive dragging
+      const parent = menuRef.current.parentElement;
+      const deltaX = e.clientX - dragStartRef.current.mouseX;
+      const deltaY = e.clientY - dragStartRef.current.mouseY;
 
-        const newX = dragStartRef.current.elementX + deltaX;
-        const newY = dragStartRef.current.elementY + deltaY;
+      const newX = dragStartRef.current.elementX + deltaX;
+      const newY = dragStartRef.current.elementY + deltaY;
 
-        const parentWidth = parent ? parent.offsetWidth : document.documentElement.clientWidth;
-        const maxX = Math.max(0, parentWidth - size.width);
-        const maxY = Math.max(0, window.innerHeight - size.height - 40);
+      const parentWidth = parent ? parent.offsetWidth : document.documentElement.clientWidth;
+      const maxX = Math.max(0, parentWidth - size.width);
+      const maxY = Math.max(0, window.innerHeight - size.height - 40);
 
-        const clampedX = Math.max(0, Math.min(maxX, newX));
-        const clampedY = Math.max(0, Math.min(maxY, newY));
+      const clampedX = Math.max(0, Math.min(maxX, newX));
+      const clampedY = Math.max(0, Math.min(maxY, newY));
 
-        menuRef.current.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
-      });
+      menuRef.current.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
     } else if (isResizing) {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -162,9 +157,6 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
 
   handleMouseUpRef.current = () => {
     if (isDragging && menuRef.current) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
       const transform = menuRef.current.style.transform;
       const match = /translate3d\(([^,]+)px, ([^,]+)px, 0px\)/.exec(transform);
       if (match) {
