@@ -50,7 +50,9 @@ class TestCli:
         exit_code = main(["/path/to/repo", "-o", "output.json"])
 
         # Check that analyze_repository was called with expected args
-        mock_analyze.assert_called_once_with("/path/to/repo", "output.json")
+        mock_analyze.assert_called_once_with(
+            "/path/to/repo", "output.json", enable_github=False, github_token=None
+        )
         assert exit_code == 0
 
     @patch("os.path.isdir")
