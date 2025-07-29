@@ -843,7 +843,7 @@ class RepositoryAnalyzer:
         # This is a simplified analysis. A more robust solution would use a proper JS/TS parser.
         import_pattern = r"""(?:import|export)\s+(?:(?P<imports>[\w\s{},*]+)\s+from\s+)?['"](?P<path>[^'"]+)['"]"""
         for match in re.finditer(import_pattern, content):
-            import_path = match.group(1)
+            import_path = match.group("path")
             resolved_path = self._resolve_js_import(import_path, file_path)
             if resolved_path:
                 self._add_relationship(file_path, resolved_path, "import")
