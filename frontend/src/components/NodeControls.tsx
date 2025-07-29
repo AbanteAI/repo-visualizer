@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import FloatingMenu from './FloatingMenu';
 import {
   VisualizationConfig,
-  VisualFeature,
   VISUAL_FEATURES,
-  DATA_SOURCES,
   getFeatureMapping,
   updateFeatureMapping,
   updateDirectoryInclusion,

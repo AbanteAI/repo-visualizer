@@ -7,4 +7,6 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT/frontend"
 
 npm run dev -- --host 0.0.0.0 &
+pid=$!
 sleep 5
+wait $pid
