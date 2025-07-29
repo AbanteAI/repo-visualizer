@@ -2034,13 +2034,15 @@ class RepositoryAnalyzer:
         sorted_indices = sorted(indices)
 
         print(
-            f"Creating {len(sorted_indices)} timeline points from {total_commits} commits..."
+            f"Creating {len(sorted_indices)} timeline points "
+            f"from {total_commits} commits..."
         )
 
         for idx, i in enumerate(sorted_indices):
             commit = commits[i]
             print(
-                f"Analyzing commit {idx + 1}/{len(sorted_indices)}: {commit['id'][:8]} - {commit['message'][:50]}..."
+                f"Analyzing commit {idx + 1}/{len(sorted_indices)}: "
+                f"{commit['id'][:8]} - {commit['message'][:50]}..."
             )
 
             # Checkout this commit
