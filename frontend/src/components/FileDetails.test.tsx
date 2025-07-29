@@ -131,7 +131,7 @@ describe('FileDetails', () => {
   it('calls onClose when close button is clicked', () => {
     render(<FileDetails fileId="test-file" data={mockData} onClose={mockOnClose} />);
 
-    const closeButton = screen.getByText('×');
+    const closeButton = screen.getByLabelText('Close');
     fireEvent.click(closeButton);
 
     expect(mockOnClose).toHaveBeenCalledTimes(1);
