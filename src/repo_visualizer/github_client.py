@@ -267,11 +267,12 @@ class GitHubClient:
                     activity["earliest_pr_date"] = pr_created
 
         # Calculate derived metrics
-        now = datetime.now(
-            tz=file_activity[next(iter(file_activity.keys()))]["latest_pr_date"].tzinfo
-            if file_activity
-            else None
-        )
+        tzinfo = None
+        if file_activity:
+            first_activity = next(iter(file_activity.values()))
+            first_dt = first_activity.get("latest_pr_date")
+            tzinfo = first_dt.tzinfo if isinstance(first_dt, datetime) else None
+        now = datetime.now(tz=tzinfo)
         max_changes = max(
             (activity["total_changes"] for activity in file_activity.values()),
             default=1,
