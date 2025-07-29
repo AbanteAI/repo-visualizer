@@ -89,7 +89,13 @@ describe('RepositoryGraph Simple Tests', () => {
   it('applies correct container classes', () => {
     render(<RepositoryGraph {...defaultProps} />);
     const container = document.querySelector('svg')?.parentElement;
-    expect(container).toHaveClass('w-full', 'h-full', 'bg-gray-50', 'rounded-lg', 'overflow-hidden');
+    expect(container).toHaveClass(
+      'w-full',
+      'h-full',
+      'bg-gray-50',
+      'rounded-lg',
+      'overflow-hidden'
+    );
   });
 
   it('handles prop changes', () => {

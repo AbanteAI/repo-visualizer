@@ -16,14 +16,6 @@ from typing import Dict, List, Optional, Tuple, cast
 import pathspec
 
 # Optional dependency for semantic similarity
-try:
-    import openai
-
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-
-
 from .schema import (
     File,
     Relationship,
