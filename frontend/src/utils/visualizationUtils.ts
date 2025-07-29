@@ -123,7 +123,13 @@ export const computeLinkMetrics = (data: RepositoryData): Map<string, ComputedLi
       semantic_similarity: rel.type === 'semantic_similarity' ? strength : 0,
       filesystem_proximity: rel.type === 'filesystem_proximity' ? strength : 0,
       code_references:
-        rel.type === 'import' || rel.type === 'call' || rel.type === 'contains' ? strength : 0,
+        rel.type === 'import' ||
+        rel.type === 'call' ||
+        rel.type === 'calls' ||
+        rel.type === 'inheritance' ||
+        rel.type === 'contains'
+          ? strength
+          : 0,
     };
 
     metrics.set(linkKey, linkMetrics);

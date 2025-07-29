@@ -18,12 +18,11 @@ import {
   computeLinkMetrics,
   calculateNodeSize,
   calculateEdgeStrength,
-  calculateEdgeWidth,
-  calculateEdgeColor,
   getNodeColor,
-  getLinkColor,
   isNodeVisible,
   isEdgeVisible,
+  calculateEdgeWidth,
+  calculateEdgeColor,
 } from '../../utils/visualizationUtils';
 import { EXTENSION_COLORS } from '../../utils/extensionColors';
 import { createPieChartNodes, isPieChartEnabled } from './RepositoryGraph.helpers';
@@ -54,7 +53,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-    const originalNodesRef = useRef<Node[]>([]);
     const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
     const [nodeMetrics, setNodeMetrics] = useState<Map<string, ComputedNodeMetrics>>(new Map());
@@ -126,27 +124,20 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       const handleResize = () => {
         if (containerRef.current) {
           const newWidth = containerRef.current.clientWidth;
-
-          // Calculate available height dynamically
           const viewportHeight = window.innerHeight;
           const header = document.querySelector('header');
-          const repoInfo = document.querySelector('.max-w-7xl'); // repo info section
-          const controls = document.querySelector('.border-t'); // controls section
-
+          const repoInfo = document.querySelector('.max-w-7xl');
+          const controls = document.querySelector('.border-t');
           const headerHeight = header ? header.offsetHeight : 0;
           const repoInfoHeight = repoInfo ? repoInfo.offsetHeight : 0;
           const controlsHeight = controls ? controls.offsetHeight : 0;
-
-          // Calculate available height for the graph
           const availableHeight =
-            viewportHeight - headerHeight - repoInfoHeight - controlsHeight - 16; // 16px for padding
-          const newHeight = Math.max(availableHeight, 400); // minimum 400px
+            viewportHeight - headerHeight - repoInfoHeight - controlsHeight - 16;
+          const newHeight = Math.max(availableHeight, 400);
 
-          // Only update if dimensions actually changed significantly (avoid micro-changes)
           setDimensions(prev => {
             const widthChanged = Math.abs(prev.width - newWidth) > 2;
             const heightChanged = Math.abs(prev.height - newHeight) > 2;
-
             if (widthChanged || heightChanged) {
               return { width: newWidth, height: newHeight };
             }
@@ -160,21 +151,16 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         resizeTimeout = setTimeout(handleResize, 100);
       };
 
-      // Set initial dimensions
       handleResize();
 
-      // Use ResizeObserver for better detection of container size changes
       if (containerRef.current && window.ResizeObserver) {
         const resizeObserver = new ResizeObserver(debouncedResize);
         resizeObserver.observe(containerRef.current);
-
-        // Cleanup
         return () => {
           clearTimeout(resizeTimeout);
           resizeObserver.disconnect();
         };
       } else {
-        // Fallback to window resize listener
         window.addEventListener('resize', debouncedResize);
         return () => {
           clearTimeout(resizeTimeout);
@@ -183,7 +169,7 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }, []);
 
-    // Effect to handle dimension changes - only update simulation if it exists
+    // Effect to handle dimension changes
     useEffect(() => {
       if (
         !svgRef.current ||
@@ -192,42 +178,25 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         dimensions.height === 0
       )
         return;
-
       const svg = d3.select(svgRef.current);
       const simulation = simulationRef.current;
-      const width = dimensions.width;
-      const height = dimensions.height;
-
-      // Update SVG dimensions - ensure it doesn't expand beyond container
-      svg
-        .attr('width', width)
-        .attr('height', height)
-        .attr('viewBox', [0, 0, width, height])
-        .style('max-width', '100%')
-        .style('max-height', '100%');
-
-      // Update center force to new dimensions
+      const { width, height } = dimensions;
+      svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
       const centerForce = simulation.force('center') as d3.ForceCenter<Node>;
       if (centerForce) {
         centerForce.x(width / 2).y(height / 2);
       }
-
-      // Gently restart simulation to adjust to new dimensions (reduce alpha to minimize movement)
       simulation.alpha(0.05).restart();
     }, [dimensions]);
 
     // Compute metrics when data changes
     useEffect(() => {
       if (!data) return;
-
-      const computedNodeMetrics = computeNodeMetrics(data);
-      const computedLinkMetrics = computeLinkMetrics(data);
-
-      setNodeMetrics(computedNodeMetrics);
-      setLinkMetrics(computedLinkMetrics);
+      setNodeMetrics(computeNodeMetrics(data));
+      setLinkMetrics(computeLinkMetrics(data));
     }, [data]);
 
-    // Initial setup effect - runs when data changes
+    // Main drawing effect
     useEffect(() => {
       if (
         !svgRef.current ||
@@ -239,135 +208,64 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       )
         return;
 
-      // Clear any existing visualization
       const svg = d3.select(svgRef.current);
       svg.selectAll('*').remove();
 
-      // Set up dimensions
-      const width = dimensions.width;
-      const height = dimensions.height;
-
-      // Update SVG dimensions
+      const { width, height } = dimensions;
       svg.attr('width', width).attr('height', height).attr('viewBox', [0, 0, width, height]);
 
-      // Create a group for the graph
       const g = svg.append('g');
 
-      // Extract nodes from files and their components
       const allNodes: Node[] = [];
-
-      // Add file and directory nodes
       data.files.forEach(file => {
-        // Only add file-level nodes (not components as separate nodes)
         if (file.type === 'file' || file.type === 'directory') {
-          allNodes.push({
-            id: file.id,
-            name: file.name,
-            path: file.path,
-            type: file.type,
-            extension: file.extension,
-            size: file.size,
-            depth: file.depth,
-            expanded: expandedFiles.has(file.id),
-          });
-
-          // Add component nodes only if file is expanded
+          allNodes.push({ ...file, expanded: expandedFiles.has(file.id) });
           if (expandedFiles.has(file.id) && file.components) {
             file.components.forEach(component => {
               allNodes.push({
-                id: component.id,
-                name: component.name,
+                ...component,
                 path: file.path,
-                type: component.type,
-                extension: file.extension,
-                size: 0, // Components don't have file size
-                depth: file.depth + 1,
                 parentId: file.id,
+                depth: file.depth + 1,
+                size: 0,
               });
-
-              // Add nested component nodes recursively
-              const addNestedComponents = (comp: any, currentDepth: number, parentId: string) => {
-                if (comp.components) {
-                  comp.components.forEach((nestedComp: any) => {
-                    allNodes.push({
-                      id: nestedComp.id,
-                      name: nestedComp.name,
-                      path: file.path,
-                      type: nestedComp.type,
-                      extension: file.extension,
-                      size: 0,
-                      depth: currentDepth + 1,
-                      parentId: parentId,
-                    });
-                    addNestedComponents(nestedComp, currentDepth + 1, parentId);
-                  });
-                }
-              };
-              addNestedComponents(component, file.depth + 1, file.id);
             });
           }
         }
       });
 
-      // Get all node metrics for threshold calculations
       const allNodeMetrics = Array.from(nodeMetrics.values());
-
-      // Use all nodes initially - thresholding will be applied in config update effect
-      const nodes = allNodes;
-
-      // Create initial links with current weights, but only for visible nodes
+      const nodes = allNodes.filter(node => {
+        const metrics = nodeMetrics.get(node.id);
+        return metrics ? isNodeVisible(metrics, config, allNodeMetrics, node.type) : true;
+      });
       const nodeIds = new Set(nodes.map(n => n.id));
+
       const createLinks = () => {
         const baseLinks = data.relationships
           .filter(rel => nodeIds.has(rel.source) && nodeIds.has(rel.target))
           .map(rel => {
             const linkKey = `${rel.source}-${rel.target}`;
             const linkMetric = linkMetrics.get(linkKey);
-
-            if (!linkMetric) {
-              return {
-                source: rel.source,
-                target: rel.target,
-                type: rel.type,
-                weight: 0,
-                originalStrength: rel.strength || 1,
-              };
-            }
-
-            const edgeStrength = calculateEdgeStrength(linkMetric, config);
-
-            return {
-              source: rel.source,
-              target: rel.target,
-              type: rel.type,
-              weight: edgeStrength,
-              originalStrength: rel.strength || 1,
-            };
+            const edgeStrength = linkMetric ? calculateEdgeStrength(linkMetric, config) : 0;
+            return { ...rel, weight: edgeStrength };
           })
           .filter(link => {
-            // Apply both existing weight check and new threshold check
             if (link.weight <= 0) return false;
-
             const linkKey = `${link.source}-${link.target}`;
             const linkMetric = linkMetrics.get(linkKey);
-            if (!linkMetric) return false;
-
-            return isEdgeVisible(linkMetric, config, link.type);
+            return linkMetric ? isEdgeVisible(linkMetric, config, link.type) : false;
           });
 
-        // Add dynamic "contains" relationships for expanded nodes
         const dynamicLinks: Link[] = [];
         nodes.forEach(node => {
           if (node.parentId && nodeIds.has(node.parentId)) {
-            // Create a synthetic link metric for contains relationships
             const containsMetric: ComputedLinkMetrics = {
               semantic_similarity: 0,
               filesystem_proximity: 0,
-              code_references: 1, // Contains relationships are code references
+              code_references: 1,
             };
-
             const edgeStrength = calculateEdgeStrength(containsMetric, config);
-
             dynamicLinks.push({
               source: node.parentId,
               target: node.id,
@@ -377,16 +275,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             });
           }
         });
-
         return [...baseLinks, ...dynamicLinks];
       };
-
       const links = createLinks();
 
-      // Store original nodes for threshold filtering
-      originalNodesRef.current = nodes;
-
-      // Create a force simulation
       const simulation = d3
         .forceSimulation<Node>(nodes)
         .force(
@@ -395,36 +287,21 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             .forceLink<Node, Link>(links)
             .id(d => d.id)
             .distance(d => {
-              // Adjust distance based on connection type and weight
               const baseDistance = 100;
               const weight = d.weight || 0;
               const strength = d.originalStrength || 1;
-
-              if (d.type === 'filesystem_proximity') {
-                // Filesystem connections should be closer
+              if (d.type === 'filesystem_proximity')
                 return baseDistance * (1 - weight * 0.5) * (1 / strength);
-              } else if (d.type === 'semantic_similarity') {
-                // Semantic connections should be moderately close
+              if (d.type === 'semantic_similarity')
                 return baseDistance * (1 - weight * 0.4) * (1 / strength);
-              } else if (d.type === 'contains') {
-                // Containment relationships should be very close for clear hierarchy
-                return 50; // Much shorter distance for parent-child relationships
-              } else {
-                // Reference connections
-                return baseDistance * (1 - weight * 0.3);
-              }
+              if (d.type === 'contains') return 50;
+              return baseDistance * (1 - weight * 0.3);
             })
             .strength(d => {
-              // Adjust strength based on weight
               const baseStrength = 1;
               const weight = d.weight || 0;
               const strength = d.originalStrength || 1;
-
-              if (d.type === 'contains') {
-                // Strong attraction for parent-child relationships
-                return 2; // Stronger force for containment
-              }
-
+              if (d.type === 'contains') return 2;
               return baseStrength * weight * strength;
             })
         )
@@ -434,16 +311,11 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           'collision',
           d3.forceCollide<Node>().radius(d => {
             const metrics = nodeMetrics.get(d.id);
-            if (!metrics) return 10;
-            const allNodeMetrics = Array.from(nodeMetrics.values());
-            return calculateNodeSize(metrics, config, allNodeMetrics, d.type) + 5;
+            return (metrics ? calculateNodeSize(metrics, config, allNodeMetrics, d.type) : 5) + 5;
           })
         );
-
-      // Save simulation to ref for potential future interactions
       simulationRef.current = simulation;
 
-      // Create links
       const link = g
         .append('g')
         .selectAll('line')
@@ -470,17 +342,14 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           return calculateEdgeWidth(linkMetric, config, d.type);
         });
 
-      // Add tooltips to edges showing reference counts
       link.append('title').text(d => {
         const sourceName = (d.source as any).name || (d.source as any).id || d.source;
         const targetName = (d.target as any).name || (d.target as any).id || d.target;
         const strength = d.originalStrength || 1;
         const referenceText = strength > 1 ? `${strength} references` : '1 reference';
-
         return `${sourceName} → ${targetName}\nType: ${d.type}\nReferences: ${referenceText}`;
       });
 
-      // Create node groups (to hold both circles and expand/collapse indicators)
       const nodeGroups = g
         .append('g')
         .attr('class', 'nodes')
@@ -491,13 +360,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('cursor', 'pointer')
         .call(dragBehavior(simulation));
 
-      // Check if pie chart mode is enabled
       const pieChartMode = isPieChartEnabled(config);
-
-      let node: d3.Selection<d3.BaseType, NodeData, d3.BaseType, unknown>;
+      let node: d3.Selection<d3.BaseType, Node, d3.BaseType, unknown>;
 
       if (pieChartMode) {
-        // Create pie chart nodes
         node = createPieChartNodes(
           nodeGroups,
           nodeMetrics,
@@ -507,7 +373,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           onSelectFile
         );
       } else {
-        // Create regular circle nodes
         node = nodeGroups
           .append('circle')
           .attr('class', 'node')
@@ -525,7 +390,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             d3.select(this).attr('stroke-width', 3);
           })
           .on('mouseout', function (_event, _d) {
-            // Reset to default hover state, but preserve selection highlighting
             const isSelected = d3.select(this).attr('stroke') === '#e74c3c';
             d3.select(this).attr('stroke-width', isSelected ? 2 : 1.5);
           })
@@ -535,10 +399,8 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           });
       }
 
-      // Add tooltips to nodes
       node.append('title').text(d => `${d.name}\nPath: ${d.path}\nType: ${d.type}`);
 
-      // Add click handler for expand/collapse
       nodeGroups
         .filter(d => hasComponents(d.id))
         .on('dblclick', (event, d) => {
@@ -546,7 +408,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           toggleNodeExpansion(d.id);
         });
 
-      // Add expand/collapse indicators for expandable nodes
       nodeGroups
         .filter(d => hasComponents(d.id))
         .append('text')
@@ -558,7 +419,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('pointer-events', 'none')
         .text(d => (expandedFiles.has(d.id) ? '-' : '+'));
 
-      // Add labels to nodes
       const labels = g
         .append('g')
         .selectAll('text')
@@ -572,70 +432,53 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .attr('dy', 4)
         .attr('fill', '#333');
 
-      // Set up zoom behavior
       const zoom = d3
         .zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 8])
         .on('zoom', event => {
           g.attr('transform', event.transform);
         });
-
       svg.call(zoom);
       zoomRef.current = zoom;
 
-      // Ticking function for the simulation
       simulation.on('tick', () => {
         link
           .attr('x1', d => (d.source as any).x)
           .attr('y1', d => (d.source as any).y)
           .attr('x2', d => (d.target as any).x)
           .attr('y2', d => (d.target as any).y);
-
         nodeGroups.attr('transform', d => `translate(${d.x},${d.y})`);
-
         labels.attr('x', d => d.x!).attr('y', d => d.y!);
       });
 
-      // Drag behavior for nodes
       function dragBehavior(simulation: d3.Simulation<Node, Link>) {
         function dragstarted(event: any, d: Node) {
           if (!event.active) simulation.alphaTarget(0.3).restart();
           d.fx = d.x;
           d.fy = d.y;
         }
-
         function dragged(event: any, d: Node) {
           d.fx = event.x;
           d.fy = event.y;
         }
-
         function dragended(event: any, d: Node) {
           if (!event.active) simulation.alphaTarget(0);
           d.fx = null;
           d.fy = null;
         }
-
-        return d3
-          .drag<any, Node>()
-          .on('start', dragstarted)
-          .on('drag', dragged)
-          .on('end', dragended);
+        return d3.drag<any, Node>().on('start', dragstarted).on('drag', dragged).on('end', dragended);
       }
 
-      // Cleanup function
       return () => {
         simulation.stop();
       };
     }, [data, dimensions, expandedFiles, nodeMetrics, linkMetrics, config]);
 
-    // Effect to update node/link styles when config changes
     useEffect(() => {
       if (!svgRef.current || !simulationRef.current || nodeMetrics.size === 0) return;
-
       const svg = d3.select(svgRef.current);
       const allNodeMetrics = Array.from(nodeMetrics.values());
 
-      // Update node visibility, size, and color
       svg
         .selectAll('.node')
         .transition()
@@ -655,7 +498,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
             : 'none';
         });
 
-      // Update link visibility, width, and color
       svg
         .selectAll('line')
         .transition()
@@ -690,7 +532,6 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
           return linkMetric && isEdgeVisible(linkMetric, config, (d as Link).type) ? '' : 'none';
         });
 
-      // Update simulation forces if needed
       const simulation = simulationRef.current;
       if (simulation) {
         const linkForce = simulation.force('link') as d3.ForceLink<Node, Link>;
@@ -705,30 +546,21 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
       }
     }, [config, nodeMetrics, linkMetrics]);
 
-    // Effect to highlight selected file
     useEffect(() => {
       if (!svgRef.current) return;
       const svg = d3.select(svgRef.current);
       const pieChartMode = isPieChartEnabled(config);
-
-      // Select appropriate node elements based on mode
       const nodes = pieChartMode ? svg.selectAll('g.pie-node') : svg.selectAll('circle.node');
-
-      // Only proceed if nodes exist
       if (nodes.empty()) return;
-
-      // Reset all nodes to default stroke
       if (pieChartMode) {
         nodes.selectAll('.pie-segment').attr('stroke', '#fff').attr('stroke-width', 1);
       } else {
         nodes.attr('stroke', '#fff').attr('stroke-width', 1.5);
       }
-
       if (selectedFile) {
         const selectedNodes = nodes.filter(function (d) {
           return d && typeof d === 'object' && 'id' in d && d.id === selectedFile;
         });
-
         if (pieChartMode) {
           selectedNodes.selectAll('.pie-segment').attr('stroke', '#e74c3c').attr('stroke-width', 2);
         } else {

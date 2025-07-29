@@ -185,7 +185,7 @@ describe('App', () => {
     });
   });
 
-  it('initializes with correct default weight values', async () => {
+  it('initializes with controls not rendered', async () => {
     (global.fetch as any).mockResolvedValue({
       ok: true,
       text: () => Promise.resolve(JSON.stringify(mockValidData)),
@@ -194,12 +194,13 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      // Check that controls are rendered with default values
-      expect(screen.getByText('100%')).toBeInTheDocument(); // File size weight should be visible
+      // Check that controls are not rendered by default
+      expect(screen.queryByText('Node Controls')).not.toBeInTheDocument();
+      expect(screen.queryByText('Edge Controls')).not.toBeInTheDocument();
     });
   });
 
-  it('shows controls toggle button when data is loaded', async () => {
+  it('shows controls toggle buttons when data is loaded', async () => {
     (global.fetch as any).mockResolvedValue({
       ok: true,
       text: () => Promise.resolve(JSON.stringify(mockValidData)),
@@ -208,8 +209,9 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      // Check that the controls toggle button is present
-      expect(screen.getByLabelText('Toggle controls')).toBeInTheDocument();
+      // Check that the controls toggle buttons are present
+      expect(screen.getByLabelText('Toggle Node Controls')).toBeInTheDocument();
+      expect(screen.getByLabelText('Toggle Edge Controls')).toBeInTheDocument();
     });
   });
 
@@ -244,7 +246,7 @@ describe('App', () => {
     });
   });
 
-  it('opens controls when toggle button is clicked', async () => {
+  it('opens node controls when toggle button is clicked', async () => {
     (global.fetch as any).mockResolvedValue({
       ok: true,
       text: () => Promise.resolve(JSON.stringify(mockValidData)),
@@ -253,11 +255,28 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      const toggleButton = screen.getByLabelText('Toggle controls');
+      const toggleButton = screen.getByLabelText('Toggle Node Controls');
       fireEvent.click(toggleButton);
 
-      // Controls should be visible (they start visible by default)
-      expect(toggleButton).toBeInTheDocument();
+      // Controls should be visible
+      expect(screen.getByText('Node Controls')).toBeInTheDocument();
+    });
+  });
+
+  it('opens edge controls when toggle button is clicked', async () => {
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve(JSON.stringify(mockValidData)),
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      const toggleButton = screen.getByLabelText('Toggle Edge Controls');
+      fireEvent.click(toggleButton);
+
+      // Controls should be visible
+      expect(screen.getByText('Edge Controls')).toBeInTheDocument();
     });
   });
 
@@ -272,20 +291,6 @@ describe('App', () => {
     await waitFor(() => {
       const main = screen.getByRole('main');
       expect(main).toBeInTheDocument();
-    });
-  });
-
-  it('renders controls panel when data is loaded', async () => {
-    (global.fetch as any).mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(JSON.stringify(mockValidData)),
-    });
-
-    render(<App />);
-
-    await waitFor(() => {
-      // Controls should be visible by default when data is loaded
-      expect(screen.getByLabelText('Toggle controls')).toBeInTheDocument();
     });
   });
 
