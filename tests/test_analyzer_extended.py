@@ -48,6 +48,8 @@ class TestRepositoryAnalyzerExtended:
             "path": "test.py",
             "type": "file",
             "extension": "py",
+            "components": [],
+            "metrics": {},
         }
         analyzer._analyze_file_content(python_content, file_info)
         assert len(file_info["components"]) == 1
@@ -68,6 +70,8 @@ class TestRepositoryAnalyzerExtended:
             "path": "test.js",
             "type": "file",
             "extension": "js",
+            "components": [],
+            "metrics": {},
         }
         analyzer._analyze_file_content(js_content, file_info)
         assert len(file_info["components"]) == 1

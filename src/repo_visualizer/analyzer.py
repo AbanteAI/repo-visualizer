@@ -683,13 +683,14 @@ class RepositoryAnalyzer:
 
                     if file_path in self.file_ids:
                         file_info = self.file_ids[file_path]
+                        if not isinstance(file_info, dict):
+                            continue
                         if file_info.get("metrics") is None:
                             file_info["metrics"] = {}
 
-                        file_info["metrics"]["lastModified"] = current_commit_timestamp
-                        file_info["metrics"]["commitCount"] = (
-                            file_info["metrics"].get("commitCount", 0) + 1
-                        )
+                        metrics = file_info["metrics"]
+                        metrics["lastModified"] = current_commit_timestamp
+                        metrics["commitCount"] = metrics.get("commitCount", 0) + 1
 
 
 def analyze_repository(
