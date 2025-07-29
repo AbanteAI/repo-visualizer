@@ -841,9 +841,11 @@ class RepositoryAnalyzer:
     def _extract_js_imports(self, content: str, file_path: str) -> None:
         """Extract import relationships from a JavaScript/TypeScript file."""
         # This is a simplified analysis. A more robust solution would use a proper JS/TS parser.
-        import_pattern = r"""(?:import|export)\s+(?:(?P<imports>[\w\s{},*]+)\s+from\s+)?['"](?P<path>[^'"]+)['"]|import\s+['"](?P<path2>[^'"]+)['"]"""
+        import_pattern = r"""(?:import|export)\s+(?:(?P<imports>[\w\s{},*]+)\s+from\s+)?['"](?P<path>[^'"]+)['"]|import\s+['"](?P<path2>[^'"]+)['"]|require\(['"](?P<path3>[^'"]+)['"]\)"""
         for match in re.finditer(import_pattern, content):
-            import_path = match.group("path") or match.group("path2")
+            import_path = (
+                match.group("path") or match.group("path2") or match.group("path3")
+            )
             if import_path:
                 resolved_path = self._resolve_js_import(import_path, file_path)
                 if resolved_path:
