@@ -51,7 +51,9 @@ class TestRepositoryAnalyzerExtended:
         assert file_info is not None
         assert len(file_info.get("components", [])) == 1
         assert file_info.get("components", [])[0].get("name") == "MyClass"
-        assert "linesOfCode" in file_info.get("metrics", {})
+        metrics = file_info.get("metrics")
+        assert metrics is not None
+        assert "linesOfCode" in metrics
 
     def test_analyze_js_file_content(self):
         """Test analysis of JavaScript file content."""
@@ -70,7 +72,9 @@ class TestRepositoryAnalyzerExtended:
         assert file_info is not None
         assert len(file_info.get("components", [])) == 1
         assert file_info.get("components", [])[0].get("name") == "MyComponent"
-        assert "linesOfCode" in file_info.get("metrics", {})
+        metrics = file_info.get("metrics")
+        assert metrics is not None
+        assert "linesOfCode" in metrics
 
     def test_resolve_python_import(self):
         """Test Python import resolution."""
