@@ -1872,7 +1872,21 @@ class RepositoryAnalyzer:
         finally:
             # Restore original state
             print("Restoring original repository state...")
-            self._checkout_commit(current_commit)
+            # Checkout the branch instead of commit to avoid detached HEAD
+            if current_branch and current_branch != "HEAD":
+                try:
+                    subprocess.run(
+                        ["git", "checkout", current_branch, "--quiet"],
+                        cwd=self.repo_path,
+                        check=True,
+                    )
+                except Exception:
+                    # Fallback to commit if branch checkout fails
+                    self._checkout_commit(current_commit)
+            else:
+                # If we started in detached HEAD, restore to that commit
+                self._checkout_commit(current_commit)
+
             if has_changes:
                 self._pop_stash()
 
