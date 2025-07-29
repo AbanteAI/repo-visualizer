@@ -43,12 +43,12 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   const dragStartRef = useRef({ mouseX: 0, mouseY: 0, elementX: 0, elementY: 0 });
   const [resizeStart, setResizeStart] = useState({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
-  const animationFrameRef = useRef<number | null>(null);
+  const resizeAnimationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (resizeAnimationFrameRef.current) {
+        cancelAnimationFrame(resizeAnimationFrameRef.current);
       }
     };
   }, []);
@@ -94,6 +94,9 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
       elementX: position.x,
       elementY: position.y,
     };
+
+    // Disable transition during dragging for immediate response
+    menuRef.current.style.transition = 'none';
     setIsDragging(true);
     e.preventDefault();
   };
@@ -117,32 +120,27 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   // Update refs with current values
   handleMouseMoveRef.current = (e: MouseEvent) => {
     if (isDragging && menuRef.current) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      animationFrameRef.current = requestAnimationFrame(() => {
-        if (!menuRef.current) return;
-        const parent = menuRef.current.parentElement;
-        const deltaX = e.clientX - dragStartRef.current.mouseX;
-        const deltaY = e.clientY - dragStartRef.current.mouseY;
+      // Update position immediately without requestAnimationFrame for responsive dragging
+      const parent = menuRef.current.parentElement;
+      const deltaX = e.clientX - dragStartRef.current.mouseX;
+      const deltaY = e.clientY - dragStartRef.current.mouseY;
 
-        const newX = dragStartRef.current.elementX + deltaX;
-        const newY = dragStartRef.current.elementY + deltaY;
+      const newX = dragStartRef.current.elementX + deltaX;
+      const newY = dragStartRef.current.elementY + deltaY;
 
-        const parentWidth = parent ? parent.offsetWidth : document.documentElement.clientWidth;
-        const maxX = Math.max(0, parentWidth - size.width);
-        const maxY = Math.max(0, window.innerHeight - size.height - 40);
+      const parentWidth = parent ? parent.offsetWidth : document.documentElement.clientWidth;
+      const maxX = Math.max(0, parentWidth - size.width);
+      const maxY = Math.max(0, window.innerHeight - size.height - 40);
 
-        const clampedX = Math.max(0, Math.min(maxX, newX));
-        const clampedY = Math.max(0, Math.min(maxY, newY));
+      const clampedX = Math.max(0, Math.min(maxX, newX));
+      const clampedY = Math.max(0, Math.min(maxY, newY));
 
-        menuRef.current.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
-      });
+      menuRef.current.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
     } else if (isResizing) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (resizeAnimationFrameRef.current) {
+        cancelAnimationFrame(resizeAnimationFrameRef.current);
       }
-      animationFrameRef.current = requestAnimationFrame(() => {
+      resizeAnimationFrameRef.current = requestAnimationFrame(() => {
         const deltaX = e.clientX - resizeStart.mouseX;
         const deltaY = e.clientY - resizeStart.mouseY;
 
@@ -161,16 +159,21 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
   };
 
   handleMouseUpRef.current = () => {
+    // Cancel any pending resize animation frame
+    if (resizeAnimationFrameRef.current) {
+      cancelAnimationFrame(resizeAnimationFrameRef.current);
+      resizeAnimationFrameRef.current = null;
+    }
+
     if (isDragging && menuRef.current) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
       const transform = menuRef.current.style.transform;
       const match = /translate3d\(([^,]+)px, ([^,]+)px, 0px\)/.exec(transform);
       if (match) {
         setPosition({ x: parseFloat(match[1]), y: parseFloat(match[2]) });
       }
       menuRef.current.style.transform = '';
+      // Re-enable transition after dragging
+      menuRef.current.style.removeProperty('transition');
     }
     setIsDragging(false);
     setIsResizing(false);
