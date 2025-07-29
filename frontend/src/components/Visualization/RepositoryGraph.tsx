@@ -542,6 +542,10 @@ const RepositoryGraph = forwardRef<RepositoryGraphHandle, RepositoryGraphProps>(
         .style('fill', '#333')
         .style('pointer-events', 'none');
 
+      for (let i = 0; i < 100; ++i) {
+        simulation.tick();
+      }
+
       simulation.alpha(0.1).restart();
     }, [data, nodeMetrics, linkMetrics, expandedFiles, config, onSelectFile, dimensions]);
 
