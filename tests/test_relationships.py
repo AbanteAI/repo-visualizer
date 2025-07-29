@@ -12,6 +12,8 @@ class TestRepositoryRelationships:
 
     def setup_method(self):
         self.repo_path = os.path.join(os.path.dirname(__file__), "test_repo_rel")
+        if os.path.exists(self.repo_path):
+            shutil.rmtree(self.repo_path)
         os.makedirs(self.repo_path, exist_ok=True)
         subprocess.run(
             ["git", "init"], cwd=self.repo_path, check=True, capture_output=True

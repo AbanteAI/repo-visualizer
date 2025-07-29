@@ -830,16 +830,60 @@ class RepositoryAnalyzer:
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
-                        self._add_relationship(file_path, alias.name, "import")
+                        resolved_path = self._resolve_python_import(
+                            alias.name, file_path
+                        )
+                        if resolved_path:
+                            self._add_relationship(file_path, resolved_path, "import")
                 elif isinstance(node, ast.ImportFrom):
                     module = node.module
                     if module:
                         for alias in node.names:
-                            self._add_relationship(
-                                file_path, f"{module}.{alias.name}", "import"
+                            full_module_name = f"{module}.{alias.name}"
+                            resolved_path = self._resolve_python_import(
+                                full_module_name, file_path, node.level
                             )
+                            if resolved_path:
+                                self._add_relationship(
+                                    file_path, resolved_path, "import"
+                                )
         except Exception as e:
             print(f"Warning: Could not parse Python file for imports {file_path}: {e}")
+
+    def _resolve_python_import(
+        self, import_name: str, file_path: str, level: int = 0
+    ) -> Optional[str]:
+        """Resolve a Python import to a file path."""
+        base_dir = os.path.dirname(file_path)
+        if level > 0:
+            # Relative import
+            base_dir = os.path.abspath(
+                os.path.join(base_dir, *(".." for _ in range(level)))
+            )
+
+        parts = import_name.split(".")
+
+        # Try to find a file
+        possible_path = os.path.join(base_dir, *parts)
+        for ext in [".py", "/__init__.py"]:
+            path_with_ext = possible_path + ext
+            rel_path = os.path.relpath(path_with_ext, self.repo_path).replace(
+                os.path.sep, "/"
+            )
+            if rel_path in self.file_ids:
+                return rel_path
+
+        # Try to find a directory
+        possible_dir_path = os.path.join(base_dir, *parts)
+        rel_dir_path = os.path.relpath(possible_dir_path, self.repo_path).replace(
+            os.path.sep, "/"
+        )
+        if rel_dir_path in self.file_ids:
+            init_path = os.path.join(rel_dir_path, "__init__.py")
+            if init_path in self.file_ids:
+                return init_path
+
+        return None
 
     def _extract_js_imports(self, content: str, file_path: str) -> None:
         """Extract import relationships from a JavaScript/TypeScript file."""
