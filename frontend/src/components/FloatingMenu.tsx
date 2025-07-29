@@ -173,7 +173,7 @@ const FloatingMenu: React.FC<FloatingMenuProps> = ({
       }
       menuRef.current.style.transform = '';
       // Re-enable transition after dragging
-      menuRef.current.style.transition = '';
+      menuRef.current.style.removeProperty('transition');
     }
     setIsDragging(false);
     setIsResizing(false);
