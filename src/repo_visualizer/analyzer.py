@@ -839,33 +839,33 @@ class RepositoryAnalyzer:
                 elif isinstance(node, ast.ImportFrom):
                     module = node.module
                     if module:
+                        for alias in node.names:
 
-                        def handle_alias(alias):
-                            resolved_path = self._resolve_python_import(
-                                module, file_path, node.level
-                            )
-                            if resolved_path:
-                                # If the resolved path is a directory, the import is of a module within that package
-                                if os.path.basename(resolved_path) == "__init__.py":
-                                    module_dir = os.path.dirname(resolved_path)
-                                    imported_file = os.path.join(
-                                        module_dir, alias.name + ".py"
-                                    )
-                                    if imported_file in self.file_ids:
-                                        self._add_relationship(
-                                            file_path, imported_file, "import"
+                            def handle_alias_closure(captured_alias):
+                                resolved_path = self._resolve_python_import(
+                                    module, file_path, node.level
+                                )
+                                if resolved_path:
+                                    # If resolved to a package, find the specific module
+                                    if os.path.basename(resolved_path) == "__init__.py":
+                                        module_dir = os.path.dirname(resolved_path)
+                                        imported_file = os.path.join(
+                                            module_dir, captured_alias.name + ".py"
                                         )
+                                        if imported_file in self.file_ids:
+                                            self._add_relationship(
+                                                file_path, imported_file, "import"
+                                            )
+                                        else:
+                                            self._add_relationship(
+                                                file_path, resolved_path, "import"
+                                            )
                                     else:
                                         self._add_relationship(
                                             file_path, resolved_path, "import"
                                         )
-                                else:
-                                    self._add_relationship(
-                                        file_path, resolved_path, "import"
-                                    )
 
-                        for alias in node.names:
-                            handle_alias(alias)
+                            handle_alias_closure(alias)
         except Exception as e:
             print(f"Warning: Could not parse Python file for imports {file_path}: {e}")
 
