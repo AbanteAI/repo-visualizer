@@ -35,7 +35,8 @@ class GitHubClient:
         """
         if not REQUESTS_AVAILABLE:
             raise ImportError(
-                "requests library is required for GitHub integration. Install with: pip install requests"
+                "requests library is required for GitHub integration. "
+                "Install with: pip install requests"
             )
 
         self.token = token or os.getenv("GITHUB_TOKEN")
@@ -291,7 +292,7 @@ class GitHubClient:
             (activity["pr_count"] for activity in file_activity.values()), default=1
         )
 
-        for filename, activity in file_activity.items():
+        for _, activity in file_activity.items():
             # Change frequency: how often this file is being modified
             activity["change_frequency"] = activity["pr_count"] / max_pr_count
 
@@ -312,7 +313,8 @@ class GitHubClient:
             )
 
         logger.info(
-            f"Analyzed activity for {len(file_activity)} files across {len(prs)} open PRs"
+            f"Analyzed activity for {len(file_activity)} files across "
+            f"{len(prs)} open PRs"
         )
         return file_activity
 

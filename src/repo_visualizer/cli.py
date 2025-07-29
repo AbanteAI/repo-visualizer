@@ -67,7 +67,7 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
 
     parser.add_argument(
         "--github",
-        help="Enable GitHub integration to fetch PR activity data (adds github_activity metric)",
+        help="Enable GitHub integration to fetch PR activity data",
         action="store_true",
     )
 
