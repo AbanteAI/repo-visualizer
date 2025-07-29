@@ -65,6 +65,13 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
     )
 
+    parser.add_argument(
+        "-b",
+        "--branch",
+        help="Specific branch to analyze (defaults to current branch)",
+        default=None,
+    )
+
     return parser.parse_args(args)
 
 
@@ -104,7 +111,9 @@ def main(args: Optional[List[str]] = None) -> int:
 
         # Analyze repository
         logger.info(f"Analyzing repository at {repo_path}")
-        analyze_repository(repo_path, output_path)
+        if parsed_args.branch:
+            logger.info(f"Analyzing branch: {parsed_args.branch}")
+        analyze_repository(repo_path, output_path, branch=parsed_args.branch)
 
         logger.info(f"Analysis complete. Output saved to {output_path}")
         return 0
