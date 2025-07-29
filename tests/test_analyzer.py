@@ -20,6 +20,16 @@ class TestRepositoryAnalyzer:
         subprocess.run(
             ["git", "init"], cwd=self.repo_path, check=True, capture_output=True
         )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=self.repo_path,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=self.repo_path,
+            check=True,
+        )
         # Create a dummy file and commit it
         with open(os.path.join(self.repo_path, "README.md"), "w") as f:
             f.write("# Test Repo\n")

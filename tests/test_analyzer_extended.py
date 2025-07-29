@@ -16,6 +16,16 @@ class TestRepositoryAnalyzerExtended:
         subprocess.run(
             ["git", "init"], cwd=self.repo_path, check=True, capture_output=True
         )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=self.repo_path,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=self.repo_path,
+            check=True,
+        )
         with open(os.path.join(self.repo_path, ".gitignore"), "w") as f:
             f.write("node_modules/\n")
         with open(os.path.join(self.repo_path, "main.py"), "w") as f:

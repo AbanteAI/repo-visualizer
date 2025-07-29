@@ -16,6 +16,16 @@ class TestRepositoryRelationships:
         subprocess.run(
             ["git", "init"], cwd=self.repo_path, check=True, capture_output=True
         )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=self.repo_path,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=self.repo_path,
+            check=True,
+        )
 
         # Create a complex file structure
         os.makedirs(os.path.join(self.repo_path, "src/app/components"))
