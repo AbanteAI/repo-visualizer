@@ -606,9 +606,7 @@ class RepositoryAnalyzer:
 
                 # Analyze file content for components and relationships
                 try:
-                    with open(
-                        os.path.join(root, file_name), encoding="utf-8"
-                    ) as f:
+                    with open(os.path.join(root, file_name), encoding="utf-8") as f:
                         content = f.read()
                     self._analyze_file_content(content, file_entry)
                     self._extract_file_relationships(content, rel_path, ext)
@@ -843,7 +841,9 @@ class RepositoryAnalyzer:
     def _extract_js_imports(self, content: str, file_path: str) -> None:
         """Extract import relationships from a JavaScript/TypeScript file."""
         # This is a simplified analysis. A more robust solution would use a proper JS/TS parser.
-        import_pattern = r"import\s+.*\s+from\s+['\"]([^'\"]+)['\"]"
+        import_pattern = (
+            r"import\s+(?:(?:\w+\s*,\s*)?\{[^}]*\}|\w+|\*)\s+from\s+['\"]([^'\"]+)['\"]"
+        )
         for match in re.finditer(import_pattern, content):
             import_path = match.group(1)
             resolved_path = self._resolve_js_import(import_path, file_path)
@@ -852,10 +852,16 @@ class RepositoryAnalyzer:
 
     def _resolve_js_import(self, import_path: str, file_path: str) -> Optional[str]:
         """Resolve a JavaScript import path to a file path."""
-        if not import_path.startswith("."):
+        if not import_path.startswith((".", "/")):
             return None  # Skip node_modules imports
 
         base_dir = os.path.dirname(file_path)
+
+        # Handle absolute paths from root
+        if import_path.startswith("/"):
+            base_dir = self.repo_path
+            import_path = import_path[1:]
+
         resolved_path = os.path.normpath(os.path.join(base_dir, import_path))
 
         # Try with extensions
