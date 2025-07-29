@@ -604,6 +604,17 @@ class RepositoryAnalyzer:
                     if metrics:
                         metrics["testCoverage"] = file_coverage
 
+                # Analyze file content for components and relationships
+                try:
+                    with open(
+                        os.path.join(root, file_name), encoding="utf-8"
+                    ) as f:
+                        content = f.read()
+                    self._analyze_file_content(content, file_entry)
+                    self._extract_file_relationships(content, rel_path, ext)
+                except Exception as e:
+                    print(f"Warning: Could not analyze file {rel_path}: {e}")
+
                 self.file_ids[rel_path] = file_entry
 
                 # Add to parent directory map
@@ -611,6 +622,42 @@ class RepositoryAnalyzer:
                 if parent_dir and parent_dir in dir_file_map:
                     dir_file_map[parent_dir].append(rel_path)
                     self._add_relationship(parent_dir, rel_path, "contains")
+
+    def _analyze_file_content(self, content: str, file_info: File) -> None:
+        """Analyze file content to extract components and metrics."""
+        lines = content.splitlines()
+        metrics = {
+            "linesOfCode": len(lines),
+            "emptyLines": lines.count(""),
+            "commentLines": sum(
+                1
+                for line in lines
+                if line.strip().startswith(("#", "//", "/*", "*", "*/"))
+            ),
+        }
+        if file_info.get("metrics") is None:
+            file_info["metrics"] = {}
+        file_info["metrics"].update(metrics)
+
+        if file_info["extension"] == "py":
+            components, _ = self._analyze_python_file(
+                content, file_info["path"], file_info["metrics"]
+            )
+            file_info["components"] = components
+        elif file_info["extension"] in ("js", "ts", "jsx", "tsx"):
+            components, _ = self._analyze_js_file(
+                content, file_info["path"], file_info["metrics"]
+            )
+            file_info["components"] = components
+
+    def _extract_file_relationships(
+        self, content: str, file_path: str, extension: str
+    ) -> None:
+        """Extract relationships from a single file."""
+        if extension == "py":
+            self._extract_python_imports(content, file_path)
+        elif extension in ("js", "ts", "jsx", "tsx"):
+            self._extract_js_imports(content, file_path)
 
     def _extract_relationships(self) -> None:
         """Extract relationships between files."""
@@ -695,6 +742,141 @@ class RepositoryAnalyzer:
                         if metrics:
                             metrics["lastModified"] = current_commit_timestamp
                             metrics["commitCount"] = metrics.get("commitCount", 0) + 1
+
+    def _analyze_python_file(
+        self, content: str, file_path: str, metrics: Dict
+    ) -> Tuple[List[Dict], Dict]:
+        """Analyze Python file to extract components."""
+        components = []
+        try:
+            import ast
+
+            tree = ast.parse(content)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    components.append(
+                        {
+                            "id": f"{file_path}:{node.name}",
+                            "name": node.name,
+                            "type": "function",
+                            "lineStart": node.lineno,
+                            "lineEnd": node.end_lineno,
+                        }
+                    )
+                elif isinstance(node, ast.ClassDef):
+                    components.append(
+                        {
+                            "id": f"{file_path}:{node.name}",
+                            "name": node.name,
+                            "type": "class",
+                            "lineStart": node.lineno,
+                            "lineEnd": node.end_lineno,
+                            "components": [],
+                        }
+                    )
+        except Exception as e:
+            print(f"Warning: Could not parse Python file {file_path}: {e}")
+        return components, metrics
+
+    def _analyze_js_file(
+        self, content: str, file_path: str, metrics: Dict
+    ) -> Tuple[List[Dict], Dict]:
+        """Analyze JavaScript/TypeScript file to extract components."""
+        components = []
+        # This is a simplified analysis. A more robust solution would use a proper JS/TS parser.
+        function_patterns = [
+            r"function\s+([a-zA-Z0-9_]+)\s*\(",  # function myFunction()
+            r"const\s+([a-zA-Z0-9_]+)\s*=\s*\(",  # const myFunction = () =>
+            r"let\s+([a-zA-Z0-9_]+)\s*=\s*\(",  # let myFunction = () =>
+            r"var\s+([a-zA-Z0-9_]+)\s*=\s*\(",  # var myFunction = () =>
+        ]
+        class_pattern = r"class\s+([a-zA-Z0-9_]+)"
+
+        for i, line in enumerate(content.splitlines()):
+            for pattern in function_patterns:
+                match = re.search(pattern, line)
+                if match:
+                    components.append(
+                        {
+                            "id": f"{file_path}:{match.group(1)}",
+                            "name": match.group(1),
+                            "type": "function",
+                            "lineStart": i + 1,
+                            "lineEnd": i + 1,
+                        }
+                    )
+
+            match = re.search(class_pattern, line)
+            if match:
+                components.append(
+                    {
+                        "id": f"{file_path}:{match.group(1)}",
+                        "name": match.group(1),
+                        "type": "class",
+                        "lineStart": i + 1,
+                        "lineEnd": i + 1,
+                        "components": [],
+                    }
+                )
+        return components, metrics
+
+    def _extract_python_imports(self, content: str, file_path: str) -> None:
+        """Extract import relationships from a Python file."""
+        try:
+            import ast
+
+            tree = ast.parse(content)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        self._add_relationship(file_path, alias.name, "import")
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module
+                    if module:
+                        for alias in node.names:
+                            self._add_relationship(
+                                file_path, f"{module}.{alias.name}", "import"
+                            )
+        except Exception as e:
+            print(f"Warning: Could not parse Python file for imports {file_path}: {e}")
+
+    def _extract_js_imports(self, content: str, file_path: str) -> None:
+        """Extract import relationships from a JavaScript/TypeScript file."""
+        # This is a simplified analysis. A more robust solution would use a proper JS/TS parser.
+        import_pattern = r"import\s+.*\s+from\s+['\"]([^'\"]+)['\"]"
+        for match in re.finditer(import_pattern, content):
+            import_path = match.group(1)
+            resolved_path = self._resolve_js_import(import_path, file_path)
+            if resolved_path:
+                self._add_relationship(file_path, resolved_path, "import")
+
+    def _resolve_js_import(self, import_path: str, file_path: str) -> Optional[str]:
+        """Resolve a JavaScript import path to a file path."""
+        if not import_path.startswith("."):
+            return None  # Skip node_modules imports
+
+        base_dir = os.path.dirname(file_path)
+        resolved_path = os.path.normpath(os.path.join(base_dir, import_path))
+
+        # Try with extensions
+        for ext in [
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            "/index.js",
+            "/index.ts",
+            "/index.jsx",
+            "/index.tsx",
+        ]:
+            path_with_ext = resolved_path + ext
+            if path_with_ext in self.file_ids:
+                return path_with_ext
+
+        if resolved_path in self.file_ids:
+            return resolved_path
+
+        return None
 
 
 def analyze_repository(
