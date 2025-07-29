@@ -690,3 +690,28 @@ class RepositoryAnalyzer:
                         file_info["metrics"]["commitCount"] = (
                             file_info["metrics"].get("commitCount", 0) + 1
                         )
+
+
+def analyze_repository(
+    repo_path: str,
+    output_path: str,
+    python_coverage_path: Optional[str] = None,
+    frontend_coverage_path: Optional[str] = None,
+) -> None:
+    """
+    Analyze a repository and generate visualization data.
+
+    Args:
+        repo_path: Path to the local git repository
+        output_path: Path to output JSON file
+        python_coverage_path: Path to Python coverage.json file
+        frontend_coverage_path: Path to frontend coverage.json file
+    """
+    analyzer = RepositoryAnalyzer(
+        repo_path,
+        python_coverage_path=python_coverage_path,
+        frontend_coverage_path=frontend_coverage_path,
+    )
+    data = analyzer.analyze()
+    with open(output_path, "w") as f:
+        json.dump(data, f, indent=2)
