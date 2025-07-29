@@ -43,12 +43,16 @@ class TestRepositoryAnalyzerExtended:
         """Test analysis of Python file content."""
         analyzer = RepositoryAnalyzer(self.repo_path)
         python_content = "import os\n\nclass MyClass:\n    pass\n"
-        components, metrics = analyzer._analyze_python_file(
-            python_content, "test.py", {}
-        )
-        assert len(components) == 1
-        assert components[0]["name"] == "MyClass"
-        assert "linesOfCode" in metrics
+        file_info = {
+            "id": "test.py",
+            "path": "test.py",
+            "type": "file",
+            "extension": "py",
+        }
+        analyzer._analyze_file_content(python_content, file_info)
+        assert len(file_info["components"]) == 1
+        assert file_info["components"][0]["name"] == "MyClass"
+        assert "linesOfCode" in file_info["metrics"]
 
     def test_analyze_js_file_content(self):
         """Test analysis of JavaScript file content."""
@@ -59,10 +63,16 @@ class TestRepositoryAnalyzerExtended:
             "    return <div></div>;\n"
             "}"
         )
-        components, metrics = analyzer._analyze_js_file(js_content, "test.js", {})
-        assert len(components) == 1
-        assert components[0]["name"] == "MyComponent"
-        assert "linesOfCode" in metrics
+        file_info = {
+            "id": "test.js",
+            "path": "test.js",
+            "type": "file",
+            "extension": "js",
+        }
+        analyzer._analyze_file_content(js_content, file_info)
+        assert len(file_info["components"]) == 1
+        assert file_info["components"][0]["name"] == "MyComponent"
+        assert "linesOfCode" in file_info["metrics"]
 
     def test_resolve_python_import(self):
         """Test Python import resolution."""
@@ -82,10 +92,14 @@ class TestRepositoryAnalyzerExtended:
             }
         }
 
-        resolved_path = analyzer._resolve_python_import(
-            "src.utils.helpers", "src/main.py"
+        analyzer._extract_file_relationships(
+            "from src.utils import helpers", "src/main.py", "py"
         )
-        assert resolved_path == ["src/utils/helpers.py"]
+        assert (
+            "src/main.py",
+            "src/utils/helpers.py",
+            "import",
+        ) in analyzer.relationship_counts
 
     def test_resolve_js_import(self):
         """Test JavaScript import resolution."""
@@ -103,7 +117,11 @@ class TestRepositoryAnalyzerExtended:
             }
         }
 
-        resolved_path = analyzer._resolve_js_import(
-            "./Button", "src/components/Card.js"
+        analyzer._extract_file_relationships(
+            "import Button from './Button'", "src/components/Card.js", "js"
         )
-        assert resolved_path == "src/components/Button.js"
+        assert (
+            "src/components/Card.js",
+            "src/components/Button.js",
+            "import",
+        ) in analyzer.relationship_counts

@@ -683,7 +683,7 @@ class RepositoryAnalyzer:
 
                     if file_path in self.file_ids:
                         file_info = self.file_ids[file_path]
-                        if "metrics" not in file_info:
+                        if file_info.get("metrics") is None:
                             file_info["metrics"] = {}
 
                         file_info["metrics"]["lastModified"] = current_commit_timestamp
